@@ -1,6 +1,6 @@
 -- ============================================================================
--- 大明浮生志2 - 自定义游戏弹窗通知
--- 居中浮动面板式提示，古风主题，自动消失
+-- 大明浮生志2 - 游戏弹窗通知（正式弹窗，需手动确认关闭）
+-- 居中面板式提示，古风主题，点击"知道了"按钮关闭
 -- ============================================================================
 
 local UI = require("urhox-libs/UI")
@@ -10,55 +10,44 @@ local Toast = {}
 
 -- 当前显示的弹窗引用（同一时间只显示一个，新弹窗覆盖旧弹窗）
 local currentPopup_ = nil
-local popupTimer_ = 0
-local popupDuration_ = 0
 
 -- 弹窗类型配置
 local POPUP_CONFIG = {
     success = {
-        icon = "✓",
-        iconColor = { 76, 175, 80, 255 },
+        icon = "OK",
+        iconColor = Theme.GREEN,
         borderColor = { 76, 175, 80, 180 },
-        bgColor = { 255, 255, 252, 245 },
-        accentColor = { 232, 248, 233, 255 },
+        titleColor = Theme.GREEN,
     },
     warn = {
-        icon = "!",
+        icon = "⚠",
         iconColor = { 220, 160, 50, 255 },
-        borderColor = { 220, 160, 50, 180 },
-        bgColor = { 255, 253, 248, 245 },
-        accentColor = { 255, 248, 225, 255 },
+        borderColor = Theme.BORDER_GOLD,
+        titleColor = { 185, 140, 30, 255 },
     },
     error = {
-        icon = "✕",
-        iconColor = { 220, 80, 60, 255 },
+        icon = "X",
+        iconColor = Theme.RED,
         borderColor = { 220, 80, 60, 180 },
-        bgColor = { 255, 252, 251, 245 },
-        accentColor = { 255, 235, 232, 255 },
+        titleColor = Theme.RED,
     },
     info = {
-        icon = "i",
-        iconColor = { 66, 133, 244, 255 },
-        borderColor = { 66, 133, 244, 180 },
-        bgColor = { 252, 253, 255, 245 },
-        accentColor = { 232, 242, 255, 255 },
+        icon = "ℹ",
+        iconColor = Theme.GOLD,
+        borderColor = Theme.BORDER_GOLD,
+        titleColor = Theme.GOLD,
     },
     locked = {
-        icon = "[锁]",
+        icon = "🔒",
         iconColor = { 165, 160, 148, 255 },
-        borderColor = { 200, 155, 50, 180 },
-        bgColor = { 255, 253, 248, 245 },
-        accentColor = { 255, 248, 225, 255 },
+        borderColor = Theme.BORDER_GOLD,
+        titleColor = Theme.GOLD_DARK,
     },
 }
 
--- 倒计时自动关闭（由外部 HandleGameUpdate 调用，不再独立订阅 Update 事件）
+-- 倒计时自动关闭（保留接口，但不再需要）
 function Toast.Update(dt)
-    if not currentPopup_ then return end
-    popupTimer_ = popupTimer_ + dt
-    if popupTimer_ >= popupDuration_ then
-        Toast.DismissPopup()
-    end
+    -- 不再自动消失，保留空函数以兼容 GameScreen 的调用
 end
 
 --- 关闭当前弹窗
@@ -72,34 +61,49 @@ function Toast.DismissPopup()
     end
 end
 
---- 显示自定义弹窗
+--- 显示自定义弹窗（带确认按钮，需手动关闭）
 --- @param variant string "success"|"warn"|"error"|"info"|"locked"
 --- @param title string 标题文字
 --- @param desc string|nil 描述文字（可选）
---- @param duration number|nil 显示时长（秒，默认2.5）
+--- @param duration number|nil 已废弃，保留参数兼容旧接口
 local function ShowPopup(variant, title, desc, duration)
     -- 先关闭旧弹窗
     Toast.DismissPopup()
 
     local config = POPUP_CONFIG[variant] or POPUP_CONFIG.info
-    popupDuration_ = duration or 2.5
-    popupTimer_ = 0
 
-    -- 构建内容（仅文字，无图标）
-    local contentChildren = {}
+    -- 构建内容子元素
+    local cardChildren = {}
+
+    -- 顶部金色装饰线
+    cardChildren[#cardChildren + 1] = UI.Panel {
+        width = 40, height = 2, borderRadius = 1,
+        backgroundColor = Theme.GOLD_LIGHT,
+        marginBottom = 4,
+    }
+
+    -- 图标
+    cardChildren[#cardChildren + 1] = UI.Label {
+        text = config.icon,
+        fontSize = 22,
+        fontColor = config.iconColor,
+        textAlign = "center",
+    }
 
     -- 标题
-    contentChildren[#contentChildren + 1] = UI.Label {
+    cardChildren[#cardChildren + 1] = UI.Label {
         text = title,
         fontSize = 15,
-        fontColor = Theme.TEXT_PRIMARY,
+        fontColor = config.titleColor,
         fontWeight = "bold",
         textAlign = "center",
+        whiteSpace = "normal",
+        marginTop = 4,
     }
 
     -- 描述（如有）
     if desc and desc ~= "" then
-        contentChildren[#contentChildren + 1] = UI.Label {
+        cardChildren[#cardChildren + 1] = UI.Label {
             text = desc,
             fontSize = 12,
             fontColor = Theme.TEXT_SECONDARY,
@@ -109,48 +113,45 @@ local function ShowPopup(variant, title, desc, duration)
         }
     end
 
-    -- 弹窗面板
-    local popup = UI.Panel {
-        id = "gamePopup",
-        width = "100%", height = "100%",
-        position = "absolute", left = 0, top = 0, zIndex = 800,
+    -- 底部金色装饰线
+    cardChildren[#cardChildren + 1] = UI.Panel {
+        width = "60%", height = 1,
+        backgroundColor = Theme.BORDER_GOLD,
+        marginTop = 8,
+    }
+
+    -- "知道了"确认按钮
+    cardChildren[#cardChildren + 1] = UI.Panel {
+        width = 100, height = 32, borderRadius = 6, marginTop = 8,
+        backgroundGradient = Theme.GRADIENT_PRIMARY,
         justifyContent = "center", alignItems = "center",
-        backgroundColor = { 0, 0, 0, 50 },
         onPointerDown = function(self)
             Toast.DismissPopup()
         end,
         children = {
+            UI.Label { text = "知道了", fontSize = 13, fontColor = Theme.TEXT_WHITE },
+        },
+    }
+
+    -- 弹窗面板（带遮罩层）
+    local popup = UI.Panel {
+        id = "toastPopup",
+        width = "100%", height = "100%",
+        position = "absolute", left = 0, top = 0, zIndex = 800,
+        justifyContent = "center", alignItems = "center",
+        backgroundColor = { 0, 0, 0, 100 },
+        children = {
             -- 内容卡片
             UI.Panel {
-                width = 220, minHeight = 80,
-                backgroundColor = config.bgColor,
-                borderRadius = 14,
+                width = 240, minHeight = 90,
+                backgroundColor = Theme.BG_WHITE,
+                borderRadius = 12,
                 borderWidth = 2,
                 borderColor = config.borderColor,
                 padding = { 16, 20, 16, 20 },
                 alignItems = "center",
                 gap = 2,
-                -- 顶部装饰线
-                children = (function()
-                    local c = {}
-                    -- 顶部金色细线装饰
-                    c[#c + 1] = UI.Panel {
-                        width = 40, height = 2, borderRadius = 1,
-                        backgroundColor = Theme.GOLD_LIGHT,
-                        marginBottom = 6,
-                    }
-                    -- 内容（图标、标题、描述）
-                    for _, child in ipairs(contentChildren) do
-                        c[#c + 1] = child
-                    end
-                    -- 底部金色细线装饰
-                    c[#c + 1] = UI.Panel {
-                        width = 40, height = 2, borderRadius = 1,
-                        backgroundColor = Theme.GOLD_LIGHT,
-                        marginTop = 8,
-                    }
-                    return c
-                end)(),
+                children = cardChildren,
             },
         },
     }
@@ -160,13 +161,8 @@ local function ShowPopup(variant, title, desc, duration)
     if root then
         root:AddChild(popup)
         currentPopup_ = popup
-
-        -- Toast 计时器由 HandleGameUpdate 驱动（Toast.Update），不再独立订阅 Update 事件
     end
 end
-
--- 注意：不再使用全局 SubscribeToEvent("Update")，避免覆盖 HandleGameUpdate
--- Toast.Update(dt) 由 GameScreen.HandleGameUpdate 每帧调用
 
 -- ============================================================================
 -- 公开接口（保持与旧 Toast API 兼容）
@@ -174,39 +170,39 @@ end
 
 --- 通用弹窗（兼容 Toast.Show 调用）
 function Toast.Show(msg, duration)
-    if not msg or msg == "" then return end  -- 空消息不弹窗
-    ShowPopup("info", msg, nil, duration or 2.5)
+    if not msg or msg == "" then return end
+    ShowPopup("info", msg, nil, duration)
 end
 
 --- 显示信息弹窗
 function Toast.Info(msg, duration)
     if not msg or msg == "" then return end
-    ShowPopup("info", msg, nil, duration or 2.5)
+    ShowPopup("info", msg, nil, duration)
 end
 
 --- 显示成功弹窗
 function Toast.Success(msg, duration)
-    ShowPopup("success", msg, nil, duration or 2.0)
+    ShowPopup("success", msg, nil, duration)
 end
 
 --- 显示警告弹窗
 function Toast.Warn(msg, duration)
-    ShowPopup("warn", msg, nil, duration or 3.0)
+    ShowPopup("warn", msg, nil, duration)
 end
 
 --- 显示错误弹窗
 function Toast.Error(msg, duration)
-    ShowPopup("error", msg, nil, duration or 3.0)
+    ShowPopup("error", msg, nil, duration)
 end
 
 --- 资源不足提示（专用样式）
 function Toast.NotEnough(resourceName)
-    ShowPopup("warn", "资源不足", resourceName .. "不够，无法执行此操作。", 2.5)
+    ShowPopup("warn", "资源不足", resourceName .. "不够，无法执行此操作。")
 end
 
 --- 功能未解锁提示（专用样式）
 function Toast.Locked(featureName, reqRank)
-    ShowPopup("locked", "尚未解锁", featureName .. "需要品级【" .. (reqRank or "?") .. "】才能开启。", 3.0)
+    ShowPopup("locked", "尚未解锁", featureName .. "需要品级【" .. (reqRank or "?") .. "】才能开启。")
 end
 
 return Toast

@@ -155,7 +155,25 @@ local function CreateTopBar()
                         children = {
                             UI.Label { id = "yearLabel", text = EraSystem.GetYearLabel(s.year), fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
                             UI.Label { id = "monthLabel", text = s.month .. "月", fontSize = 11, fontColor = Theme.TEXT_SECONDARY, fontWeight = "bold" },
-                            UI.Label { id = "weatherLabel", text = WeatherSystem.GetDisplayText(), fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                            -- 季节+天气图标组
+                            UI.Panel {
+                                id = "weatherPanel",
+                                flexDirection = "row", alignItems = "center", gap = 3,
+                                children = (function()
+                                    local info = WeatherSystem.GetDisplayInfo()
+                                    local items = {}
+                                    if info.seasonImg then
+                                        items[#items + 1] = UI.Panel { width = 16, height = 16, borderRadius = 8, overflow = "hidden", backgroundImage = info.seasonImg, backgroundFit = "cover" }
+                                    end
+                                    items[#items + 1] = UI.Label { id = "weatherText", text = info.seasonName, fontSize = 10, fontColor = Theme.TEXT_SECONDARY }
+                                    if info.weatherImg then
+                                        items[#items + 1] = UI.Label { text = "·", fontSize = 10, fontColor = Theme.TEXT_MUTED }
+                                        items[#items + 1] = UI.Panel { width = 16, height = 16, borderRadius = 8, overflow = "hidden", backgroundImage = info.weatherImg, backgroundFit = "cover" }
+                                        items[#items + 1] = UI.Label { id = "weatherName", text = info.weatherName, fontSize = 10, fontColor = Theme.TEXT_SECONDARY }
+                                    end
+                                    return items
+                                end)(),
+                            },
                             -- 暂停菜单按钮
                             UI.Panel {
                                 flexDirection = "row", alignItems = "center", gap = 3,
@@ -385,6 +403,155 @@ RefreshTimeControl = function()
 end
 
 -- ============================================================================
+-- 事件结果反馈弹窗（资源变化对比 + 后果描述）
+-- ============================================================================
+
+--- 资源名称映射
+local RESOURCE_LABELS = {
+    silver = "银两", grain = "粮食", cloth = "布匹", fame = "声望", pop = "人口",
+}
+--- 资源图标颜色（涨绿跌红）
+local RESOURCE_COLORS = {
+    positive = { 56, 158, 70, 255 },   -- 绿色（收入/增长）
+    negative = { 210, 60, 50, 255 },   -- 红色（支出/损失）
+    neutral  = Theme.TEXT_MUTED,
+}
+
+--- 快照当前资源状态
+local function SnapshotResources()
+    local s = GameData.state
+    return {
+        silver = s.silver,
+        grain  = s.grain,
+        cloth  = s.cloth,
+        fame   = s.fame,
+        pop    = #GameData.GetAliveMembers(),
+    }
+end
+
+--- 计算资源差异
+local function DiffResources(before, after)
+    local diffs = {}
+    local keys = { "silver", "grain", "cloth", "fame", "pop" }
+    for _, k in ipairs(keys) do
+        local delta = (after[k] or 0) - (before[k] or 0)
+        if delta ~= 0 then
+            diffs[#diffs + 1] = { key = k, delta = delta }
+        end
+    end
+    return diffs
+end
+
+--- 显示事件结果反馈弹窗
+--- @param eventTitle string 事件标题
+--- @param choiceText string 玩家选择的选项文本
+--- @param diffs table 资源差异列表 {{ key, delta }, ...}
+--- @param resultText string|nil 选项的结果描述文案（可选）
+--- @param onClose function 关闭后的回调
+local function ShowEventResultPopup(eventTitle, choiceText, diffs, resultText, onClose)
+    -- 如果没有任何变化也没有结果文案，直接跳过
+    if #diffs == 0 and (not resultText or resultText == "") then
+        if onClose then onClose() end
+        return
+    end
+
+    -- 先清除残留的结果弹窗，防止重叠
+    if gameRoot_ then
+        local oldResult = gameRoot_:FindById("eventResultOverlay")
+        if oldResult then gameRoot_:RemoveChild(oldResult) end
+    end
+
+    -- 构建资源变化行
+    local changeRows = {}
+    for _, d in ipairs(diffs) do
+        local label = RESOURCE_LABELS[d.key] or d.key
+        local sign = d.delta > 0 and "+" or ""
+        local color = d.delta > 0 and RESOURCE_COLORS.positive or RESOURCE_COLORS.negative
+        changeRows[#changeRows + 1] = UI.Panel {
+            flexDirection = "row", justifyContent = "spaceBetween", alignItems = "center",
+            width = "100%", paddingHorizontal = 12, height = 28,
+            children = {
+                UI.Label { text = label, fontSize = 13, fontColor = Theme.TEXT_PRIMARY },
+                UI.Label {
+                    text = sign .. tostring(d.delta),
+                    fontSize = 14, fontColor = color, fontWeight = "bold",
+                },
+            },
+        }
+    end
+
+    -- 关闭结果弹窗的统一函数（防止重复触发）
+    local resultClosed = false
+    local function CloseResultPopup()
+        if resultClosed then return end
+        resultClosed = true
+        AudioManager.Click()
+        local overlay = gameRoot_:FindById("eventResultOverlay")
+        if overlay then gameRoot_:RemoveChild(overlay) end
+        if onClose then onClose() end
+    end
+
+    -- 弹窗 overlay（点击遮罩区域也可关闭）
+    local resultOverlay = UI.Panel {
+        id = "eventResultOverlay",
+        width = "100%", height = "100%",
+        position = "absolute", left = 0, top = 0, zIndex = 910,
+        justifyContent = "center", alignItems = "center",
+        backgroundColor = { 0, 0, 0, 140 },
+        onPointerDown = function(self) CloseResultPopup() end,
+        children = {
+            UI.Panel {
+                width = 270, borderRadius = 12,
+                backgroundColor = Theme.BG_WHITE,
+                borderWidth = 2, borderColor = Theme.BORDER_GOLD,
+                padding = 16, gap = 8, alignItems = "center",
+                -- 阻止卡片内部点击穿透到遮罩层
+                onPointerDown = function(self) end,
+                children = {
+                    -- 标题
+                    UI.Label { text = eventTitle, fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold" },
+                    -- 分隔线
+                    UI.Panel { width = "80%", height = 1, backgroundColor = Theme.BORDER_GOLD },
+                    -- 玩家选择了什么
+                    UI.Panel {
+                        flexDirection = "row", gap = 4, alignItems = "center",
+                        children = {
+                            UI.Label { text = "你选择了：", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = choiceText, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                        },
+                    },
+                    -- 结果描述（如果有）
+                    (resultText and resultText ~= "") and UI.Label {
+                        text = resultText, fontSize = 12, fontColor = Theme.TEXT_PRIMARY,
+                        textAlign = "center", whiteSpace = "normal", marginTop = 4,
+                    } or nil,
+                    -- 资源变化区域
+                    (#diffs > 0) and UI.Panel {
+                        width = "100%", gap = 2, marginTop = 4,
+                        backgroundColor = { 245, 240, 228, 255 },
+                        borderRadius = 8, paddingVertical = 6,
+                        children = changeRows,
+                    } or UI.Label {
+                        text = "（暂无资源变化）", fontSize = 11, fontColor = Theme.TEXT_MUTED,
+                        marginTop = 4,
+                    },
+                    -- 确认按钮
+                    UI.Panel {
+                        width = 120, height = 36, borderRadius = 6, marginTop = 6,
+                        backgroundGradient = Theme.GRADIENT_PRIMARY,
+                        justifyContent = "center", alignItems = "center",
+                        onPointerDown = function(self) CloseResultPopup() end,
+                        children = { UI.Label { text = "知道了", fontSize = 13, fontColor = Theme.TEXT_WHITE } },
+                    },
+                },
+            },
+        },
+    }
+
+    gameRoot_:AddChild(resultOverlay)
+end
+
+-- ============================================================================
 -- 事件弹窗（在当前页面上覆盖显示，不切换 tab）
 -- ============================================================================
 
@@ -394,8 +561,10 @@ function GameScreen.ShowPendingEventPopup()
     -- 先清除任何残留的 Toast 弹窗，避免遮挡事件弹窗
     Toast.DismissPopup()
 
-    -- 先移除旧的事件弹窗 overlay（防止重复叠加）
+    -- 先移除旧的弹窗 overlay（防止重复叠加）
     if gameRoot_ then
+        local oldResult = gameRoot_:FindById("eventResultOverlay")
+        if oldResult then gameRoot_:RemoveChild(oldResult) end
         local oldOverlay = gameRoot_:FindById("eventPopupOverlay")
         if oldOverlay then
             gameRoot_:RemoveChild(oldOverlay)
@@ -450,18 +619,31 @@ function GameScreen.ShowPendingEventPopup()
                             return -- 资源不足，不关闭事件，不执行效果
                         end
                     end
+                    -- 资源快照（在 effect 执行前记录）
+                    local snapBefore = SnapshotResources()
+                    -- 记录事件标题和选项文本（弹窗关闭后 evt 引用可能变化）
+                    local evtTitle = evt.title
+                    local choiceLabel = choice.text
                     -- 先移除事件和overlay，防止effect()报错导致卡死
                     table.remove(s.pendingEvents, 1)
                     SaveSystem.AutoSave()
                     local overlay = gameRoot_:FindById("eventPopupOverlay")
                     if overlay then gameRoot_:RemoveChild(overlay) end
-                    -- 安全执行效果函数
-                    local ok, err = pcall(choice.effect)
+                    -- 安全执行效果函数（传入 choice 引用，支持 effect 内动态设置 result）
+                    local ok, err = pcall(choice.effect, choice)
                     if not ok then
                         log:Write(LOG_WARNING, "Event effect error: " .. tostring(err))
                     end
-                    -- 处理下一个事件或恢复
-                    GameScreen.ShowPendingEventPopup()
+                    -- 在 effect 执行后读取 result（支持 effect 内动态设置）
+                    local resultDesc = choice.result
+                    -- 资源快照（effect 执行后）并计算差异
+                    local snapAfter = SnapshotResources()
+                    local diffs = DiffResources(snapBefore, snapAfter)
+                    -- 显示结果反馈弹窗，关闭后再处理下一个事件
+                    ShowEventResultPopup(evtTitle, choiceLabel, diffs, resultDesc, function()
+                        GameScreen.RefreshAll()
+                        GameScreen.ShowPendingEventPopup()
+                    end)
                 end,
                 children = { UI.Label { text = choice.text, fontSize = 13, fontColor = Theme.GOLD } },
             }
@@ -788,6 +970,8 @@ function GameScreen.RefreshContent()
                 onCourtesan = function() GameScreen.ShowCourtesanDialog() end,
                 onImperialSeal = function() GameScreen.ShowImperialSealDialog() end,
                 onLoan = function() GameScreen.ShowLoanDialog() end,
+                onClinic = function() GameScreen.ShowClinicDialog() end,
+                onLabor = function() GameScreen.ShowLaborDialog() end,
             }
         )
         contentArea_:AddChild(tree)
@@ -930,6 +1114,47 @@ function GameScreen.CreateClanPage()
                         },
                     },
 
+                    -- 晋升条件卡片（始终可见）
+                    (s.clanRank < #GameData.CLAN_RANKS) and UI.Panel {
+                        width = "100%", padding = 14, borderRadius = 10,
+                        backgroundColor = Theme.BG_WHITE,
+                        borderWidth = 1, borderColor = Theme.BORDER, gap = 6,
+                        children = (function()
+                            local items = {}
+                            items[#items + 1] = UI.Label { text = "晋升条件 → " .. nextRank, fontSize = 14, fontColor = Theme.GOLD, marginBottom = 4 }
+                            local function reqRow(icon, label, need, cur)
+                                local met = cur >= need
+                                return UI.Panel {
+                                    flexDirection = "row", justifyContent = "space-between", alignItems = "center", width = "100%",
+                                    children = {
+                                        UI.Panel {
+                                            flexDirection = "row", alignItems = "center", gap = 4,
+                                            children = {
+                                                UI.Panel { width = 16, height = 16, backgroundImage = icon, backgroundFit = "contain" },
+                                                UI.Label { text = label, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                                            },
+                                        },
+                                        UI.Panel {
+                                            flexDirection = "row", gap = 4, alignItems = "center",
+                                            children = {
+                                                UI.Label { text = tostring(cur) .. " / " .. tostring(need), fontSize = 11, fontColor = met and Theme.GREEN or Theme.RED },
+                                                UI.Label { text = met and "OK" or "x", fontSize = 9, fontColor = met and Theme.GREEN or Theme.RED },
+                                            },
+                                        },
+                                    },
+                                }
+                            end
+                            items[#items + 1] = reqRow(Theme.IMG.RES_SILVER, "银两", upgradeCostSilver, s.silver)
+                            items[#items + 1] = reqRow(Theme.IMG.RES_FAME, "声望", upgradeCostFame, s.fame)
+                            items[#items + 1] = reqRow(Theme.IMG.RES_GRAIN, "粮食", upgradeCostGrain, s.grain)
+                            if upgradeCostCloth > 0 then
+                                items[#items + 1] = reqRow(Theme.IMG.RES_CLOTH, "布匹", upgradeCostCloth, s.cloth)
+                            end
+                            items[#items + 1] = reqRow(Theme.IMG.RES_POP, "族人", upgradePopReq, aliveCount)
+                            return items
+                        end)(),
+                    } or nil,
+
                     -- 操作按钮（圆形）
                     UI.Panel {
                         width = "100%", flexDirection = "row", justifyContent = "center", gap = 16,
@@ -999,7 +1224,7 @@ function GameScreen.CreateClanPage()
                                         opacity = (GameData.state.lastSacrificeYear < GameData.state.year and GameData.CanAfford(0, 10, 5, 0)) and 1.0 or 0.5,
                                         onClick = function(self)
                                             if s.lastSacrificeYear >= s.year then
-                                                Toast.Warning("今年已祭祀过，明年再来")
+                                                Toast.Warn("今年已祭祀过，明年再来")
                                                 return
                                             end
                                             if not GameData.CanAfford(0, 10, 5, 0) then
@@ -1500,7 +1725,21 @@ function GameScreen.RefreshTopBar()
             })
         end
     end
-    updateLabel("weatherLabel", WeatherSystem.GetDisplayText())
+    -- 更新季节+天气图标组
+    local weatherInfo = WeatherSystem.GetDisplayInfo()
+    local weatherPanel = gameRoot_:FindById("weatherPanel")
+    if weatherPanel then
+        weatherPanel:ClearChildren()
+        if weatherInfo.seasonImg then
+            weatherPanel:AddChild(UI.Panel { width = 16, height = 16, borderRadius = 8, overflow = "hidden", backgroundImage = weatherInfo.seasonImg, backgroundFit = "cover" })
+        end
+        weatherPanel:AddChild(UI.Label { text = weatherInfo.seasonName, fontSize = 10, fontColor = Theme.TEXT_SECONDARY })
+        if weatherInfo.weatherImg then
+            weatherPanel:AddChild(UI.Label { text = "·", fontSize = 10, fontColor = Theme.TEXT_MUTED })
+            weatherPanel:AddChild(UI.Panel { width = 16, height = 16, borderRadius = 8, overflow = "hidden", backgroundImage = weatherInfo.weatherImg, backgroundFit = "cover" })
+            weatherPanel:AddChild(UI.Label { text = weatherInfo.weatherName, fontSize = 10, fontColor = Theme.TEXT_SECONDARY })
+        end
+    end
     updateLabel("resSilver", FormatNumber(s.silver))
     updateLabel("resGrain", FormatNumber(s.grain))
     updateLabel("resCloth", FormatNumber(s.cloth))

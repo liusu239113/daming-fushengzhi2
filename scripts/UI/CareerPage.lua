@@ -73,14 +73,23 @@ function CareerPage.Create(pageTitle, gameScreen)
     if not examUnlocked then
         children[#children + 1] = UI.Panel {
             width = "100%", padding = 12, borderRadius = 8,
-            backgroundColor = Theme.BG_INPUT, opacity = 0.5,
-            gap = 4, alignItems = "center",
+            backgroundColor = Theme.BG_INPUT, opacity = 0.6,
+            gap = 6, alignItems = "center",
             onClick = function(self)
-                gameScreen.ShowResultPopup("尚未解锁", "提升品级至【" .. examReqRank .. "】后可参加科举考试。")
+                gameScreen.ShowResultPopup("科举考试（未解锁）",
+                    "提升品级至【" .. examReqRank .. "】后可参加科举考试。\n\n"
+                    .. "科举路径：\n"
+                    .. "  1. 先在书院安排族人读书，提升学识\n"
+                    .. "  2. 学识达标后依次参加：\n"
+                    .. "     童试（学识30+）→ 乡试（60+）→ 会试（85+）→ 殿试（95+）\n"
+                    .. "  3. 中举/中进士可大幅提升声望\n\n"
+                    .. "当前品级：" .. GameData.GetClanRankName() .. "，需提升至" .. examReqRank)
             end,
             children = {
                 UI.Panel { width = 200, height = 112, alignSelf = "center", borderRadius = 8, overflow = "hidden", backgroundImage = Theme.IMG.BTN_EXAM, backgroundFit = "cover", opacity = 0.4 },
-                UI.Label { text = "需品级【" .. examReqRank .. "】解锁", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "科举取士 · 需品级【" .. examReqRank .. "】解锁", fontSize = 12, fontColor = Theme.GOLD },
+                UI.Label { text = "安排族人读书→参加科举→获取功名声望", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                UI.Label { text = "点击查看详情", fontSize = 9, fontColor = Theme.BLUE },
             },
         }
     else
@@ -139,14 +148,21 @@ function CareerPage.Create(pageTitle, gameScreen)
     if not donateUnlocked then
         children[#children + 1] = UI.Panel {
             width = "100%", padding = 12, borderRadius = 8,
-            backgroundColor = Theme.BG_INPUT, opacity = 0.5,
-            gap = 4, alignItems = "center",
+            backgroundColor = Theme.BG_INPUT, opacity = 0.6,
+            gap = 6, alignItems = "center",
             onClick = function(self)
-                gameScreen.ShowResultPopup("尚未解锁", "提升品级至【" .. donateReqRank .. "】后可纳捐监生。")
+                gameScreen.ShowResultPopup("纳捐监生（未解锁）",
+                    "提升品级至【" .. donateReqRank .. "】后可纳捐监生。\n\n"
+                    .. "纳捐说明：\n"
+                    .. "  · 花费银两为族人购买国子监名额\n"
+                    .. "  · 族人获得「监生」身份\n"
+                    .. "  · 无需参加科举，直接获得功名\n\n"
+                    .. "当前品级：" .. GameData.GetClanRankName() .. "，需提升至" .. donateReqRank)
             end,
             children = {
-                UI.Label { text = "[锁] 纳捐监生", fontSize = 15, fontColor = Theme.TEXT_MUTED },
-                UI.Label { text = "需品级【" .. donateReqRank .. "】解锁", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "纳捐监生 · 需品级【" .. donateReqRank .. "】解锁", fontSize = 12, fontColor = Theme.GOLD },
+                UI.Label { text = "花银两为族人买功名（不需科举）", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                UI.Label { text = "点击查看详情", fontSize = 9, fontColor = Theme.BLUE },
             },
         }
     else
@@ -201,14 +217,23 @@ function CareerPage.Create(pageTitle, gameScreen)
     if not militaryUnlocked then
         children[#children + 1] = UI.Panel {
             width = "100%", padding = 12, borderRadius = 8,
-            backgroundColor = Theme.BG_INPUT, opacity = 0.5,
-            gap = 4, alignItems = "center",
+            backgroundColor = Theme.BG_INPUT, opacity = 0.6,
+            gap = 6, alignItems = "center",
             onClick = function(self)
-                gameScreen.ShowResultPopup("尚未解锁", "提升品级至【" .. militaryReqRank .. "】后可从军报国。")
+                gameScreen.ShowResultPopup("从军报国（未解锁）",
+                    "提升品级至【" .. militaryReqRank .. "】后可从军报国。\n\n"
+                    .. "从军特点：\n"
+                    .. "  · 派遣男性族人（16-45岁）投身军旅\n"
+                    .. "  · 每月获取军饷（银两）和声望\n"
+                    .. "  · 可逐步晋升军职：士兵→把总→守备\n"
+                    .. "  · 风险较高：从军有阵亡概率\n\n"
+                    .. "当前品级：" .. GameData.GetClanRankName() .. "，需提升至" .. militaryReqRank)
             end,
             children = {
                 UI.Panel { width = 200, height = 112, alignSelf = "center", borderRadius = 8, overflow = "hidden", backgroundImage = Theme.IMG.BTN_MILITARY, backgroundFit = "cover", opacity = 0.4 },
-                UI.Label { text = "需品级【" .. militaryReqRank .. "】解锁", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "从军报国 · 需品级【" .. militaryReqRank .. "】解锁", fontSize = 12, fontColor = Theme.GOLD },
+                UI.Label { text = "派遣族人从军→获取军饷声望（高风险高回报）", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                UI.Label { text = "点击查看详情", fontSize = 9, fontColor = Theme.BLUE },
             },
         }
     else

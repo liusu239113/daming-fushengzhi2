@@ -17,11 +17,11 @@ local FamilyTree = {}
 -- 布局常量
 -- ============================================================================
 
-local CARD_W = 66          -- 族人卡片宽度
-local CARD_H = 86          -- 族人卡片高度
+local CARD_W = 90          -- 族人卡片宽度（放大以容纳身份信息）
+local CARD_H = 118         -- 族人卡片高度
 local COUPLE_GAP = 4       -- 夫妻之间间距
-local SIBLING_GAP = 14     -- 兄弟姐妹之间间距
-local GEN_GAP_Y = 36       -- 代际垂直间距（连线区域）
+local SIBLING_GAP = 10     -- 兄弟姐妹之间间距
+local GEN_GAP_Y = 30       -- 代际垂直间距（连线区域）
 local TREE_PAD = 20        -- 树整体内边距
 local LINE_COLOR = Theme.GOLD_DARK   -- 连线颜色
 local LINE_W = 2           -- 连线宽度
@@ -152,25 +152,46 @@ local function CreateMemberCard(member, onClickMember)
         if ps == "读书" then stateIcon2 = "书"; stateColor2 = { 100, 180, 120, 255 }
         elseif ps == "从军" or ps == "出征" then stateIcon2 = "军"; stateColor2 = Theme.BLUE
         elseif ps == "经商" then stateIcon2 = "商"; stateColor2 = Theme.GOLD_DARK
+        elseif ps == "打工" then stateIcon2 = "工"; stateColor2 = {180, 140, 60, 255}
         end
     elseif member.state == "读书" then stateColor = { 100, 180, 120, 255 }; stateIcon = "书"
     elseif member.state == "从军" or member.state == "出征" then stateColor = Theme.BLUE; stateIcon = "军"
     elseif member.state == "经商" then stateColor = Theme.GOLD_DARK; stateIcon = "商"
+    elseif member.state == "打工" then stateColor = {180, 140, 60, 255}; stateIcon = "工"
     elseif member.state == "在家" then stateIcon = ""
     end
 
-    -- 身份标签
+    -- 身份标签与颜色
     local identityText = member.identity
     if identityText == "白丁" then identityText = "" end
+
+    -- 身份颜色：文官蓝紫、武将赤红、普通金色
+    local identityColor = Theme.GOLD_DARK
+    local identityEffect = ""
+    local CIVIL_IDS = { ["童生"]=true, ["秀才"]=true, ["举人"]=true, ["进士"]=true, ["监生"]=true }
+    local MILITARY_IDS = { ["士兵"]=true, ["把总"]=true, ["守备"]=true }
+    if CIVIL_IDS[member.identity] then
+        identityColor = { 80, 100, 180, 255 }  -- 蓝紫色（文官）
+        if member.identity == "秀才" then identityEffect = "月+2望"
+        elseif member.identity == "举人" then identityEffect = "月+5望+2银"
+        elseif member.identity == "进士" then identityEffect = "月+10望+5银"
+        elseif member.identity == "监生" then identityEffect = "月+2望"
+        end
+    elseif MILITARY_IDS[member.identity] then
+        identityColor = { 180, 60, 60, 255 }  -- 赤红色（武将）
+        if member.identity == "把总" then identityEffect = "月+8望+8银"
+        elseif member.identity == "守备" then identityEffect = "月+15望+15银"
+        end
+    end
 
     local cardBg = isDead and { 230, 225, 218, 200 } or Theme.BG_CARD
     local cardBorder = isDead and { 200, 195, 185, 180 } or Theme.BORDER_GOLD
     local textAlpha = isDead and 120 or 255
 
-    -- 头像圆形区域的尺寸和位置（相对于卡片）
-    local avatarSize = 26
-    local avatarTop = 5
-    local avatarBorderW = 2
+    -- 头像圆形区域的尺寸和位置（对齐装饰边框中的金色圆环）
+    local avatarSize = 36
+    local avatarTop = 12
+    local avatarBorderW = 0  -- 装饰边框自带圆环，不需要额外border
 
     return UI.Panel {
         width = CARD_W,
@@ -200,12 +221,13 @@ local function CreateMemberCard(member, onClickMember)
                 overflow = "hidden",
                 flexShrink = 1,
                 paddingTop = avatarTop,
-                paddingBottom = 2,
+                paddingBottom = 3,
                 paddingHorizontal = 2,
                 gap = 0,
-                children = {
+                children = (function()
+                    local items = {}
                     -- 圆形头像区域（使用纸娃娃头像系统）
-                    UI.Panel {
+                    items[#items + 1] = UI.Panel {
                         width = avatarSize, height = avatarSize,
                         borderRadius = avatarSize / 2,
                         borderWidth = avatarBorderW,
@@ -213,60 +235,79 @@ local function CreateMemberCard(member, onClickMember)
                         overflow = "hidden",
                         backgroundImage = AvatarSystem.GetAvatar(member),
                         backgroundFit = "cover",
-                    },
+                    }
                     -- 姓名（限1行，超出截断）
-                    UI.Label {
+                    items[#items + 1] = UI.Label {
                         text = member.name,
-                        fontSize = 9,
+                        fontSize = 10,
+                        marginTop = 1,
                         fontColor = { Theme.TEXT_PRIMARY[1], Theme.TEXT_PRIMARY[2], Theme.TEXT_PRIMARY[3], textAlpha },
+                        fontWeight = "bold",
                         textAlign = "center",
                         maxLines = 1,
-                        maxWidth = CARD_W - 6,
+                        maxWidth = CARD_W - 8,
                         flexShrink = 1,
-                    },
+                    }
                     -- 年龄（限1行）
-                    UI.Label {
+                    items[#items + 1] = UI.Label {
                         text = isDead and "已故" or (member.age .. "岁"),
                         fontSize = 8,
                         fontColor = isDead and Theme.RED or { Theme.TEXT_SECONDARY[1], Theme.TEXT_SECONDARY[2], Theme.TEXT_SECONDARY[3], textAlpha },
                         textAlign = "center",
                         maxLines = 1,
                         flexShrink = 1,
-                    },
-                    -- 身份/状态（限1行）
-                    (identityText ~= "" and
-                        UI.Label {
+                    }
+                    -- 身份（限1行，文官蓝紫/武将赤红）
+                    if identityText ~= "" then
+                        items[#items + 1] = UI.Label {
                             text = identityText,
                             fontSize = 8,
-                            fontColor = Theme.GOLD_DARK,
+                            fontColor = identityColor,
+                            fontWeight = "bold",
                             textAlign = "center",
                             maxLines = 1,
-                            maxWidth = CARD_W - 6,
+                            maxWidth = CARD_W - 8,
                             flexShrink = 1,
                         }
-                    or stateIcon2 ~= "" and
-                        -- 双状态并列（如 病+书）
-                        UI.Panel {
-                            flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 2,
-                            maxWidth = CARD_W - 6, flexShrink = 1,
-                            children = {
-                                UI.Label { text = stateIcon, fontSize = 8, fontColor = stateColor },
-                                UI.Label { text = "+", fontSize = 7, fontColor = Theme.TEXT_MUTED },
-                                UI.Label { text = stateIcon2, fontSize = 8, fontColor = stateColor2 },
-                            },
-                        }
-                    or
-                        UI.Label {
-                            text = stateIcon ~= "" and stateIcon or member.state,
-                            fontSize = 8,
-                            fontColor = stateColor,
+                    end
+                    -- 身份效果提示（如 月+5望+2银）
+                    if identityEffect ~= "" then
+                        items[#items + 1] = UI.Label {
+                            text = identityEffect,
+                            fontSize = 7,
+                            fontColor = { identityColor[1], identityColor[2], identityColor[3], 160 },
                             textAlign = "center",
                             maxLines = 1,
-                            maxWidth = CARD_W - 6,
+                            maxWidth = CARD_W - 8,
                             flexShrink = 1,
                         }
-                    ),
-                },
+                    end
+                    -- 状态图标
+                    if stateIcon ~= "" then
+                        if stateIcon2 ~= "" then
+                            -- 双状态并列（如 病+书）
+                            items[#items + 1] = UI.Panel {
+                                flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 2,
+                                maxWidth = CARD_W - 8, flexShrink = 1,
+                                children = {
+                                    UI.Label { text = stateIcon, fontSize = 8, fontColor = stateColor },
+                                    UI.Label { text = "+", fontSize = 7, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = stateIcon2, fontSize = 8, fontColor = stateColor2 },
+                                },
+                            }
+                        else
+                            items[#items + 1] = UI.Label {
+                                text = stateIcon,
+                                fontSize = 8,
+                                fontColor = stateColor,
+                                textAlign = "center",
+                                maxLines = 1,
+                                flexShrink = 1,
+                            }
+                        end
+                    end
+                    return items
+                end)(),
             },
         },
     }
@@ -524,6 +565,34 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
             backgroundImage = Theme.IMG.NAV_LOAN, backgroundFit = "contain",
             justifyContent = "center", alignItems = "center",
             onPointerDown = function(self) AudioManager.Click() cbs.onLoan() end,
+        }
+        btnTop = btnTop + btnGap
+    end
+
+    -- 医馆（开局即可用）
+    if cbs.onClinic then
+        floatingButtons[#floatingButtons + 1] = UI.Panel {
+            position = "absolute",
+            right = 6, top = btnTop,
+            width = btnSize, height = btnSize,
+            borderRadius = btnSize / 2,
+            backgroundImage = Theme.IMG.NAV_CLINIC, backgroundFit = "contain",
+            justifyContent = "center", alignItems = "center",
+            onPointerDown = function(self) AudioManager.Click() cbs.onClinic() end,
+        }
+        btnTop = btnTop + btnGap
+    end
+
+    -- 打工（开局即可用，常驻）
+    if cbs.onLabor then
+        floatingButtons[#floatingButtons + 1] = UI.Panel {
+            position = "absolute",
+            right = 6, top = btnTop,
+            width = btnSize, height = btnSize,
+            borderRadius = btnSize / 2,
+            backgroundImage = Theme.IMG.NAV_LABOR, backgroundFit = "contain",
+            justifyContent = "center", alignItems = "center",
+            onPointerDown = function(self) AudioManager.Click() cbs.onLabor() end,
         }
         btnTop = btnTop + btnGap
     end

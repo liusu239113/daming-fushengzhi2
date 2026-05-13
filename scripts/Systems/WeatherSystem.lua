@@ -4,6 +4,7 @@
 -- ============================================================================
 
 local GameData = require("Data.GameData")
+local Theme = require("UI.Theme")
 
 local WeatherSystem = {}
 
@@ -12,10 +13,10 @@ local WeatherSystem = {}
 -- ============================================================================
 
 WeatherSystem.SEASONS = {
-    { id = "spring", name = "春", icon = "春", months = { 1, 2, 3 } },
-    { id = "summer", name = "夏", icon = "夏", months = { 4, 5, 6 } },
-    { id = "autumn", name = "秋", icon = "秋", months = { 7, 8, 9 } },
-    { id = "winter", name = "冬", icon = "冬", months = { 10, 11, 12 } },
+    { id = "spring", name = "春", icon = "春", img = Theme.IMG.SEASON_SPRING, months = { 1, 2, 3 } },
+    { id = "summer", name = "夏", icon = "夏", img = Theme.IMG.SEASON_SUMMER, months = { 4, 5, 6 } },
+    { id = "autumn", name = "秋", icon = "秋", img = Theme.IMG.SEASON_AUTUMN, months = { 7, 8, 9 } },
+    { id = "winter", name = "冬", icon = "冬", img = Theme.IMG.SEASON_WINTER, months = { 10, 11, 12 } },
 }
 
 -- ============================================================================
@@ -24,17 +25,17 @@ WeatherSystem.SEASONS = {
 
 -- 天气定义：name 显示名, icon 图标, effects 影响系数
 WeatherSystem.WEATHER_TYPES = {
-    clear    = { name = "晴朗", icon = "晴", grainMul = 1.0,  healthMod = 0,  moraleMod = 0,  desc = "天朗气清，万物和畅。" },
-    cloudy   = { name = "多云", icon = "云", grainMul = 0.95, healthMod = 0,  moraleMod = 0,  desc = "云层叠嶂，不碍农事。" },
-    rain     = { name = "细雨", icon = "雨", grainMul = 1.1,  healthMod = -1, moraleMod = 0,  desc = "春雨润物，利于耕种。" },
-    storm    = { name = "暴雨", icon = "暴", grainMul = 0.7,  healthMod = -3, moraleMod = -1, desc = "暴雨倾盆，田地受淹，道路泥泞。" },
-    drought  = { name = "干旱", icon = "旱", grainMul = 0.5,  healthMod = -2, moraleMod = -2, desc = "烈日炎炎，禾苗枯焦，旱魃为虐。" },
-    flood    = { name = "洪涝", icon = "涝", grainMul = 0.4,  healthMod = -5, moraleMod = -3, desc = "洪水漫堤，田宅尽没，流民四起。" },
-    snow     = { name = "大雪", icon = "雪", grainMul = 0.3,  healthMod = -4, moraleMod = -1, desc = "大雪封路，严寒刺骨，柴米告急。" },
-    frost    = { name = "霜冻", icon = "霜", grainMul = 0.6,  healthMod = -3, moraleMod = -1, desc = "霜降过早，秋粮减收。" },
-    fog      = { name = "大雾", icon = "雾", grainMul = 0.9,  healthMod = -1, moraleMod = 0,  desc = "浓雾弥漫，出行不便。" },
-    wind     = { name = "大风", icon = "风", grainMul = 0.85, healthMod = -1, moraleMod = 0,  desc = "狂风大作，屋瓦飞扬。" },
-    pleasant = { name = "和煦", icon = "暖", grainMul = 1.15, healthMod = 2,  moraleMod = 1,  desc = "风和日丽，适宜耕读。" },
+    clear    = { name = "晴朗", icon = "晴", img = Theme.IMG.WEATHER_CLEAR,    grainMul = 1.0,  healthMod = 0,  moraleMod = 0,  desc = "天朗气清，万物和畅。" },
+    cloudy   = { name = "多云", icon = "云", img = Theme.IMG.WEATHER_CLOUDY,   grainMul = 0.95, healthMod = 0,  moraleMod = 0,  desc = "云层叠嶂，不碍农事。" },
+    rain     = { name = "细雨", icon = "雨", img = Theme.IMG.WEATHER_RAIN,     grainMul = 1.1,  healthMod = -1, moraleMod = 0,  desc = "春雨润物，利于耕种。" },
+    storm    = { name = "暴雨", icon = "暴", img = Theme.IMG.WEATHER_STORM,    grainMul = 0.7,  healthMod = -3, moraleMod = -1, desc = "暴雨倾盆，田地受淹，道路泥泞。" },
+    drought  = { name = "干旱", icon = "旱", img = Theme.IMG.WEATHER_DROUGHT,  grainMul = 0.5,  healthMod = -2, moraleMod = -2, desc = "烈日炎炎，禾苗枯焦，旱魃为虐。" },
+    flood    = { name = "洪涝", icon = "涝", img = Theme.IMG.WEATHER_FLOOD,    grainMul = 0.4,  healthMod = -5, moraleMod = -3, desc = "洪水漫堤，田宅尽没，流民四起。" },
+    snow     = { name = "大雪", icon = "雪", img = Theme.IMG.WEATHER_SNOW,     grainMul = 0.3,  healthMod = -4, moraleMod = -1, desc = "大雪封路，严寒刺骨，柴米告急。" },
+    frost    = { name = "霜冻", icon = "霜", img = Theme.IMG.WEATHER_FROST,    grainMul = 0.6,  healthMod = -3, moraleMod = -1, desc = "霜降过早，秋粮减收。" },
+    fog      = { name = "大雾", icon = "雾", img = Theme.IMG.WEATHER_FOG,      grainMul = 0.9,  healthMod = -1, moraleMod = 0,  desc = "浓雾弥漫，出行不便。" },
+    wind     = { name = "大风", icon = "风", img = Theme.IMG.WEATHER_WIND,     grainMul = 0.85, healthMod = -1, moraleMod = 0,  desc = "狂风大作，屋瓦飞扬。" },
+    pleasant = { name = "和煦", icon = "暖", img = Theme.IMG.WEATHER_PLEASANT, grainMul = 1.15, healthMod = 2,  moraleMod = 1,  desc = "风和日丽，适宜耕读。" },
 }
 
 -- 各季节天气权重分布
@@ -46,7 +47,7 @@ local SEASON_WEATHER_WEIGHTS = {
 }
 
 -- cold 是 winter 专属，补充定义
-WeatherSystem.WEATHER_TYPES.cold = { name = "严寒", icon = "寒", grainMul = 0.4, healthMod = -5, moraleMod = -2, desc = "天寒地冻，冻死牛马，人心惶惶。" }
+WeatherSystem.WEATHER_TYPES.cold = { name = "严寒", icon = "寒", img = Theme.IMG.WEATHER_COLD, grainMul = 0.4, healthMod = -5, moraleMod = -2, desc = "天寒地冻，冻死牛马，人心惶惶。" }
 
 -- ============================================================================
 -- 核心方法
@@ -161,10 +162,32 @@ function WeatherSystem.GetDisplayText()
     local s = GameData.state
     if s.currentWeather then
         local w = s.currentWeather
-        return w.season.name .. w.season.icon .. " · " .. w.type.name .. w.type.icon
+        return w.season.name .. " · " .. w.type.name
     end
     local season = WeatherSystem.GetSeason(s.month or 1)
-    return season.name .. season.icon
+    return season.name
+end
+
+--- 获取当前天气的图标数据（用于顶栏图标显示）
+--- @return table { seasonImg, seasonName, weatherImg, weatherName } 或 nil
+function WeatherSystem.GetDisplayInfo()
+    local s = GameData.state
+    if s.currentWeather then
+        local w = s.currentWeather
+        return {
+            seasonImg = w.season.img,
+            seasonName = w.season.name,
+            weatherImg = w.type.img,
+            weatherName = w.type.name,
+        }
+    end
+    local season = WeatherSystem.GetSeason(s.month or 1)
+    return {
+        seasonImg = season.img,
+        seasonName = season.name,
+        weatherImg = nil,
+        weatherName = nil,
+    }
 end
 
 return WeatherSystem

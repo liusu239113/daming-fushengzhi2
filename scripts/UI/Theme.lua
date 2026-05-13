@@ -169,6 +169,8 @@ Theme.IMG = {
     NAV_COURTESAN = "image/nav_btn_courtesan_20260511235034.png",
     NAV_SEAL      = "image/nav_btn_seal_20260511235035.png",
     NAV_LOAN      = "image/nav_btn_loan_20260512064520.png",
+    NAV_CLINIC    = "image/nav_btn_clinic_20260513093122.png",
+    NAV_LABOR     = "image/nav_btn_labor_20260513095832.png",
 
     -- UI 背景素材（翡翠绿+金色主题）
     BG_MAIN_LANDSCAPE = "image/edited_bg_main_landscape_fill_20260511200448.png",
@@ -189,6 +191,26 @@ Theme.IMG = {
     BTN_RECALL   = "image/btn_recall_bar_20260511033433.png",
     BTN_EXAM     = "image/btn_exam_bar_20260511033455.png",
     BTN_MILITARY = "image/btn_military_bar_20260511033512.png",
+
+    -- 季节图标（古风水墨圆形 256x256）
+    SEASON_SPRING = "image/icon_season_spring_20260513103222.png",
+    SEASON_SUMMER = "image/icon_season_summer_20260513103227.png",
+    SEASON_AUTUMN = "image/icon_season_autumn_20260513103022.png",
+    SEASON_WINTER = "image/icon_season_winter_20260513103027.png",
+
+    -- 天气图标（古风水墨圆形 256x256）
+    WEATHER_CLEAR    = "image/icon_weather_clear_20260513103014.png",
+    WEATHER_CLOUDY   = "image/icon_weather_cloudy_20260513103625.png",
+    WEATHER_RAIN     = "image/icon_weather_rain_20260513103627.png",
+    WEATHER_STORM    = "image/icon_weather_storm_20260513103026.png",
+    WEATHER_DROUGHT  = "image/icon_weather_drought_20260513103629.png",
+    WEATHER_FLOOD    = "image/icon_weather_flood_20260513103225.png",
+    WEATHER_SNOW     = "image/icon_weather_snow_20260513103223.png",
+    WEATHER_FROST    = "image/icon_weather_frost_20260513103624.png",
+    WEATHER_FOG      = "image/icon_weather_fog_20260513103629.png",
+    WEATHER_WIND     = "image/icon_weather_wind_20260513103626.png",
+    WEATHER_PLEASANT = "image/icon_weather_pleasant_20260513103626.png",
+    WEATHER_COLD     = "image/icon_weather_cold_20260513103631.png",
 
     -- 族谱页面背景
     BG_FAMILY_TREE = "image/1000752662.png",

@@ -115,10 +115,10 @@ function GrowthSystem.Process(report, ruleEffects)
             end
         end
 
-        -- 婴儿夭折（0-2岁，5%概率）
+        -- 婴儿夭折（0-2岁）
         if m.alive and m.age <= 2 then
-            local infantDeathRate = 0.03
-            if m.health < 50 then infantDeathRate = 0.06 end
+            local infantDeathRate = 0.008
+            if m.health < 50 then infantDeathRate = 0.015 end
             if math.random() < infantDeathRate then
                 EquipmentSystem.HandleInheritance(m)
                 -- 婴儿不可能是族长，无需检查继承
@@ -146,7 +146,7 @@ function GrowthSystem.Process(report, ruleEffects)
                 sickRate = sickRate * 0.85
             end
             if math.random() < sickRate then
-                m.health = math.max(0, m.health - math.random(5, 20))
+                m.health = math.max(0, m.health - math.random(3, 10))
                 if m.state ~= "从军" and m.state ~= "出征" and m.state ~= "赶考" then
                     if m.state ~= "生病" then m.prevState = m.state end
                     m.state = "生病"
@@ -157,13 +157,13 @@ function GrowthSystem.Process(report, ruleEffects)
 
         -- 病人恢复
         if m.alive and m.state == "生病" then
-            m.health = math.min(100, m.health + math.random(3, 8))
+            m.health = math.min(100, m.health + math.random(5, 12))
             if m.health >= 60 then
                 m.state = m.prevState or "在家"
                 m.prevState = nil
             end
             -- 病重者可能病死（独苗保护：仅剩1人时概率大幅降低）
-            local deathChance = 0.15
+            local deathChance = 0.08
             if #GameData.GetAliveMembers() <= 1 then deathChance = 0.03 end
             if m.health <= 10 and math.random() < deathChance then
                 EquipmentSystem.HandleInheritance(m)

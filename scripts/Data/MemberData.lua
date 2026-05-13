@@ -13,7 +13,7 @@ MemberData.IDENTITIES = {
 }
 
 -- 族人状态
-MemberData.STATES = { "在家", "读书", "赶考", "经商", "从军", "出征", "生病", "筑寨", "历练" }
+MemberData.STATES = { "在家", "读书", "赶考", "经商", "从军", "出征", "生病", "筑寨", "历练", "打工" }
 
 -- 天赋列表
 MemberData.TALENTS = {
@@ -275,5 +275,42 @@ MemberData.TRAINING_OPTIONS = {
       cost = { silver = 8, grain = 0 },
       attr = "health", multiplier = 2.0 },
 }
+
+-- ============================================================================
+-- 打工系统（按品级解锁工种，月结工资）
+-- ============================================================================
+
+-- 打工工种列表（按品级解锁）
+-- 工资设计原则：略低于人均月消耗（成人3粮/月 + 季度布匹0.5 ≈ 月开销折银约4~6两）
+-- 让玩家能续命但无法躺赢
+MemberData.LABOR_JOBS = {
+    { id = "coolie",     name = "帮工",   rank = 1, wage = 3,  desc = "码头搬运，卖力气换铜板" },
+    { id = "farmhand",   name = "佃农",   rank = 1, wage = 4,  desc = "替人耕种，辛苦度日" },
+    { id = "peddler",    name = "货郎",   rank = 2, wage = 6,  desc = "走街串巷，贩卖杂货" },
+    { id = "craftsman",  name = "匠人",   rank = 2, wage = 7,  desc = "手艺谋生，略有余钱" },
+    { id = "clerk",      name = "账房",   rank = 3, wage = 9,  desc = "商号记账，薪俸稳定" },
+    { id = "foreman",    name = "工头",   rank = 3, wage = 10, desc = "管人管事，待遇尚可" },
+    { id = "steward",    name = "掌柜",   rank = 4, wage = 12, desc = "店铺坐堂，收入丰厚" },
+    { id = "tutor",      name = "西席",   rank = 4, wage = 14, desc = "设帐授徒，束脩不菲" },
+}
+
+--- 获取当前品级可用的打工工种
+function MemberData.GetAvailableLaborJobs(clanRank)
+    local result = {}
+    for _, job in ipairs(MemberData.LABOR_JOBS) do
+        if clanRank >= job.rank then
+            result[#result + 1] = job
+        end
+    end
+    return result
+end
+
+--- 根据 id 获取打工工种
+function MemberData.GetLaborJob(jobId)
+    for _, job in ipairs(MemberData.LABOR_JOBS) do
+        if job.id == jobId then return job end
+    end
+    return nil
+end
 
 return MemberData

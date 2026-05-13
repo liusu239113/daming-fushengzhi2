@@ -25,6 +25,8 @@ IndustryData.INDUSTRY_TYPES = {
     { id = "livestock",   name = "畜栏", resource = "grain", baseOutput = 6,  cost = 200,
       desc = "养猪牧羊，产粮食兼出少量布匹",
       resource2 = "cloth", baseOutput2 = 3 },
+    { id = "handicraft",  name = "手工作坊", resource = "silver", baseOutput = 4, cost = 260,
+      desc = "编篮制陶，前期银两来源" },
 
     -- === 乡绅（3级）===
     { id = "shop",        name = "商铺", resource = "silver", baseOutput = 10, cost = 450,
@@ -110,6 +112,7 @@ IndustryData.INDUSTRY_UNLOCK = {
     paddy_field  = 2,
     fish_pond    = 2,
     livestock    = 2,
+    handicraft   = 2,
     -- 乡绅（3级）
     shop         = 3,
     tea_garden   = 3,

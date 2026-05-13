@@ -13,6 +13,8 @@ local SkillSystem = require("Systems.SkillSystem")
 local GrowthSystem = require("Systems.GrowthSystem")
 local AdSystem = require("Systems.AdSystem")
 local AvatarSystem = require("UI.AvatarSystem")
+local MemberData = require("Data.MemberData")
+local Toast = require("Systems.Toast")
 
 local ModalDialogs = {}
 
@@ -142,6 +144,37 @@ function GameScreen.ShowMemberDetail(member)
     if member.talent then
         detailChildren[#detailChildren + 1] = UI.Label { text = "天赋：" .. member.talent.name .. "（" .. member.talent.effect .. "）", fontSize = 12, fontColor = Theme.GOLD_DARK }
     end
+
+    -- 身份效果说明（功名/军衔带来的月收益）
+    local IDENTITY_EFFECTS = {
+        ["秀才"]  = { color = { 80, 100, 180, 255 }, desc = "功名在身，每月+2声望", icon = "文" },
+        ["举人"]  = { color = { 80, 100, 180, 255 }, desc = "举人功名，每月+5声望 +2银两", icon = "文" },
+        ["进士"]  = { color = { 80, 100, 180, 255 }, desc = "进士及第，每月+10声望 +5银两", icon = "文" },
+        ["监生"]  = { color = { 80, 100, 180, 255 }, desc = "监生资格，每月+2声望", icon = "文" },
+        ["士兵"]  = { color = { 180, 60, 60, 255 }, desc = "军中效力，每月领取军饷", icon = "武" },
+        ["把总"]  = { color = { 180, 60, 60, 255 }, desc = "把总军衔，每月+8银两军饷", icon = "武" },
+        ["守备"]  = { color = { 180, 60, 60, 255 }, desc = "守备军衔，每月+15银两军饷", icon = "武" },
+    }
+    local idEffect = IDENTITY_EFFECTS[member.identity]
+    if idEffect then
+        detailChildren[#detailChildren + 1] = UI.Panel {
+            width = "100%", flexDirection = "row", alignItems = "center", gap = 6,
+            paddingVertical = 4, paddingHorizontal = 8, borderRadius = 6, marginTop = 2,
+            backgroundColor = { idEffect.color[1], idEffect.color[2], idEffect.color[3], 20 },
+            borderWidth = 1, borderColor = { idEffect.color[1], idEffect.color[2], idEffect.color[3], 60 },
+            children = {
+                UI.Label { text = idEffect.icon, fontSize = 14, fontColor = idEffect.color, fontWeight = "bold" },
+                UI.Panel {
+                    flexShrink = 1, gap = 1,
+                    children = {
+                        UI.Label { text = member.identity, fontSize = 12, fontColor = idEffect.color, fontWeight = "bold" },
+                        UI.Label { text = idEffect.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    },
+                },
+            },
+        }
+    end
+
     if spouse then
         detailChildren[#detailChildren + 1] = UI.Label { text = "配偶：" .. spouse.name .. (spouse.alive and "" or "（已故）"), fontSize = 12, fontColor = Theme.TEXT_SECONDARY }
     end
@@ -434,6 +467,7 @@ function GameScreen.ShowMemberDetail(member)
                 if actionDone then return end
                 AudioManager.Click()
                 actionDone = true
+                member.laborJob = nil  -- 清除打工工种
                 member.state = "在家"; modal:Close(); GameScreen.RefreshAll()
             end,
         }
@@ -2404,11 +2438,13 @@ function GameScreen.ShowCourtesanDialog()
                     UI.Label { text = strat.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
                     UI.Panel {
                         flexDirection = "row", gap = 8,
-                        children = {
-                            strat.bonus > 0 and UI.Label { text = "加成+" .. strat.bonus, fontSize = 9, fontColor = Theme.GREEN } or nil,
-                            strat.risk > 0 and UI.Label { text = "风险-" .. strat.risk, fontSize = 9, fontColor = Theme.RED } or nil,
-                            (strat.bonus == 0 and strat.risk == 0) and UI.Label { text = "稳定发挥", fontSize = 9, fontColor = Theme.TEXT_MUTED } or nil,
-                        },
+                        children = (function()
+                            local tags = {}
+                            if strat.bonus > 0 then tags[#tags+1] = UI.Label { text = "加成+" .. strat.bonus, fontSize = 9, fontColor = Theme.GREEN } end
+                            if strat.risk > 0 then tags[#tags+1] = UI.Label { text = "风险-" .. strat.risk, fontSize = 9, fontColor = Theme.RED } end
+                            if strat.bonus == 0 and strat.risk == 0 then tags[#tags+1] = UI.Label { text = "稳定发挥", fontSize = 9, fontColor = Theme.TEXT_MUTED } end
+                            return tags
+                        end)(),
                     },
                 },
             }
@@ -3065,6 +3101,458 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
     end
 
     renderCandidates()
+    modal:Open()
+end
+
+-- ============================================================================
+-- 弹窗：医馆（主动治疗生病族人）
+-- ============================================================================
+
+function GameScreen.ShowClinicDialog()
+    local s = GameData.state
+
+    -- 治疗费用：基础 8 两，品级越高费用越高（名医坐诊）
+    local baseCost = 8
+    local costPerRank = { [1] = 8, [2] = 10, [3] = 12, [4] = 15, [5] = 20, [6] = 25, [7] = 30 }
+    local healCost = costPerRank[s.clanRank] or baseCost
+    -- 治疗效果：恢复 25~40 点健康
+    local healMin, healMax = 25, 40
+
+    local modal = UI.Modal {
+        title = "医馆 · 问诊",
+        size = "md",
+        showCloseButton = true,
+        closeOnOverlay = true,
+    }
+
+    local function renderContent()
+        local children = {}
+
+        -- 说明区
+        children[#children + 1] = UI.Panel {
+            width = "100%", padding = 8, borderRadius = 8,
+            backgroundColor = Theme.BG_INPUT, gap = 4,
+            children = {
+                UI.Label { text = "延请郎中，诊治族人", fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                UI.Label { text = "诊金 " .. healCost .. " 两/人 · 恢复健康 " .. healMin .. "~" .. healMax, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                UI.Label { text = "当前银两：" .. s.silver .. " 两", fontSize = 11, fontColor = s.silver >= healCost and Theme.GOLD_DARK or Theme.RED },
+            },
+        }
+
+        -- 收集生病或低健康的族人
+        local sickMembers = {}
+        for _, m in ipairs(GameData.GetAliveMembers()) do
+            if m.state == "生病" or m.health <= 40 then
+                sickMembers[#sickMembers + 1] = m
+            end
+        end
+
+        if #sickMembers == 0 then
+            -- 无人需要治疗
+            children[#children + 1] = UI.Panel {
+                width = "100%", paddingTop = 30, paddingBottom = 30,
+                justifyContent = "center", alignItems = "center", gap = 6,
+                children = {
+                    UI.Label { text = "阖族安康", fontSize = 16, fontColor = Theme.GREEN, fontWeight = "bold" },
+                    UI.Label { text = "当前无人需要诊治", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                },
+            }
+        else
+            -- 全部治疗按钮
+            if #sickMembers > 1 then
+                local totalCost = healCost * #sickMembers
+                local canHealAll = s.silver >= totalCost
+                children[#children + 1] = UI.Panel {
+                    width = "100%", height = 36, borderRadius = 8, marginTop = 6,
+                    backgroundGradient = canHealAll
+                        and { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } }
+                        or nil,
+                    backgroundColor = (not canHealAll) and Theme.BG_INPUT or nil,
+                    justifyContent = "center", alignItems = "center",
+                    onPointerDown = canHealAll and function(self)
+                        AudioManager.Click()
+                        local msgs = {}
+                        for _, m in ipairs(sickMembers) do
+                            s.silver = s.silver - healCost
+                            local heal = math.random(healMin, healMax)
+                            m.health = math.min(100, m.health + heal)
+                            if m.health >= 60 and m.state == "生病" then
+                                m.state = m.prevState or "在家"
+                                m.prevState = nil
+                                msgs[#msgs + 1] = m.name .. "康复（健康+" .. heal .. "）"
+                            else
+                                msgs[#msgs + 1] = m.name .. "好转（健康+" .. heal .. "）"
+                            end
+                        end
+                        GameData.AddLog("医馆诊治：" .. table.concat(msgs, "、"))
+                        modal:Close()
+                        GameScreen.ShowResultPopup("医馆 · 诊治完毕", table.concat(msgs, "\n"))
+                        GameScreen.RefreshAll()
+                    end or nil,
+                    children = {
+                        UI.Label {
+                            text = canHealAll
+                                and ("全部诊治（" .. #sickMembers .. "人 · " .. totalCost .. "两）")
+                                or ("银两不足（需 " .. totalCost .. " 两）"),
+                            fontSize = 12,
+                            fontColor = canHealAll and Theme.TEXT_WHITE or Theme.TEXT_MUTED,
+                            fontWeight = "bold",
+                        },
+                    },
+                }
+            end
+
+            -- 逐人列表
+            children[#children + 1] = UI.Label { text = "需诊治族人", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
+
+            for _, m in ipairs(sickMembers) do
+                local canHeal = s.silver >= healCost
+                local healthColor = statColor(m.health)
+                local stateDesc = m.state == "生病" and "染病" or "体弱"
+
+                children[#children + 1] = UI.Panel {
+                    width = "100%", padding = 8, borderRadius = 8,
+                    backgroundColor = Theme.BG_WHITE, borderWidth = 1, borderColor = Theme.BORDER,
+                    flexDirection = "row", alignItems = "center", gap = 8, marginTop = 4,
+                    children = {
+                        -- 族人信息
+                        UI.Panel {
+                            flex = 1, gap = 2,
+                            children = {
+                                UI.Panel {
+                                    flexDirection = "row", alignItems = "center", gap = 4,
+                                    children = {
+                                        UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = stateDesc, fontSize = 10, fontColor = Theme.RED },
+                                        UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    },
+                                },
+                                StatBar("健康", m.health),
+                            },
+                        },
+                        -- 治疗按钮
+                        UI.Panel {
+                            width = 68, height = 30, borderRadius = 6,
+                            backgroundGradient = canHeal
+                                and { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } }
+                                or nil,
+                            backgroundColor = (not canHeal) and Theme.BG_INPUT or nil,
+                            justifyContent = "center", alignItems = "center",
+                            onPointerDown = canHeal and function(self)
+                                AudioManager.Click()
+                                s.silver = s.silver - healCost
+                                local heal = math.random(healMin, healMax)
+                                m.health = math.min(100, m.health + heal)
+                                local msg
+                                if m.health >= 60 and m.state == "生病" then
+                                    m.state = m.prevState or "在家"
+                                    m.prevState = nil
+                                    msg = m.name .. "经郎中诊治后康复，健康+" .. heal
+                                else
+                                    msg = m.name .. "经郎中诊治后好转，健康+" .. heal
+                                end
+                                GameData.AddLog("医馆：" .. msg)
+                                modal:Close()
+                                GameScreen.ShowResultPopup("医馆 · 问诊", msg)
+                                GameScreen.RefreshAll()
+                            end or nil,
+                            children = {
+                                UI.Label {
+                                    text = canHeal and (healCost .. "两") or "银不足",
+                                    fontSize = 11,
+                                    fontColor = canHeal and Theme.TEXT_WHITE or Theme.TEXT_MUTED,
+                                    fontWeight = "bold",
+                                },
+                            },
+                        },
+                    },
+                }
+            end
+        end
+
+        -- 药铺提示
+        local hasHerbShop = false
+        if s.industries then
+            for _, ind in ipairs(s.industries) do
+                if ind.id == "herb_shop" then hasHerbShop = true; break end
+            end
+        end
+        if not hasHerbShop then
+            children[#children + 1] = UI.Panel {
+                width = "100%", padding = 6, borderRadius = 6, marginTop = 8,
+                backgroundColor = { 255, 248, 220, 255 }, gap = 2,
+                children = {
+                    UI.Label { text = "提示：开设药铺可降低全族生病概率15%", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                },
+            }
+        end
+
+        modal:AddContent(UI.ScrollView {
+            width = "100%", maxHeight = 380, scrollY = true, showScrollbar = true, bounces = true,
+            children = {
+                UI.Panel { width = "100%", padding = 8, gap = 6, children = children },
+            },
+        })
+    end
+
+    renderContent()
+    modal:Open()
+end
+
+-- ============================================================================
+-- 弹窗：打工（派遣族人外出做工赚银两）
+-- ============================================================================
+
+function GameScreen.ShowLaborDialog()
+    local s = GameData.state
+    local clanRank = s.clanRank or 1
+
+    local modal = UI.Modal {
+        title = "打工 · 外出做工",
+        size = "md",
+        showCloseButton = true,
+        closeOnOverlay = true,
+    }
+
+    local function renderContent()
+        local children = {}
+
+        -- 当前打工中的族人
+        local laborers = GameData.GetMembersByState("打工")
+
+        -- 说明区
+        children[#children + 1] = UI.Panel {
+            width = "100%", padding = 8, borderRadius = 8,
+            backgroundColor = Theme.BG_INPUT, gap = 4,
+            children = {
+                UI.Label { text = "派遣族人外出做工", fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                UI.Label { text = "打工族人无法读书、经商、从军或管理产业", fontSize = 10, fontColor = Theme.RED },
+                UI.Label { text = "当前打工：" .. #laborers .. " 人", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+            },
+        }
+
+        -- 已在打工的族人列表
+        if #laborers > 0 then
+            children[#children + 1] = UI.Label { text = "打工中", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
+            for _, m in ipairs(laborers) do
+                local job = MemberData.GetLaborJob(m.laborJob)
+                local jobName = job and job.name or "杂工"
+                local jobWage = job and job.wage or 3
+                children[#children + 1] = UI.Panel {
+                    width = "100%", padding = 8, borderRadius = 8,
+                    backgroundColor = Theme.BG_WHITE, borderWidth = 1, borderColor = Theme.BORDER,
+                    flexDirection = "row", alignItems = "center", gap = 8, marginTop = 4,
+                    children = {
+                        UI.Panel {
+                            flex = 1, gap = 2,
+                            children = {
+                                UI.Panel {
+                                    flexDirection = "row", alignItems = "center", gap = 4,
+                                    children = {
+                                        UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = jobName, fontSize = 10, fontColor = {180, 140, 60, 255} },
+                                        UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    },
+                                },
+                                UI.Label { text = "月入 " .. jobWage .. " 银两", fontSize = 10, fontColor = Theme.GREEN },
+                            },
+                        },
+                        -- 召回按钮
+                        UI.Panel {
+                            width = 56, height = 28, borderRadius = 6,
+                            backgroundColor = {180, 80, 60, 255},
+                            justifyContent = "center", alignItems = "center",
+                            onPointerDown = function(self)
+                                AudioManager.Click()
+                                m.state = "在家"
+                                m.laborJob = nil
+                                GameData.AddLog(m.name .. "停止打工，回到家中。")
+                                modal:Close()
+                                GameScreen.ShowLaborDialog()  -- 重新打开刷新
+                                GameScreen.RefreshAll()
+                            end,
+                            children = {
+                                UI.Label { text = "召回", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                            },
+                        },
+                    },
+                }
+            end
+        end
+
+        -- 可用工种列表
+        local availableJobs = MemberData.GetAvailableLaborJobs(clanRank)
+        children[#children + 1] = UI.Label { text = "可用工种", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 10 }
+
+        -- 所有工种（包括未解锁的，灰显）
+        for _, job in ipairs(MemberData.LABOR_JOBS) do
+            local unlocked = clanRank >= job.rank
+            local rankName = GameData.CLAN_RANKS[job.rank] or "?"
+
+            children[#children + 1] = UI.Panel {
+                width = "100%", padding = 8, borderRadius = 8, marginTop = 4,
+                backgroundColor = unlocked and Theme.BG_WHITE or {240, 240, 240, 255},
+                borderWidth = 1, borderColor = unlocked and Theme.BORDER or {220, 220, 220, 255},
+                opacity = unlocked and 1.0 or 0.5,
+                flexDirection = "row", alignItems = "center", gap = 8,
+                children = {
+                    -- 工种信息
+                    UI.Panel {
+                        flex = 1, gap = 2,
+                        children = {
+                            UI.Panel {
+                                flexDirection = "row", alignItems = "center", gap = 4,
+                                children = {
+                                    UI.Label { text = job.name, fontSize = 12, fontColor = unlocked and Theme.TEXT_PRIMARY or Theme.TEXT_MUTED, fontWeight = "bold" },
+                                    UI.Label { text = "月薪 " .. job.wage .. " 两", fontSize = 10, fontColor = unlocked and Theme.GREEN or Theme.TEXT_MUTED },
+                                },
+                            },
+                            UI.Label { text = job.desc, fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                            (not unlocked) and UI.Label { text = "需品级【" .. rankName .. "】解锁", fontSize = 9, fontColor = Theme.RED } or nil,
+                        },
+                    },
+                    -- 派遣按钮
+                    unlocked and UI.Panel {
+                        width = 56, height = 28, borderRadius = 6,
+                        backgroundGradient = { direction = "to-right", from = {180, 140, 60, 255}, to = {160, 120, 40, 255} },
+                        justifyContent = "center", alignItems = "center",
+                        onPointerDown = function(self)
+                            AudioManager.Click()
+                            -- 弹出选人界面
+                            modal:Close()
+                            GameScreen.ShowLaborAssign(job)
+                        end,
+                        children = {
+                            UI.Label { text = "派遣", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                        },
+                    } or nil,
+                },
+            }
+        end
+
+        modal:AddContent(UI.ScrollView {
+            width = "100%", maxHeight = 400, scrollY = true, showScrollbar = true, bounces = true,
+            children = {
+                UI.Panel { width = "100%", padding = 8, gap = 4, children = children },
+            },
+        })
+    end
+
+    renderContent()
+    modal:Open()
+end
+
+-- ============================================================================
+-- 弹窗：打工派遣选人
+-- ============================================================================
+
+function GameScreen.ShowLaborAssign(job)
+    -- 可派遣的族人：成年 + 在家状态
+    local candidates = {}
+    for _, m in ipairs(GameData.GetAdultMembers()) do
+        if m.state == "在家" then
+            candidates[#candidates + 1] = m
+        end
+    end
+
+    local modal = UI.Modal {
+        title = "派遣 · " .. job.name,
+        size = "md",
+        showCloseButton = true,
+        closeOnOverlay = true,
+    }
+
+    local children = {}
+
+    children[#children + 1] = UI.Panel {
+        width = "100%", padding = 8, borderRadius = 8,
+        backgroundColor = Theme.BG_INPUT, gap = 4,
+        children = {
+            UI.Label { text = job.name .. " · " .. job.desc, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
+            UI.Label { text = "月薪 " .. job.wage .. " 银两", fontSize = 11, fontColor = Theme.GREEN },
+            UI.Label { text = "选择一名族人外出打工", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+        },
+    }
+
+    if #candidates == 0 then
+        children[#children + 1] = UI.Panel {
+            width = "100%", paddingTop = 30, paddingBottom = 30,
+            justifyContent = "center", alignItems = "center", gap = 6,
+            children = {
+                UI.Label { text = "无人可用", fontSize = 14, fontColor = Theme.TEXT_MUTED, fontWeight = "bold" },
+                UI.Label { text = "没有闲在家中的成年族人", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+            },
+        }
+    else
+        for _, m in ipairs(candidates) do
+            children[#children + 1] = UI.Panel {
+                width = "100%", padding = 8, borderRadius = 8, marginTop = 4,
+                backgroundColor = Theme.BG_WHITE, borderWidth = 1, borderColor = Theme.BORDER,
+                flexDirection = "row", alignItems = "center", gap = 8,
+                children = {
+                    UI.Panel {
+                        flex = 1, gap = 2,
+                        children = {
+                            UI.Panel {
+                                flexDirection = "row", alignItems = "center", gap = 4,
+                                children = {
+                                    UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                    UI.Label { text = (m.gender == "male" and "男" or "女") .. " " .. m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                },
+                            },
+                            UI.Panel {
+                                flexDirection = "row", gap = 6,
+                                children = {
+                                    UI.Label { text = "学" .. (m.study or 0), fontSize = 9, fontColor = Theme.TEXT_SECONDARY },
+                                    UI.Label { text = "武" .. (m.martial or 0), fontSize = 9, fontColor = Theme.TEXT_SECONDARY },
+                                    UI.Label { text = "健" .. (m.health or 0), fontSize = 9, fontColor = Theme.TEXT_SECONDARY },
+                                },
+                            },
+                        },
+                    },
+                    UI.Panel {
+                        width = 56, height = 28, borderRadius = 6,
+                        backgroundGradient = { direction = "to-right", from = {180, 140, 60, 255}, to = {160, 120, 40, 255} },
+                        justifyContent = "center", alignItems = "center",
+                        onPointerDown = function(self)
+                            AudioManager.Click()
+                            m.state = "打工"
+                            m.laborJob = job.id
+                            GameData.AddLog(m.name .. "外出做" .. job.name .. "，月入" .. job.wage .. "两。")
+                            modal:Close()
+                            GameScreen.RefreshAll()
+                            Toast.Success(m.name .. "开始打工")
+                        end,
+                        children = {
+                            UI.Label { text = "派遣", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                        },
+                    },
+                },
+            }
+        end
+    end
+
+    -- 返回按钮
+    children[#children + 1] = UI.Panel {
+        width = "100%", height = 32, borderRadius = 6, marginTop = 8,
+        backgroundColor = Theme.BG_INPUT,
+        justifyContent = "center", alignItems = "center",
+        onPointerDown = function(self)
+            AudioManager.Click()
+            modal:Close()
+            GameScreen.ShowLaborDialog()  -- 返回打工主界面
+        end,
+        children = {
+            UI.Label { text = "← 返回打工列表", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+        },
+    }
+
+    modal:AddContent(UI.ScrollView {
+        width = "100%", maxHeight = 400, scrollY = true, showScrollbar = true, bounces = true,
+        children = {
+            UI.Panel { width = "100%", padding = 8, gap = 4, children = children },
+        },
+    })
     modal:Open()
 end
 

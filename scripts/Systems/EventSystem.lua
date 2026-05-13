@@ -464,17 +464,17 @@ EventSystem.RANDOM_EVENTS = {
     },
     {
         title = "喜结连理",
-        weight = 4,
+        weight = 8,
         check = function(s)
             for _, m in ipairs(GameData.GetAliveMembers()) do
-                if m.age >= 16 and m.age <= 30 and not m.spouseId then return true end
+                if m.age >= 16 and m.age <= 40 and not m.spouseId then return true end
             end
             return false
         end,
         execute = function(s, report)
             local singles = {}
             for _, m in ipairs(GameData.GetAliveMembers()) do
-                if m.age >= 16 and m.age <= 30 and not m.spouseId then singles[#singles + 1] = m end
+                if m.age >= 16 and m.age <= 40 and not m.spouseId then singles[#singles + 1] = m end
             end
             if #singles == 0 then return nil end
             local person = singles[math.random(1, #singles)]

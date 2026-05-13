@@ -13,6 +13,7 @@ local GrowthSystem = require("Systems.GrowthSystem")
 local MarketSystem = require("Systems.MarketSystem")
 local SkillSystem = require("Systems.SkillSystem")
 local EquipmentSystem = require("Systems.EquipmentSystem")
+local MemberData = require("Data.MemberData")
 
 local MonthlyUpdate = {}
 
@@ -53,6 +54,9 @@ function MonthlyUpdate.Execute()
 
     -- 2. 经商族人收益
     MonthlyUpdate.ProcessMerchants(report, ruleEffects)
+
+    -- 2.5 打工族人工资
+    MonthlyUpdate.ProcessLabor(report)
 
     -- 3. 人口消耗
     MonthlyUpdate.ProcessConsumption(report, ruleEffects)
@@ -413,6 +417,19 @@ function MonthlyUpdate.ProcessMerchants(report, ruleEffects)
 end
 
 -- ============================================================================
+-- 打工收入
+-- ============================================================================
+
+function MonthlyUpdate.ProcessLabor(report)
+    local laborers = GameData.GetMembersByState("打工")
+    for _, m in ipairs(laborers) do
+        local job = MemberData.GetLaborJob(m.laborJob)
+        local wage = job and job.wage or 3
+        report.incomes.silver = report.incomes.silver + wage
+    end
+end
+
+-- ============================================================================
 -- 人口消耗（受族规影响）
 -- ============================================================================
 
@@ -559,6 +576,25 @@ end
 
 function MonthlyUpdate.ProcessCareer(report, ruleEffects)
     local s = GameData.state
+
+    -- 文官身份月俸禄（声望/银两）
+    local CIVIL_INCOME = {
+        ["秀才"]  = { fame = 2, silver = 0 },
+        ["举人"]  = { fame = 5, silver = 2 },
+        ["进士"]  = { fame = 10, silver = 5 },
+        ["监生"]  = { fame = 2, silver = 0 },
+    }
+    for _, m in ipairs(GameData.GetAliveMembers()) do
+        local inc = CIVIL_INCOME[m.identity]
+        if inc then
+            if inc.fame > 0 then
+                report.incomes.fame = report.incomes.fame + inc.fame
+            end
+            if inc.silver > 0 then
+                report.incomes.silver = report.incomes.silver + inc.silver
+            end
+        end
+    end
 
     -- 从军收益
     for _, m in ipairs(GameData.GetMembersByState("从军")) do
@@ -1292,17 +1328,17 @@ function MonthlyUpdate.CheckGuaranteedMarriage(report)
     -- 收集该代成员信息
     local genMembers = {}
     local hasMarried = false
-    local allAbove22 = true
+    local allAbove18 = true
     for _, m in ipairs(members) do
         if m.generation == maxGen then
             genMembers[#genMembers + 1] = m
             if m.spouseId then hasMarried = true end
-            if m.age < 22 then allAbove22 = false end
+            if m.age < 18 then allAbove18 = false end
         end
     end
 
-    -- 已有人结婚或还有人不到22岁，不需要催
-    if hasMarried or not allAbove22 then return end
+    -- 已有人结婚或还有人不到18岁，不需要催
+    if hasMarried or not allAbove18 then return end
     if #genMembers == 0 then return end
 
     -- 筛选适龄未婚候选人（16-40岁）
