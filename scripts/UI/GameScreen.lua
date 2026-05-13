@@ -1781,6 +1781,27 @@ function GameScreen.RefreshTopBar()
     end
 end
 
+--- 通用结果弹窗（标题+描述，点击"知道了"关闭）
+--- 用于科举结果、功能提示等需要玩家确认的场景
+---@param title string 弹窗标题
+---@param desc string 弹窗描述
+function GameScreen.ShowResultPopup(title, desc)
+    -- 根据标题关键词自动选择弹窗类型
+    local failWords = { "失败", "不足", "未解锁", "落孙山", "不满足", "条件不足", "无闲人" }
+    local warnWords = { "已满", "尚未", "尚需", "距下次" }
+    local variant = "success"
+    for _, w in ipairs(failWords) do
+        if string.find(title, w, 1, true) then variant = "error"; break end
+    end
+    if variant == "success" then
+        for _, w in ipairs(warnWords) do
+            if string.find(title, w, 1, true) then variant = "warn"; break end
+        end
+    end
+    local fn = variant == "error" and Toast.Error or (variant == "warn" and Toast.Warn or Toast.Success)
+    fn(title .. "\n" .. (desc or ""))
+end
+
 function GameScreen.RefreshAll()
     GameScreen.RefreshTopBar()
     GameScreen.RefreshContent()
