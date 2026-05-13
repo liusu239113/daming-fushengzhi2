@@ -1,0 +1,80 @@
+{
+    "name": "BattleUnitFSM",
+    "defaultBlendTime": 0.2,
+
+    "parameters": {
+        "moveSpeed": { "type": "float", "default": 0.0, "min": 0.0, "max": 10.0 },
+        "attack":    { "type": "trigger" },
+        "die":       { "type": "trigger" }
+    },
+
+    "layers": [
+        {
+            "name": "Base",
+            "defaultState": "Idle",
+            "states": {
+                "Idle": {
+                    "animation": "uuid://G7yDSZdD2lEh3EdNzc0MGQkV",
+                    "loop": true,
+                    "speed": 1.0
+                },
+                "Move": {
+                    "animation": "uuid://F-afGUmbZwlJu4crZmqR_4kR",
+                    "loop": true,
+                    "speed": 1.0
+                },
+                "Attack": {
+                    "animation": "uuid://HFCMaTM1TqMyp12CL-treYHh",
+                    "loop": false,
+                    "speed": 1.2
+                },
+                "Die": {
+                    "animation": "uuid://Bp84GR3zHR88xE4zRCAL1uMc",
+                    "loop": false,
+                    "speed": 1.0
+                }
+            },
+            "transitions": [
+                {
+                    "from": "Idle",
+                    "to": "Move",
+                    "condition": "moveSpeed > 0.1",
+                    "blendTime": 0.2
+                },
+                {
+                    "from": "Move",
+                    "to": "Idle",
+                    "condition": "moveSpeed <= 0.1",
+                    "blendTime": 0.2
+                },
+                {
+                    "from": "Idle",
+                    "to": "Attack",
+                    "condition": "attack",
+                    "priority": 10,
+                    "blendTime": 0.1
+                },
+                {
+                    "from": "Move",
+                    "to": "Attack",
+                    "condition": "attack",
+                    "priority": 10,
+                    "blendTime": 0.1
+                },
+                {
+                    "from": "Attack",
+                    "to": "Idle",
+                    "condition": "animationFinished",
+                    "blendTime": 0.2
+                },
+                {
+                    "from": "*",
+                    "to": "Die",
+                    "condition": "die",
+                    "priority": 100,
+                    "blendTime": 0.1
+                }
+            ]
+        }
+    ]
+}
