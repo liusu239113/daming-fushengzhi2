@@ -28,24 +28,33 @@ local function statColor(val)
     else return Theme.TEXT_MUTED end
 end
 
-local function StatBar(label, val, maxVal)
+local function StatBar(label, val, maxVal, aptitudeInfo)
     maxVal = maxVal or 100
     local pct = math.min(1.0, val / maxVal)
-    return UI.Panel {
-        flexDirection = "row", alignItems = "center", gap = 4, width = "100%",
-        children = {
-            UI.Label { text = label, fontSize = 10, fontColor = Theme.TEXT_SECONDARY, width = 28 },
-            UI.Panel {
-                flex = 1, height = 6, borderRadius = 3, backgroundColor = { 230, 225, 218, 180 },
-                children = {
-                    UI.Panel {
-                        width = tostring(math.floor(pct * 100)) .. "%", height = "100%",
-                        borderRadius = 4, backgroundColor = statColor(val),
-                    },
+    local barChildren = {
+        UI.Label { text = label, fontSize = 10, fontColor = Theme.TEXT_SECONDARY, width = 28 },
+        UI.Panel {
+            flex = 1, height = 6, borderRadius = 3, backgroundColor = { 230, 225, 218, 180 },
+            children = {
+                UI.Panel {
+                    width = tostring(math.floor(pct * 100)) .. "%", height = "100%",
+                    borderRadius = 4, backgroundColor = statColor(val),
                 },
             },
-            UI.Label { text = tostring(val), fontSize = 10, fontColor = statColor(val), width = 22, textAlign = "right" },
         },
+        UI.Label { text = tostring(val), fontSize = 10, fontColor = statColor(val), width = 22, textAlign = "right" },
+    }
+    -- 资质星级显示（紧跟数值后面）
+    if aptitudeInfo then
+        local starsColor = MemberData.GetStarsColor(aptitudeInfo.stars)
+        barChildren[#barChildren + 1] = UI.Label {
+            text = MemberData.GetStarsLabel(aptitudeInfo.stars),
+            fontSize = 8, fontColor = starsColor, width = 38, textAlign = "right",
+        }
+    end
+    return UI.Panel {
+        flexDirection = "row", alignItems = "center", gap = 4, width = "100%",
+        children = barChildren,
     }
 end
 
@@ -98,24 +107,26 @@ function GameScreen.ShowMemberDetail(member)
             },
         }
         -- 生前属性
+        local apt = member.aptitude
         detailChildren[#detailChildren + 1] = UI.Label { text = "— 生平 —", fontSize = 11, fontColor = Theme.TEXT_MUTED, textAlign = "center", width = "100%", marginTop = 2 }
         detailChildren[#detailChildren + 1] = UI.Panel {
             width = "100%", gap = 3,
             children = {
-                StatBar("学识", member.study),
-                StatBar("武艺", member.martial),
+                StatBar("学识", member.study, 100, apt and apt.study),
+                StatBar("武艺", member.martial, 100, apt and apt.martial),
             },
         }
     else
         -- 存活成员：原有信息
+        local apt = member.aptitude
         detailChildren[#detailChildren + 1] = UI.Label { text = (member.gender == "male" and "男" or "女") .. " · " .. member.age .. "岁 · " .. GameData.GetAgeStage(member.age), fontSize = 13, fontColor = Theme.TEXT_PRIMARY }
         detailChildren[#detailChildren + 1] = UI.Label { text = "状态：" .. member.state, fontSize = 12, fontColor = Theme.TEXT_SECONDARY }
         detailChildren[#detailChildren + 1] = UI.Panel {
             width = "100%", gap = 3,
             children = {
-                StatBar("健康", member.health),
-                StatBar("学识", member.study),
-                StatBar("武艺", member.martial),
+                StatBar("健康", member.health, 100, apt and apt.health),
+                StatBar("学识", member.study, 100, apt and apt.study),
+                StatBar("武艺", member.martial, 100, apt and apt.martial),
             },
         }
 
@@ -126,7 +137,7 @@ function GameScreen.ShowMemberDetail(member)
                 width = "100%", height = 32, borderRadius = 6, marginTop = 4,
                 backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
                 flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                onPointerDown = function(self)
+                onClick = function(self)
                     AdSystem.HealthCure(member.id, function(success, msg)
                         modal:Close()
                         GameScreen.ShowResultPopup(success and "妙手回春" or "诊治失败", msg or "")
@@ -199,7 +210,7 @@ function GameScreen.ShowMemberDetail(member)
                 backgroundColor = canAfford and Theme.BG_WHITE or Theme.BG_INPUT,
                 borderWidth = 1, borderColor = canAfford and Theme.BORDER_GOLD or Theme.BORDER,
                 alignItems = "center", gap = 2, opacity = canAfford and 1.0 or 0.5,
-                onPointerDown = function(self)
+                onTap = function()
                     if not canAfford then return end
                     AudioManager.Click()
                     local ok, msg = SkillSystem.Train(member.id, t.id)
@@ -225,7 +236,7 @@ function GameScreen.ShowMemberDetail(member)
                 width = "100%", height = 30, borderRadius = 6,
                 backgroundGradient = { direction = "to-right", from = { 218, 165, 32, 255 }, to = { 200, 140, 20, 255 } },
                 flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                onPointerDown = function(self)
+                onClick = function(self)
                     -- 默认选第一个训练项
                     local defaultTraining = GameData.TRAINING_OPTIONS[1]
                     if not defaultTraining then return end
@@ -252,7 +263,7 @@ function GameScreen.ShowMemberDetail(member)
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
                         backgroundColor = Theme.PRIMARY_LIGHT, borderWidth = 1, borderColor = Theme.PRIMARY,
-                        onPointerDown = function(self)
+                        onClick = function(self)
                             AudioManager.Click()
                             modal:Close()
                             GameScreen.ShowEquipShop(member)
@@ -272,7 +283,7 @@ function GameScreen.ShowMemberDetail(member)
                     backgroundColor = equipped and Theme.BG_WHITE or Theme.BG_INPUT,
                     borderWidth = 1, borderColor = equipped and (rarityConf and rarityConf.color or Theme.BORDER_GOLD) or Theme.BORDER,
                     alignItems = "center", gap = 2,
-                    onPointerDown = function(self)
+                    onTap = function()
                         AudioManager.Click()
                         if equipped then
                             -- 卸下装备
@@ -342,7 +353,7 @@ function GameScreen.ShowMemberDetail(member)
                             backgroundColor = canUnlock and Theme.BG_WHITE or Theme.BG_INPUT,
                             borderWidth = 1, borderColor = canUnlock and Theme.BORDER_GOLD or Theme.BORDER,
                             alignItems = "center", gap = 2, opacity = canUnlock and 1.0 or 0.5,
-                            onPointerDown = function(self)
+                            onTap = function()
                                 AudioManager.Click()
                                 if not canUnlock then
                                     GameScreen.ShowResultPopup("条件不足", reason or "无法解锁")
@@ -372,10 +383,7 @@ function GameScreen.ShowMemberDetail(member)
     end
 
     -- 操作按钮（仅存活成员显示）
-    -- 使用 onPointerDown 代替 onClick 修复手机端需要点两次的 bug：
-    -- 手机浏览器一次触摸会同时触发 Touch 和 Mouse 事件，导致 onClick 的
-    -- widget identity 匹配因 focus 变化引起的布局微调而失败。
-    -- onPointerDown 在按下时直接触发，不依赖 PointerUp 的 identity 匹配。
+    -- onClick 代替 onClick：手机端触摸兼容性更好
     local actionDone = false
     if isDead then
         -- 已故成员：广告复活按钮
@@ -387,7 +395,7 @@ function GameScreen.ShowMemberDetail(member)
                 backgroundGradient = { direction = "horizontal", from = {218, 165, 32, 255}, to = {255, 200, 50, 255} },
                 justifyContent = "center", alignItems = "center",
                 flexDirection = "row", gap = 6,
-                onPointerDown = function(self, event)
+                onClick = function(self, event)
                     if actionDone then return end
                     AudioManager.Click()
                     actionDone = true
@@ -415,7 +423,7 @@ function GameScreen.ShowMemberDetail(member)
             detailChildren[#detailChildren + 1] = UI.Panel {
                 width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden",
                 backgroundImage = Theme.IMG.BTN_STUDY, backgroundFit = "cover",
-                onPointerDown = function(self, event)
+                onClick = function(self, event)
                     if actionDone then return end
                     AudioManager.Click()
                     actionDone = true
@@ -429,7 +437,7 @@ function GameScreen.ShowMemberDetail(member)
             width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden",
             backgroundImage = Theme.IMG.BTN_TRADE, backgroundFit = "cover",
             opacity = tradeUnlocked and 1.0 or 0.4,
-            onPointerDown = function(self, event)
+            onClick = function(self, event)
                 if actionDone then return end
                 AudioManager.Click()
                 if not tradeUnlocked then
@@ -447,7 +455,7 @@ function GameScreen.ShowMemberDetail(member)
                 width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden",
                 backgroundImage = Theme.IMG.BTN_MILITARY, backgroundFit = "cover",
                 opacity = militaryUnlocked and 1.0 or 0.4,
-                onPointerDown = function(self, event)
+                onClick = function(self, event)
                     if actionDone then return end
                     AudioManager.Click()
                     if not militaryUnlocked then
@@ -463,7 +471,7 @@ function GameScreen.ShowMemberDetail(member)
         detailChildren[#detailChildren + 1] = UI.Panel {
             width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden", marginTop = 4,
             backgroundImage = Theme.IMG.BTN_RECALL, backgroundFit = "cover",
-            onPointerDown = function(self, event)
+            onClick = function(self, event)
                 if actionDone then return end
                 AudioManager.Click()
                 actionDone = true
@@ -474,8 +482,7 @@ function GameScreen.ShowMemberDetail(member)
     end
 
     modal:AddContent(UI.ScrollView {
-        width = "100%", flexGrow = 1, flexBasis = 0,
-        bounces = false, showScrollbar = true,
+        width = "100%", maxHeight = 500, scrollY = true, bounces = true, showScrollbar = true,
         children = { UI.Panel { width = "100%", gap = 4, paddingBottom = 16, children = detailChildren } },
     })
     modal:Open()
@@ -506,7 +513,7 @@ function GameScreen.ShowAssignMember(industry)
     items[#items + 1] = UI.Panel {
         width = "100%", height = 36, borderRadius = 6, backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
         justifyContent = "center", alignItems = "center",
-        onClick = function(self)
+        onTap = function()
             AudioManager.Click()
             industry.assignedMemberId = nil; modal:Close(); GameScreen.RefreshAll()
         end,
@@ -524,7 +531,7 @@ function GameScreen.ShowAssignMember(industry)
         items[#items + 1] = UI.Panel {
             width = "100%", height = 36, borderRadius = 6, backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
             flexDirection = "row", justifyContent = "space-between", alignItems = "center", paddingHorizontal = 10,
-            onClick = function(self)
+            onTap = function()
                 AudioManager.Click()
                 industry.assignedMemberId = m.id; modal:Close(); GameScreen.RefreshAll()
             end,
@@ -543,7 +550,10 @@ function GameScreen.ShowAssignMember(industry)
     if #candidates == 0 then
         items[#items + 1] = UI.Label { text = "无可分配族人", fontSize = 12, fontColor = Theme.TEXT_MUTED, textAlign = "center", marginTop = 8 }
     end
-    modal:AddContent(UI.Panel { width = "100%", gap = 6, children = items })
+    modal:AddContent(UI.ScrollView {
+        width = "100%", maxHeight = 400, scrollY = true, bounces = true, showScrollbar = true,
+        children = { UI.Panel { width = "100%", gap = 6, children = items } },
+    })
     modal:Open()
 end
 
@@ -665,9 +675,11 @@ function GameScreen.ShowMonthlyReport(report)
         title = title, size = "md", showCloseButton = true, closeOnOverlay = true,
         onClose = function() GameScreen.ResumeSpeed() end,
     }
-    modal:AddContent(UI.Panel {
-        width = "100%", gap = 8,
-        children = contentChildren,
+    modal:AddContent(UI.ScrollView {
+        width = "100%", maxHeight = 400, scrollY = true, bounces = true, showScrollbar = true,
+        children = {
+            UI.Panel { width = "100%", gap = 8, children = contentChildren },
+        },
     })
     -- 广告按钮：双倍产出
     local adBtnChildren = {}
@@ -678,7 +690,7 @@ function GameScreen.ShowMonthlyReport(report)
             backgroundGradient = { direction = "to-right", from = { 218, 165, 32, 255 }, to = { 200, 140, 20, 255 } },
             justifyContent = "center", alignItems = "center",
             flexDirection = "row", gap = 4,
-            onPointerDown = function(self)
+            onClick = function(self)
                 AdSystem.DoubleMonthlyIncome(report, function(success, a, b)
                     modal:Close()
                     if success then
@@ -960,7 +972,7 @@ function GameScreen.ShowYearEndSummary(summary)
                                         width = 200, height = 36, borderRadius = 8,
                                         backgroundGradient = { direction = "to-right", from = { 200, 160, 40, 255 }, to = { 180, 120, 20, 255 } },
                                         flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                                        onPointerDown = function(self)
+                                        onClick = function(self)
                                             AdSystem.DoubleYearBonus(rewards, function(success, msg)
                                                 if success then
                                                     self:SetStyle { opacity = 0.3 }
@@ -1147,7 +1159,7 @@ function GameScreen.ShowMarriageTierSelect(member)
                                     borderWidth = 1, borderColor = adRemaining > 0 and Theme.PRIMARY or Theme.BORDER,
                                     opacity = adRemaining > 0 and 1.0 or 0.4,
                                     justifyContent = "center", alignItems = "center",
-                                    onPointerDown = function(self)
+                                    onClick = function(self)
                                         if adRemaining <= 0 then return end
                                         AudioManager.Click()
                                         AdSystem.ShowRewardAd("marriage_refresh", function()
@@ -1199,7 +1211,7 @@ function GameScreen.ShowMarriageTierSelect(member)
                                     alignSelf = "flex-end", marginTop = 4,
                                     paddingHorizontal = 20, paddingVertical = 7, borderRadius = 8,
                                     backgroundGradient = { direction = "to-right", from = { 180, 50, 50, 255 }, to = { 200, 70, 70, 255 } },
-                                    onPointerDown = function(self) confirmMarriage() end,
+                                    onClick = function(self) confirmMarriage() end,
                                     children = {
                                         UI.Label { text = "确定", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                                     },
@@ -1248,7 +1260,7 @@ function GameScreen.ShowEquipSelect(member, slot)
                     backgroundColor = Theme.BG_WHITE,
                     borderWidth = 1, borderColor = rarityConf and rarityConf.color or Theme.BORDER,
                     flexDirection = "row", justifyContent = "space-between", alignItems = "center",
-                    onPointerDown = function(self)
+                    onClick = function(self)
                         AudioManager.Click()
                         local ok, msg = EquipmentSystem.Equip(member.id, equip.id)
                         modal:Close()
@@ -1289,7 +1301,7 @@ function GameScreen.ShowEquipSelect(member, slot)
                 UI.Panel {
                     paddingHorizontal = 12, paddingVertical = 6, borderRadius = 6,
                     backgroundGradient = Theme.GRADIENT_PRIMARY,
-                    onPointerDown = function(self)
+                    onClick = function(self)
                         AudioManager.Click()
                         modal:Close()
                         GameScreen.ShowEquipShop(member)
@@ -1300,7 +1312,10 @@ function GameScreen.ShowEquipSelect(member, slot)
         }
     end
 
-    modal:AddContent(UI.Panel { width = "100%", gap = 6, children = items })
+    modal:AddContent(UI.ScrollView {
+        width = "100%", maxHeight = 400, scrollY = true, bounces = true, showScrollbar = true,
+        children = { UI.Panel { width = "100%", gap = 6, children = items } },
+    })
     modal:Open()
 end
 
@@ -1353,7 +1368,7 @@ function GameScreen.ShowEquipShop(member)
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
                         backgroundColor = canBuy and Theme.PRIMARY or Theme.BG_INPUT,
-                        onPointerDown = function(self)
+                        onClick = function(self)
                             if not canBuy then return end
                             AudioManager.Click()
                             local ok, msg = EquipmentSystem.BuyEquipment(equip.id)
@@ -1381,7 +1396,7 @@ function GameScreen.ShowEquipShop(member)
             UI.Panel {
                 paddingHorizontal = 12, paddingVertical = 6, borderRadius = 6,
                 backgroundColor = Theme.BG_CARD, borderWidth = 1, borderColor = Theme.BORDER,
-                onPointerDown = function(self) AudioManager.Click() modal:Close(); GameScreen.ShowMemberDetail(member) end,
+                onClick = function(self) AudioManager.Click() modal:Close(); GameScreen.ShowMemberDetail(member) end,
                 children = { UI.Label { text = "返回详情", fontSize = 12, fontColor = Theme.TEXT_PRIMARY } },
             },
         },
@@ -1464,7 +1479,10 @@ function GameScreen.ShowBatchAssign()
         end,
         children = { UI.Label { text = "全部召回在家", fontSize = 13, fontColor = Theme.TEXT_PRIMARY } },
     }
-    modal:AddContent(UI.Panel { width = "100%", gap = 8, children = jobBtns })
+    modal:AddContent(UI.ScrollView {
+        width = "100%", maxHeight = 400, scrollY = true, bounces = true, showScrollbar = true,
+        children = { UI.Panel { width = "100%", gap = 8, children = jobBtns } },
+    })
     modal:Open()
 end
 
@@ -1486,13 +1504,13 @@ function GameScreen.ShowEndingScreen()
         local info = EndingSystem.GetEndingInfo(s.hiddenEnding)
         if info then hiddenEndingTitle = info.title end
         -- 隐藏结局加分
-        if s.hiddenEnding == "scholar_dynasty" then score = score + 300
+        if s.hiddenEnding == "conquest_complete" then score = score + 600
+        elseif s.hiddenEnding == "scholar_dynasty" then score = score + 300
         elseif s.hiddenEnding == "warlord" then score = score + 250
         elseif s.hiddenEnding == "merchant_empire" then score = score + 200
         elseif s.hiddenEnding == "utopia" then score = score + 500
         elseif s.hiddenEnding == "executed" then score = math.max(0, score - 200)
         elseif s.hiddenEnding == "extinction" then score = 0
-        elseif s.hiddenEnding == "bankrupt" then score = math.max(0, score - 100)
         end
     end
 
@@ -1529,38 +1547,44 @@ function GameScreen.ShowEndingScreen()
     end
 
     local modal = UI.Modal { title = modalTitle, size = "fullscreen", showCloseButton = false, closeOnOverlay = false }
-    modal:AddContent(UI.Panel {
-        width = "100%", gap = 10, padding = 4,
+    -- 隐藏结局收集：安全构建children数组（避免table.unpack不在尾部的问题）
+    local endingCollectChildren = {
+        UI.Label { text = "隐藏结局收集", fontSize = 14, fontColor = Theme.GOLD },
+    }
+    for _, child in ipairs(unlockedChildren) do
+        endingCollectChildren[#endingCollectChildren + 1] = child
+    end
+    modal:AddContent(UI.ScrollView {
+        width = "100%", maxHeight = 500, scrollY = true, bounces = true, showScrollbar = true,
         children = {
-            UI.Label { text = endDesc, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
-            UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
             UI.Panel {
-                width = "100%", alignItems = "center", gap = 4,
+                width = "100%", gap = 10, padding = 4,
                 children = {
-                    UI.Label { text = "宗族评定", fontSize = 16, fontColor = Theme.GOLD },
-                    UI.Label { text = grade, fontSize = 22, fontColor = gradeColor },
-                    UI.Label { text = "总分：" .. score, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
-                },
-            },
-            UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
-            UI.Panel {
-                width = "100%", gap = 4,
-                children = {
-                    UI.Label { text = "传承：" .. s.totalMonths .. "个月", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = "存活族人：" .. aliveCount .. "人（共" .. totalBorn .. "人）", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = "宗族品级：" .. GameData.GetClanRankName(), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = "科举通过：" .. (s.totalExamPasses or 0) .. "次", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = "寨堡：" .. s.fortCount .. "座", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = "剩余银两：" .. s.silver, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                },
-            },
-            -- 隐藏结局收集展示
-            UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
-            UI.Panel {
-                width = "100%", gap = 4,
-                children = {
-                    UI.Label { text = "隐藏结局收集", fontSize = 14, fontColor = Theme.GOLD },
-                    table.unpack(unlockedChildren),
+                    UI.Label { text = endDesc, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
+                    UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
+                    UI.Panel {
+                        width = "100%", alignItems = "center", gap = 4,
+                        children = {
+                            UI.Label { text = "宗族评定", fontSize = 16, fontColor = Theme.GOLD },
+                            UI.Label { text = grade, fontSize = 22, fontColor = gradeColor },
+                            UI.Label { text = "总分：" .. score, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+                        },
+                    },
+                    UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
+                    UI.Panel {
+                        width = "100%", gap = 4,
+                        children = {
+                            UI.Label { text = "传承：" .. s.totalMonths .. "个月", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "存活族人：" .. aliveCount .. "人（共" .. totalBorn .. "人）", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "宗族品级：" .. GameData.GetClanRankName(), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "科举通过：" .. (s.totalExamPasses or 0) .. "次", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "寨堡：" .. s.fortCount .. "座", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "剩余银两：" .. s.silver, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                        },
+                    },
+                    -- 隐藏结局收集展示
+                    UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
+                    UI.Panel { width = "100%", gap = 4, children = endingCollectChildren },
                 },
             },
         },
@@ -1658,7 +1682,7 @@ function GameScreen.ShowLoanDialog()
                                 width = 60, height = 28, borderRadius = 6,
                                 backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
                                 justifyContent = "center", alignItems = "center",
-                                onPointerDown = function(self)
+                                onClick = function(self)
                                     AudioManager.Click()
                                     AdSystem.RepayLoan(idx, function(success, msg)
                                         modal:Close()
@@ -1708,7 +1732,7 @@ function GameScreen.ShowLoanDialog()
                         width = "100%", height = 32, borderRadius = 6, marginTop = 4,
                         backgroundGradient = { direction = "to-right", from = { 60, 180, 100, 255 }, to = { 40, 150, 80, 255 } },
                         flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                        onPointerDown = function(self)
+                        onClick = function(self)
                             AudioManager.Click()
                             AdSystem.TakeAdGrant(opt.id, function(success, msg)
                                 modal:Close()
@@ -1754,7 +1778,7 @@ function GameScreen.ShowLoanDialog()
                         width = "100%", height = 32, borderRadius = 6, marginTop = 4,
                         backgroundGradient = { direction = "to-right", from = { 200, 160, 40, 255 }, to = { 180, 120, 20, 255 } },
                         justifyContent = "center", alignItems = "center",
-                        onPointerDown = function(self)
+                        onClick = function(self)
                             AudioManager.Click()
                             AdSystem.TakeLoan(opt.id, function(success, msg)
                                 modal:Close()
@@ -1806,7 +1830,7 @@ function GameScreen.ShowPrayDialog()
         return
     end
 
-    local modal = UI.Modal { title = "祭天祈福", size = "sm" }
+    local modal = UI.Modal { title = "祭天祈福", size = "md" }
 
     -- 祭品等级
     local tiers = {
@@ -2049,7 +2073,10 @@ function GameScreen.ShowPrayDialog()
             }
         end
         children[#children + 1] = UI.Label { text = "每季（3个月）可祈福一次", fontSize = 9, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
-        modal:AddContent(UI.Panel { width = "100%", padding = 8, gap = 8, children = children })
+        modal:AddContent(UI.ScrollView {
+            width = "100%", maxHeight = 450, scrollY = true, bounces = true, showScrollbar = true,
+            children = { UI.Panel { width = "100%", padding = 8, gap = 8, children = children } },
+        })
     end
 
     -- ========== Phase 2: 抽卦象（选一张） ==========
@@ -2107,7 +2134,10 @@ function GameScreen.ShowPrayDialog()
                 },
             }
         end
-        modal:AddContent(UI.Panel { width = "100%", padding = 8, gap = 10, children = children })
+        modal:AddContent(UI.ScrollView {
+            width = "100%", maxHeight = 450, scrollY = true, bounces = true, showScrollbar = true,
+            children = { UI.Panel { width = "100%", padding = 8, gap = 10, children = children } },
+        })
     end
 
     -- ========== Phase 3: 情境抉择 ==========
@@ -2155,7 +2185,10 @@ function GameScreen.ShowPrayDialog()
             text = "祭品：" .. tier.name .. "（灵验加成+" .. (tier.luck * 10) .. "%）",
             fontSize = 9, fontColor = Theme.TEXT_MUTED, textAlign = "center", width = "100%", marginTop = 2,
         }
-        modal:AddContent(UI.Panel { width = "100%", padding = 8, gap = 8, children = children })
+        modal:AddContent(UI.ScrollView {
+            width = "100%", maxHeight = 450, scrollY = true, bounces = true, showScrollbar = true,
+            children = { UI.Panel { width = "100%", padding = 8, gap = 8, children = children } },
+        })
     end
 
     -- ========== Phase 4: 展示结果 ==========
@@ -2196,7 +2229,10 @@ function GameScreen.ShowPrayDialog()
                 children = { UI.Label { text = "天意已定", fontSize = 13, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
             },
         }
-        modal:AddContent(UI.Panel { width = "100%", padding = 8, gap = 10, children = children })
+        modal:AddContent(UI.ScrollView {
+            width = "100%", maxHeight = 450, scrollY = true, bounces = true, showScrollbar = true,
+            children = { UI.Panel { width = "100%", padding = 8, gap = 10, children = children } },
+        })
     end
 
     showPhase1()
@@ -2219,7 +2255,7 @@ function GameScreen.ShowCourtesanDialog()
         return
     end
 
-    local modal = UI.Modal { title = "教坊司 · 花魁大赛", width = 340 }
+    local modal = UI.Modal { title = "教坊司 · 花魁大赛", size = "md" }
     local entryFee = 50 -- 报名费
 
     -- AI选手名字库
@@ -2661,7 +2697,7 @@ function GameScreen.ShowImperialSealDialog()
         return
     end
 
-    local modal = UI.Modal { title = "天子诰封", width = 340 }
+    local modal = UI.Modal { title = "天子诰封", size = "md" }
 
     -- 皇恩封赏阶梯（累计皇恩值兑换永久奖励）
     local sealTiers = {
@@ -3042,7 +3078,7 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
                 backgroundColor = Theme.BG_INPUT,
                 borderWidth = 1, borderColor = Theme.BORDER_LIGHT,
                 gap = 6,
-                onPointerDown = function(self)
+                onClick = function(self)
                     AudioManager.Select()
                     GameData.SetPatriarch(c.id)
                     modal:Close()
@@ -3169,7 +3205,7 @@ function GameScreen.ShowClinicDialog()
                         or nil,
                     backgroundColor = (not canHealAll) and Theme.BG_INPUT or nil,
                     justifyContent = "center", alignItems = "center",
-                    onPointerDown = canHealAll and function(self)
+                    onClick = canHealAll and function(self)
                         AudioManager.Click()
                         local msgs = {}
                         for _, m in ipairs(sickMembers) do
@@ -3238,7 +3274,7 @@ function GameScreen.ShowClinicDialog()
                                 or nil,
                             backgroundColor = (not canHeal) and Theme.BG_INPUT or nil,
                             justifyContent = "center", alignItems = "center",
-                            onPointerDown = canHeal and function(self)
+                            onClick = canHeal and function(self)
                                 AudioManager.Click()
                                 s.silver = s.silver - healCost
                                 local heal = math.random(healMin, healMax)
@@ -3270,6 +3306,169 @@ function GameScreen.ShowClinicDialog()
             end
         end
 
+        -- ========================================
+        -- 坐堂郎中（女性族人，学识>60，家族限1人）
+        -- ========================================
+        children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 10 }
+        children[#children + 1] = UI.Label { text = "坐堂郎中", fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 6 }
+        local clinicYearlyLimit = AdSystem.GetClinicYearlyLimit()
+        local clinicBoosted = AdSystem.IsClinicBoosted()
+        children[#children + 1] = UI.Label {
+            text = "指派一名女性族人（学识60以上）坐堂行医，每年自动诊治最多" .. clinicYearlyLimit .. "名体弱族人",
+            fontSize = 10, fontColor = Theme.TEXT_SECONDARY,
+        }
+
+        local doctorId = s.clinicDoctorId
+        local doctor = doctorId and GameData.GetMember(doctorId) or nil
+        -- 清理无效分配（死亡/不再符合）
+        if doctor and (not doctor.alive or doctor.gender ~= "female" or (doctor.study or 0) < 60) then
+            s.clinicDoctorId = nil
+            doctor = nil
+        end
+
+        local healsThisYear = s._clinicHealsThisYear or 0
+
+        if doctor then
+            -- 已有坐堂郎中：显示信息 + 操作按钮
+            local doctorActionChildren = {}
+            -- 看广告增加次数按钮
+            if not clinicBoosted and AdSystem.IsAvailable("clinic_boost") then
+                local boostRemain = AdSystem.GetRemaining("clinic_boost")
+                doctorActionChildren[#doctorActionChildren + 1] = UI.Panel {
+                    height = 28, borderRadius = 6, paddingHorizontal = 8,
+                    backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
+                    flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 3,
+                    onClick = function(self)
+                        AdSystem.BoostClinicDoctor(function(success, msg)
+                            modal:Close()
+                            if success then
+                                Toast.Success("郎中加持生效，今年可诊治6人")
+                            else
+                                GameScreen.ShowResultPopup("加持失败", msg or "")
+                            end
+                            GameScreen.ShowClinicDialog()
+                            GameScreen.RefreshAll()
+                        end)
+                    end,
+                    children = {
+                        UI.Label { text = "▶广告·加持", fontSize = 10, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                        UI.Label { text = "(" .. boostRemain .. ")", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                    },
+                }
+            elseif clinicBoosted then
+                local remainSec = AdSystem.GetClinicBoostRemainingSeconds()
+                local remainH = math.ceil(remainSec / 3600)
+                doctorActionChildren[#doctorActionChildren + 1] = UI.Label {
+                    text = "加持中·" .. remainH .. "h", fontSize = 10, fontColor = Theme.GREEN,
+                }
+            end
+            -- 卸任按钮
+            doctorActionChildren[#doctorActionChildren + 1] = UI.Panel {
+                width = 58, height = 28, borderRadius = 6,
+                backgroundColor = { 180, 80, 60, 255 },
+                justifyContent = "center", alignItems = "center",
+                onClick = function(self)
+                    AudioManager.Click()
+                    s.clinicDoctorId = nil
+                    GameData.AddLog(doctor.name .. "卸任坐堂郎中，回到家中。")
+                    Toast.Info(doctor.name .. "已卸任")
+                    modal:Close()
+                    GameScreen.ShowClinicDialog()
+                    GameScreen.RefreshAll()
+                end,
+                children = {
+                    UI.Label { text = "卸任", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                },
+            }
+
+            children[#children + 1] = UI.Panel {
+                width = "100%", padding = 10, borderRadius = 8, marginTop = 4,
+                backgroundColor = { 240, 255, 245, 255 }, borderWidth = 1, borderColor = { 120, 200, 140, 255 },
+                gap = 4,
+                children = {
+                    UI.Panel {
+                        flexDirection = "row", alignItems = "center", gap = 6,
+                        children = {
+                            UI.Label { text = doctor.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "女 · " .. doctor.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = "学识" .. (doctor.study or 0), fontSize = 10, fontColor = Theme.BLUE },
+                        },
+                    },
+                    UI.Label { text = "今年已诊治 " .. healsThisYear .. "/" .. clinicYearlyLimit .. " 人", fontSize = 11, fontColor = healsThisYear >= clinicYearlyLimit and Theme.RED or Theme.GREEN },
+                    UI.Panel {
+                        flexDirection = "row", justifyContent = "flex-end", alignItems = "center", gap = 6, marginTop = 2,
+                        children = doctorActionChildren,
+                    },
+                },
+            }
+        else
+            -- 未分配坐堂郎中：显示可选女性族人
+            local candidates = {}
+            for _, m in ipairs(GameData.GetAliveMembers()) do
+                if m.gender == "female" and (m.study or 0) >= 60 and m.age >= 16 and m.state == "在家" then
+                    candidates[#candidates + 1] = m
+                end
+            end
+
+            if #candidates == 0 then
+                children[#children + 1] = UI.Panel {
+                    width = "100%", padding = 10, borderRadius = 8, marginTop = 4,
+                    backgroundColor = Theme.BG_INPUT,
+                    justifyContent = "center", alignItems = "center", gap = 4,
+                    children = {
+                        UI.Label { text = "暂无合适人选", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                        UI.Label { text = "需成年女性族人且学识达60以上", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    },
+                }
+            else
+                for _, m in ipairs(candidates) do
+                    children[#children + 1] = UI.Panel {
+                        width = "100%", padding = 8, borderRadius = 8, marginTop = 4,
+                        backgroundColor = Theme.BG_WHITE, borderWidth = 1, borderColor = Theme.BORDER,
+                        flexDirection = "row", alignItems = "center", gap = 8,
+                        children = {
+                            UI.Panel {
+                                flex = 1, gap = 2,
+                                children = {
+                                    UI.Panel {
+                                        flexDirection = "row", alignItems = "center", gap = 4,
+                                        children = {
+                                            UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                            UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                        },
+                                    },
+                                    UI.Panel {
+                                        flexDirection = "row", gap = 6,
+                                        children = {
+                                            UI.Label { text = "学识" .. (m.study or 0), fontSize = 10, fontColor = Theme.BLUE },
+                                            UI.Label { text = "健康" .. (m.health or 0), fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                                        },
+                                    },
+                                },
+                            },
+                            UI.Panel {
+                                width = 56, height = 28, borderRadius = 6,
+                                backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
+                                justifyContent = "center", alignItems = "center",
+                                onClick = function(self)
+                                    AudioManager.Click()
+                                    s.clinicDoctorId = m.id
+                                    GameData.AddLog(m.name .. "被指派为坐堂郎中，在医馆行医济世。")
+                                    Toast.Success(m.name .. "就任坐堂郎中")
+                                    modal:Close()
+                                    GameScreen.ShowClinicDialog()
+                                    GameScreen.RefreshAll()
+                                end,
+                                children = {
+                                    UI.Label { text = "指派", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                },
+                            },
+                        },
+                    }
+                end
+            end
+        end
+
         -- 药铺提示
         local hasHerbShop = false
         if s.industries then
@@ -3288,7 +3487,7 @@ function GameScreen.ShowClinicDialog()
         end
 
         modal:AddContent(UI.ScrollView {
-            width = "100%", maxHeight = 380, scrollY = true, showScrollbar = true, bounces = true,
+            width = "100%", maxHeight = 420, scrollY = true, showScrollbar = true, bounces = true,
             children = {
                 UI.Panel { width = "100%", padding = 8, gap = 6, children = children },
             },
@@ -3362,7 +3561,7 @@ function GameScreen.ShowLaborDialog()
                             width = 56, height = 28, borderRadius = 6,
                             backgroundColor = {180, 80, 60, 255},
                             justifyContent = "center", alignItems = "center",
-                            onPointerDown = function(self)
+                            onClick = function(self)
                                 AudioManager.Click()
                                 m.state = "在家"
                                 m.laborJob = nil
@@ -3416,7 +3615,7 @@ function GameScreen.ShowLaborDialog()
                         width = 56, height = 28, borderRadius = 6,
                         backgroundGradient = { direction = "to-right", from = {180, 140, 60, 255}, to = {160, 120, 40, 255} },
                         justifyContent = "center", alignItems = "center",
-                        onPointerDown = function(self)
+                        onClick = function(self)
                             AudioManager.Click()
                             -- 弹出选人界面
                             modal:Close()
@@ -3514,7 +3713,7 @@ function GameScreen.ShowLaborAssign(job)
                         width = 56, height = 28, borderRadius = 6,
                         backgroundGradient = { direction = "to-right", from = {180, 140, 60, 255}, to = {160, 120, 40, 255} },
                         justifyContent = "center", alignItems = "center",
-                        onPointerDown = function(self)
+                        onClick = function(self)
                             AudioManager.Click()
                             m.state = "打工"
                             m.laborJob = job.id
@@ -3537,7 +3736,7 @@ function GameScreen.ShowLaborAssign(job)
         width = "100%", height = 32, borderRadius = 6, marginTop = 8,
         backgroundColor = Theme.BG_INPUT,
         justifyContent = "center", alignItems = "center",
-        onPointerDown = function(self)
+        onClick = function(self)
             AudioManager.Click()
             modal:Close()
             GameScreen.ShowLaborDialog()  -- 返回打工主界面

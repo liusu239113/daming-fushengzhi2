@@ -4,6 +4,7 @@
 -- ============================================================================
 
 local GameData = require("Data.GameData")
+local MemberData = require("Data.MemberData")
 local EquipmentSystem = require("Systems.EquipmentSystem")
 local SkillSystem = require("Systems.SkillSystem")
 
@@ -20,6 +21,9 @@ local RANK_ATTR_CAP = {
     [4] = 80,   -- 望族：名师教导，最多80
     [5] = 92,   -- 世家：家学渊源，最多92
     [6] = 100,  -- 勋贵：顶级资源，可达满值
+    [7] = 100,  -- 名门：同勋贵
+    [8] = 100,  -- 豪阀：同勋贵
+    [9] = 100,  -- 国柱：同勋贵
 }
 
 -- ============================================================================
@@ -36,6 +40,8 @@ function GrowthSystem.DiminishedGain(currentValue, rawGain)
     local factor = 1.0
     if currentValue >= 80 then
         factor = 0.05
+    elseif currentValue >= 70 then
+        factor = 0.07
     elseif currentValue >= 65 then
         factor = 0.1
     elseif currentValue >= 50 then
@@ -56,10 +62,22 @@ function GrowthSystem.DiminishedGain(currentValue, rawGain)
 end
 
 --- 获取当前阶级的属性上限
----@param clanRank number 当前阶级(1-6)
+---@param clanRank number 当前阶级(1-9)
 ---@return number cap 属性上限
 function GrowthSystem.GetRankCap(clanRank)
     return RANK_ATTR_CAP[clanRank] or 35
+end
+
+--- 获取某属性的有效上限 = min(品阶上限, 资质上限)
+---@param member table 族人
+---@param attr string "study"|"martial"|"health"
+---@param rankCap number 品阶上限
+---@return number effectiveCap
+function GrowthSystem.GetEffectiveCap(member, attr, rankCap)
+    if member.aptitude and member.aptitude[attr] then
+        return math.min(rankCap, member.aptitude[attr].cap)
+    end
+    return rankCap
 end
 
 -- ============================================================================
@@ -76,24 +94,26 @@ function GrowthSystem.Process(report, ruleEffects)
         if s.month == 1 then
             m.age = m.age + 1
 
-            -- 自然成长：随年龄自动获得少量属性（受阶级上限约束）
+            -- 自然成长：随年龄自动获得少量属性（受阶级上限+资质上限约束）
             local rankCap = GrowthSystem.GetRankCap(s.clanRank)
+            local studyCap = GrowthSystem.GetEffectiveCap(m, "study", rankCap)
+            local martialCap = GrowthSystem.GetEffectiveCap(m, "martial", rankCap)
             if m.age <= 6 then
                 -- 幼儿期：每年 5% 概率+1
-                if math.random() < 0.05 then m.study = math.min(rankCap, m.study + 1) end
-                if math.random() < 0.05 then m.martial = math.min(rankCap, m.martial + 1) end
+                if math.random() < 0.05 then m.study = math.min(studyCap, m.study + 1) end
+                if math.random() < 0.05 then m.martial = math.min(martialCap, m.martial + 1) end
             elseif m.age <= 12 then
                 -- 少年期：每年 8% 概率+1
-                if math.random() < 0.08 then m.study = math.min(rankCap, m.study + 1) end
-                if math.random() < 0.08 then m.martial = math.min(rankCap, m.martial + 1) end
+                if math.random() < 0.08 then m.study = math.min(studyCap, m.study + 1) end
+                if math.random() < 0.08 then m.martial = math.min(martialCap, m.martial + 1) end
             elseif m.age <= 18 then
                 -- 青年期：每年 10% 概率+1
-                if math.random() < 0.10 then m.study = math.min(rankCap, m.study + 1) end
-                if math.random() < 0.10 then m.martial = math.min(rankCap, m.martial + 1) end
+                if math.random() < 0.10 then m.study = math.min(studyCap, m.study + 1) end
+                if math.random() < 0.10 then m.martial = math.min(martialCap, m.martial + 1) end
             elseif m.age <= 30 then
                 -- 壮年期：每年 5% 概率+1
-                if math.random() < 0.05 then m.study = math.min(rankCap, m.study + 1) end
-                if math.random() < 0.05 then m.martial = math.min(rankCap, m.martial + 1) end
+                if math.random() < 0.05 then m.study = math.min(studyCap, m.study + 1) end
+                if math.random() < 0.05 then m.martial = math.min(martialCap, m.martial + 1) end
             end
             -- 30岁以上不再自然成长，只能通过读书/习武/培养提升
         end
@@ -177,11 +197,12 @@ function GrowthSystem.Process(report, ruleEffects)
             end
         end
 
-        -- 读书增长学识（受族规影响）— 受阶级上限约束
+        -- 读书增长学识（受族规影响）— 受阶级上限+资质上限约束
         if m.alive and m.state == "读书" and m.age >= 6 then
             local rankCap = GrowthSystem.GetRankCap(s.clanRank)
-            -- 已到阶级上限则不再增长
-            if m.study < rankCap then
+            local studyCap = GrowthSystem.GetEffectiveCap(m, "study", rankCap)
+            -- 已到有效上限则不再增长
+            if m.study < studyCap then
                 -- 概率制：每月约10%基础概率+1（大幅降速）
                 local studyGain = (math.random() < 0.10) and 1 or 0
                 if m.talent and m.talent.id == "smart" then
@@ -201,18 +222,19 @@ function GrowthSystem.Process(report, ruleEffects)
                 if hasTeacher and math.random() < 0.10 then studyGain = studyGain + 1 end
                 -- 递减增长：属性越高涨得越慢
                 studyGain = GrowthSystem.DiminishedGain(m.study, studyGain)
-                -- 接近阶级上限时额外衰减（上限前5点内50%概率不涨）
-                if m.study + studyGain > rankCap - 5 and math.random() < 0.5 then
+                -- 接近上限时额外衰减（上限前5点内50%概率不涨）
+                if m.study + studyGain > studyCap - 5 and math.random() < 0.5 then
                     studyGain = math.max(0, studyGain - 1)
                 end
-                m.study = math.min(rankCap, m.study + studyGain)
+                m.study = math.min(studyCap, m.study + studyGain)
             end
         end
 
-        -- 在家族人武艺自然成长（族规：习武自卫 + 铁匠铺加成）— 受阶级上限约束
+        -- 在家族人武艺自然成长（族规：习武自卫 + 铁匠铺加成）— 受阶级上限+资质上限约束
         if m.alive and m.age >= 10 and m.gender == "male" then
             local rankCap = GrowthSystem.GetRankCap(s.clanRank)
-            if m.martial < rankCap then
+            local martialCap = GrowthSystem.GetEffectiveCap(m, "martial", rankCap)
+            if m.martial < martialCap then
                 local martialMul = ruleEffects.martialGrowthMul or 0
                 -- 铁匠铺：每座+10%武艺成长
                 if report.industryEffects and report.industryEffects.smithyBonus > 0 then
@@ -223,20 +245,21 @@ function GrowthSystem.Process(report, ruleEffects)
                     local martialGain = (math.random() < 0.10) and 1 or 0
                     martialGain = math.floor(martialGain * (1.0 + martialMul))
                     martialGain = GrowthSystem.DiminishedGain(m.martial, martialGain)
-                    m.martial = math.min(rankCap, m.martial + martialGain)
+                    m.martial = math.min(martialCap, m.martial + martialGain)
                 end
             end
         end
 
-        -- 书坊效果：读书族人额外学识成长 — 受阶级上限约束
+        -- 书坊效果：读书族人额外学识成长 — 受阶级上限+资质上限约束
         if m.alive and m.state == "读书" and report.industryEffects
             and report.industryEffects.bookshopBonus > 0 then
             local rankCap = GrowthSystem.GetRankCap(s.clanRank)
-            if m.study < rankCap then
+            local studyCap = GrowthSystem.GetEffectiveCap(m, "study", rankCap)
+            if m.study < studyCap then
                 local extraStudy = ((math.random() < 0.10) and 1 or 0) * report.industryEffects.bookshopBonus
                 if extraStudy > 0 then
                     extraStudy = GrowthSystem.DiminishedGain(m.study, extraStudy)
-                    m.study = math.min(rankCap, m.study + extraStudy)
+                    m.study = math.min(studyCap, m.study + extraStudy)
                 end
             end
         end

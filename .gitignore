@@ -1,15 +1,2 @@
-.tmp/
-logs/
-dist/
 .build/
-node_modules/
-.claude/
-.emmylua/
-engine-docs/
-examples/
-templates/
-urhox-libs/
-schemas/
-prompts/
-lua-tools/
-.project/
+dist/

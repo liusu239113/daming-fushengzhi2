@@ -1,6 +1,6 @@
 -- ============================================================================
--- 大明浮生志2 - 讨伐准备页面（征伐系统重写版）
--- 三阶段：1. 区域选择+征兵训练  2. 族人选择  3. 兵力分配
+-- 大明浮生志2 - 讨伐准备页面（两级地图系统重写版）
+-- 四阶段：1. 区域选择+征兵训练  2. 关卡选择  3. 族人选择  4. 兵力分配
 -- 世家(rank 5)解锁
 -- ============================================================================
 
@@ -18,16 +18,18 @@ local BattlePrepPage = {}
 -- 状态
 -- ============================================================================
 
-local selectedRegion_ = nil       -- 选中的区域数据
+local selectedArea_ = nil         -- 选中的区域数据
+local selectedStage_ = nil        -- 选中的关卡数据
 local selectedRival_ = nil        -- 生成的敌族数据
 local selectedMembers_ = {}       -- 选中的出战族人ID集合 { [memberId] = true }
-local phase_ = "region_select"    -- "region_select" | "member_select" | "troop_assign"
+local phase_ = "area_select"      -- "area_select" | "stage_select" | "member_select" | "troop_assign"
 local gameScreen_ = nil           -- GameScreen 引用
 local MAX_DEPLOY = 6              -- 最多出战族人数
 
 -- 兵力分配
 local deployInfantry_ = 0
 local deployArchers_ = 0
+local skipReset_ = false  -- Refresh时跳过状态重置
 
 -- ============================================================================
 -- 辅助工具
@@ -57,23 +59,16 @@ local function ShowConscriptModal(unitType)
     local canRecruit = math.max(0, RivalClans.MAX_ARMY_SIZE - total)
     canRecruit = math.floor(canRecruit / 100) * 100
 
-    -- 默认征500人
     local amount = math.min(500, canRecruit)
     if amount <= 0 then
         Toast.Show("兵力已达上限（" .. RivalClans.MAX_ARMY_SIZE .. "）")
         return
     end
 
-    local batches = amount / 100
-    local silverCost = RivalClans.CONSCRIPT_COST.silver * batches
-    local grainCost = RivalClans.CONSCRIPT_COST.grain * batches
-
-    -- 利用 ModalDialogs 或直接使用简化方案
     local ModalDialogs = require("UI.ModalDialogs")
     if ModalDialogs and ModalDialogs.ShowChoiceDialog then
-        -- 提供几档选择
         local options = {}
-        local amounts = { 100, 300, 500, 1000, 2000 }
+        local amounts = { 100, 300, 500, 1000, 2000, 5000 }
         for _, amt in ipairs(amounts) do
             if amt <= canRecruit then
                 local b = amt / 100
@@ -98,7 +93,6 @@ local function ShowConscriptModal(unitType)
             options
         )
     else
-        -- 没有弹窗模块时直接征500
         local ok, msg = RivalClans.Conscript(unitType, 500)
         Toast.Show(msg)
         BattlePrepPage.Refresh()
@@ -109,9 +103,10 @@ end
 -- 阶段1：区域选择 + 军队管理
 -- ============================================================================
 
-local function CreateRegionCard(region)
-    local isConquered = CampaignRegions.IsConquered(region.id)
-    local isUnlocked = CampaignRegions.IsUnlocked(region.id)
+local function CreateAreaCard(area)
+    local isConquered = CampaignRegions.IsAreaConquered(area.id)
+    local isUnlocked = CampaignRegions.IsAreaUnlocked(area.id)
+    local conquered, total = CampaignRegions.GetAreaProgress(area.id)
 
     -- 颜色
     local borderColor, bgColor, labelColor
@@ -129,28 +124,33 @@ local function CreateRegionCard(region)
         labelColor = { 120, 120, 120, 200 }
     end
 
-    local statusText = isConquered and "已征服" or (isUnlocked and "可挑战" or "未解锁")
+    local statusText
+    if isConquered then
+        statusText = "已征服"
+    elseif isUnlocked then
+        statusText = conquered .. "/" .. total
+    else
+        statusText = "未解锁"
+    end
+
+    -- 区域内关卡的兵力范围
+    local minSoldier = area.stages[1].soldierRange[1]
+    local maxSoldier = area.stages[#area.stages].soldierRange[2]
 
     return UI.Panel {
         width = "100%", padding = 10, borderRadius = 8,
         backgroundColor = bgColor,
         borderWidth = 1, borderColor = borderColor,
         flexDirection = "row", justifyContent = "space-between", alignItems = "center",
-        opacity = (isConquered or not isUnlocked) and 0.7 or 1.0,
-        onClick = function(self)
-            if isConquered then
-                Toast.Show("此区域已征服")
-                return
-            end
+        opacity = (not isUnlocked) and 0.5 or 1.0,
+        onTap = function()
             if not isUnlocked then
                 Toast.Show("需先征服前一区域")
                 return
             end
             AudioManager.Select()
-            selectedRegion_ = region
-            selectedRival_ = CampaignRegions.GenerateEnemy(region.id)
-            selectedMembers_ = {}
-            phase_ = "member_select"
+            selectedArea_ = area
+            phase_ = "stage_select"
             BattlePrepPage.Refresh()
         end,
         children = {
@@ -161,16 +161,17 @@ local function CreateRegionCard(region)
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = region.id .. ".", fontSize = 11, fontColor = labelColor },
-                            UI.Label { text = region.name, fontSize = 14, fontColor = labelColor, fontWeight = "bold" },
+                            UI.Label { text = area.id .. ".", fontSize = 11, fontColor = labelColor },
+                            UI.Label { text = area.name, fontSize = 14, fontColor = labelColor, fontWeight = "bold" },
+                            isConquered and UI.Label { text = "V", fontSize = 11, fontColor = { 100, 200, 100, 255 } } or nil,
                         },
                     },
-                    UI.Label { text = region.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = area.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
                     UI.Panel {
                         flexDirection = "row", gap = 8,
                         children = {
-                            UI.Label { text = "敌兵" .. region.soldierRange[1] .. "~" .. region.soldierRange[2], fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = "敌将" .. region.memberRange[1] .. "~" .. region.memberRange[2] .. "人", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "敌兵" .. FormatNumber(minSoldier) .. "~" .. FormatNumber(maxSoldier), fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = total .. "关", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
                         },
                     },
                 },
@@ -187,7 +188,7 @@ local function CreateRegionCard(region)
     }
 end
 
-local function CreateRegionSelectView()
+local function CreateAreaSelectView()
     local s = GameData.state
     local infantry = RivalClans.GetPlayerInfantry()
     local archers = RivalClans.GetPlayerArchers()
@@ -195,11 +196,15 @@ local function CreateRegionSelectView()
     local trainingLevel = RivalClans.GetTrainingLevel()
     local levelName = RivalClans.GetTrainingLevelName(trainingLevel)
 
+    -- 总进度
+    local totalConquered = CampaignRegions.GetConqueredStageCount()
+    local totalStages = CampaignRegions.GetTotalStageCount()
+
     -- 区域列表
-    local regions = CampaignRegions.GetAll()
-    local regionCards = {}
-    for _, r in ipairs(regions) do
-        regionCards[#regionCards + 1] = CreateRegionCard(r)
+    local areas = CampaignRegions.GetAllAreas()
+    local areaCards = {}
+    for _, a in ipairs(areas) do
+        areaCards[#areaCards + 1] = CreateAreaCard(a)
     end
 
     return UI.ScrollView {
@@ -215,8 +220,14 @@ local function CreateRegionSelectView()
                         borderBottomWidth = 1, borderBottomColor = Theme.BORDER,
                         backgroundColor = Theme.NAV_BG,
                         children = {
-                            UI.Label { text = "征伐天下", fontSize = 18, fontColor = Theme.GOLD, letterSpacing = 2 },
-                            UI.Label { text = "征兵练兵、逐步征服各地", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
+                            UI.Panel {
+                                flexDirection = "row", justifyContent = "space-between", alignItems = "center",
+                                children = {
+                                    UI.Label { text = "征伐天下", fontSize = 18, fontColor = Theme.GOLD, letterSpacing = 2 },
+                                    UI.Label { text = totalConquered .. "/" .. totalStages .. " 关", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                },
+                            },
+                            UI.Label { text = "选择区域，逐步征服天下", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
                         },
                     },
 
@@ -251,7 +262,7 @@ local function CreateRegionSelectView()
                             },
                             -- 月耗提示
                             total > 0 and UI.Label {
-                                text = "月耗：银两" .. math.ceil(total / 1000 * 5) .. " 粮食" .. math.ceil(total / 1000 * 8),
+                                text = "月耗：银两" .. math.ceil(total / 1000 * 1200) .. " 粮食" .. math.ceil(total / 1000 * 1500),
                                 fontSize = 10, fontColor = Theme.TEXT_MUTED,
                             } or nil,
                         },
@@ -261,35 +272,32 @@ local function CreateRegionSelectView()
                     UI.Panel {
                         width = "100%", flexDirection = "row", gap = 8, justifyContent = "center",
                         children = {
-                            -- 征步兵
                             UI.Panel {
                                 flexGrow = 1, flexBasis = 0,
                                 paddingVertical = 8, borderRadius = 6,
                                 backgroundColor = Theme.PRIMARY, justifyContent = "center", alignItems = "center",
-                                onClick = function(self)
+                                onTap = function()
                                     AudioManager.Click()
                                     ShowConscriptModal("infantry")
                                 end,
                                 children = { UI.Label { text = "征步兵", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
                             },
-                            -- 征弓兵
                             UI.Panel {
                                 flexGrow = 1, flexBasis = 0,
                                 paddingVertical = 8, borderRadius = 6,
                                 backgroundColor = { 66, 133, 244, 255 }, justifyContent = "center", alignItems = "center",
-                                onClick = function(self)
+                                onTap = function()
                                     AudioManager.Click()
                                     ShowConscriptModal("archers")
                                 end,
                                 children = { UI.Label { text = "征弓兵", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
                             },
-                            -- 训练
                             UI.Panel {
                                 flexGrow = 1, flexBasis = 0,
                                 paddingVertical = 8, borderRadius = 6,
                                 backgroundColor = trainingLevel < RivalClans.MAX_TRAINING_LEVEL and { 200, 160, 50, 255 } or Theme.BG_INPUT,
                                 justifyContent = "center", alignItems = "center",
-                                onClick = function(self)
+                                onTap = function()
                                     if trainingLevel >= RivalClans.MAX_TRAINING_LEVEL then
                                         Toast.Show("已达最高训练等级")
                                         return
@@ -326,7 +334,7 @@ local function CreateRegionSelectView()
                     },
 
                     -- 区域卡片
-                    table.unpack(regionCards),
+                    table.unpack(areaCards),
                 },
             },
         },
@@ -334,7 +342,148 @@ local function CreateRegionSelectView()
 end
 
 -- ============================================================================
--- 阶段2：族人选择
+-- 阶段2：关卡选择
+-- ============================================================================
+
+local function CreateStageCard(stage)
+    local isConquered = CampaignRegions.IsStageConquered(stage.id)
+    local isUnlocked = CampaignRegions.IsStageUnlocked(stage.id)
+
+    local borderColor, bgColor, labelColor
+    if isConquered then
+        borderColor = { 100, 200, 100, 180 }
+        bgColor = { 100, 200, 100, 15 }
+        labelColor = { 100, 200, 100, 255 }
+    elseif isUnlocked then
+        borderColor = Theme.GOLD_BORDER or { 200, 160, 50, 200 }
+        bgColor = { 200, 160, 50, 15 }
+        labelColor = Theme.GOLD or { 200, 160, 50, 255 }
+    else
+        borderColor = { 120, 120, 120, 100 }
+        bgColor = { 120, 120, 120, 10 }
+        labelColor = { 120, 120, 120, 200 }
+    end
+
+    local statusText = isConquered and "已通关" or (isUnlocked and "可挑战" or "未解锁")
+
+    -- Boss关卡特殊标识
+    local namePrefix = stage.isBoss and "BOSS " or ""
+
+    return UI.Panel {
+        width = "100%", padding = 10, borderRadius = 8,
+        backgroundColor = bgColor,
+        borderWidth = stage.isBoss and 2 or 1, borderColor = borderColor,
+        flexDirection = "row", justifyContent = "space-between", alignItems = "center",
+        opacity = (not isUnlocked) and 0.5 or 1.0,
+        onTap = function()
+            if not isUnlocked then
+                Toast.Show("需先通过前一关卡")
+                return
+            end
+            if isConquered then
+                Toast.Show("此关卡已通关")
+                return
+            end
+            AudioManager.Select()
+            selectedStage_ = stage
+            selectedRival_ = CampaignRegions.GenerateStageEnemy(stage.id)
+            selectedMembers_ = {}
+            phase_ = "member_select"
+            BattlePrepPage.Refresh()
+        end,
+        children = {
+            -- 左侧信息
+            UI.Panel {
+                gap = 2, flexShrink = 1,
+                children = {
+                    UI.Panel {
+                        flexDirection = "row", gap = 6, alignItems = "center",
+                        children = {
+                            stage.isBoss and UI.Panel {
+                                paddingHorizontal = 4, paddingVertical = 1, borderRadius = 3,
+                                backgroundColor = { 220, 80, 60, 40 },
+                                children = { UI.Label { text = "BOSS", fontSize = 9, fontColor = { 220, 80, 60, 255 }, fontWeight = "bold" } },
+                            } or nil,
+                            UI.Label { text = stage.name, fontSize = 14, fontColor = labelColor, fontWeight = "bold" },
+                        },
+                    },
+                    UI.Label { text = stage.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Panel {
+                        flexDirection = "row", gap = 8,
+                        children = {
+                            UI.Label { text = "敌兵" .. FormatNumber(stage.soldierRange[1]) .. "~" .. FormatNumber(stage.soldierRange[2]), fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "敌将" .. stage.memberRange[1] .. "~" .. stage.memberRange[2] .. "人", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                        },
+                    },
+                },
+            },
+            -- 右侧状态
+            UI.Panel {
+                paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
+                backgroundColor = isConquered and { 100, 200, 100, 30 } or (isUnlocked and { 200, 160, 50, 30 } or { 120, 120, 120, 20 }),
+                children = {
+                    UI.Label { text = statusText, fontSize = 11, fontColor = labelColor, fontWeight = "bold" },
+                },
+            },
+        },
+    }
+end
+
+local function CreateStageSelectView()
+    local area = selectedArea_
+    if not area then return UI.Panel {} end
+
+    local conquered, total = CampaignRegions.GetAreaProgress(area.id)
+
+    local stageCards = {}
+    for _, stage in ipairs(area.stages) do
+        stageCards[#stageCards + 1] = CreateStageCard(stage)
+    end
+
+    return UI.ScrollView {
+        width = "100%", flexGrow = 1, flexBasis = 0,
+        backgroundColor = { 0, 0, 0, 0 },
+        children = {
+            UI.Panel {
+                width = "100%", gap = 8, padding = 12, paddingBottom = 20,
+                children = {
+                    -- 标题 + 返回
+                    UI.Panel {
+                        width = "100%", flexDirection = "row", alignItems = "center", gap = 8,
+                        padding = { 8, 12, 8, 12 },
+                        borderBottomWidth = 1, borderBottomColor = Theme.BORDER,
+                        children = {
+                            UI.Panel {
+                                paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
+                                backgroundColor = Theme.BG_INPUT,
+                                onTap = function()
+                                    AudioManager.Click()
+                                    phase_ = "area_select"
+                                    selectedArea_ = nil
+                                    BattlePrepPage.Refresh()
+                                end,
+                                children = { UI.Label { text = "< 返回", fontSize = 12, fontColor = Theme.TEXT_SECONDARY } },
+                            },
+                            UI.Panel {
+                                gap = 1, flexShrink = 1,
+                                children = {
+                                    UI.Label { text = area.name, fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                    UI.Label { text = area.desc .. "  进度 " .. conquered .. "/" .. total, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                },
+                            },
+                        },
+                    },
+
+                    -- 关卡列表
+                    table.unpack(stageCards),
+                },
+            },
+        },
+    }
+end
+
+-- ============================================================================
+-- 阶段3：族人选择
 -- ============================================================================
 
 local function CreateDeployMemberCard(member)
@@ -346,7 +495,7 @@ local function CreateDeployMemberCard(member)
         borderWidth = isSelected and 2 or 1,
         borderColor = isSelected and Theme.PRIMARY or Theme.BORDER,
         flexDirection = "row", justifyContent = "space-between", alignItems = "center",
-        onClick = function(self)
+        onTap = function()
             AudioManager.Click()
             if isSelected then
                 selectedMembers_[member.id] = nil
@@ -404,7 +553,7 @@ local function CreateMemberSelectView()
     local deployable = RivalClans.GetDeployableMembers()
     local selectedCount = GetSelectedCount()
     local rival = selectedRival_
-    local region = selectedRegion_
+    local stage = selectedStage_
 
     local memberCards = {}
     for _, m in ipairs(deployable) do
@@ -437,10 +586,10 @@ local function CreateMemberSelectView()
                             UI.Panel {
                                 paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
                                 backgroundColor = Theme.BG_INPUT,
-                                onClick = function(self)
+                                onTap = function()
                                     AudioManager.Click()
-                                    phase_ = "region_select"
-                                    selectedRegion_ = nil
+                                    phase_ = "stage_select"
+                                    selectedStage_ = nil
                                     selectedRival_ = nil
                                     selectedMembers_ = {}
                                     BattlePrepPage.Refresh()
@@ -450,7 +599,7 @@ local function CreateMemberSelectView()
                             UI.Panel {
                                 gap = 1,
                                 children = {
-                                    UI.Label { text = "征伐 " .. (region and region.name or ""), fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                    UI.Label { text = "征伐 " .. (stage and stage.name or ""), fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
                                     UI.Label { text = "选择出战将领（最多" .. MAX_DEPLOY .. "人）", fontSize = 10, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
@@ -497,7 +646,7 @@ local function CreateMemberSelectView()
 end
 
 -- ============================================================================
--- 阶段3：兵力分配
+-- 阶段4：兵力分配
 -- ============================================================================
 
 local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
@@ -523,7 +672,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                         width = 36, height = 36, borderRadius = 6,
                         backgroundColor = value > 0 and { 220, 80, 60, 255 } or Theme.BG_INPUT,
                         justifyContent = "center", alignItems = "center",
-                        onClick = function(self)
+                        onTap = function()
                             if value > 0 then
                                 AudioManager.Click()
                                 onDecrease()
@@ -535,12 +684,10 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                     UI.Panel {
                         flexGrow = 1, flexBasis = 0, height = 20, borderRadius = 10,
                         backgroundColor = Theme.BG_INPUT, overflow = "hidden",
-                        onClick = function(self)
-                            -- 点击进度条设为一半
+                        onTap = function()
                             AudioManager.Click()
                             local half = math.floor(maxValue / 200) * 100
                             if value ~= half then
-                                -- 需要用回调更新
                                 onIncrease(half)
                             end
                         end,
@@ -557,7 +704,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                         width = 36, height = 36, borderRadius = 6,
                         backgroundColor = value < maxValue and Theme.PRIMARY or Theme.BG_INPUT,
                         justifyContent = "center", alignItems = "center",
-                        onClick = function(self)
+                        onTap = function()
                             if value < maxValue then
                                 AudioManager.Click()
                                 onIncrease()
@@ -574,7 +721,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
                         backgroundColor = Theme.BG_INPUT,
-                        onClick = function(self)
+                        onTap = function()
                             AudioManager.Click()
                             onIncrease(0)
                         end,
@@ -583,7 +730,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
                         backgroundColor = Theme.BG_INPUT,
-                        onClick = function(self)
+                        onTap = function()
                             AudioManager.Click()
                             local half = math.floor(maxValue / 200) * 100
                             onIncrease(half)
@@ -593,7 +740,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
                         backgroundColor = Theme.BG_INPUT,
-                        onClick = function(self)
+                        onTap = function()
                             AudioManager.Click()
                             onIncrease(maxValue)
                         end,
@@ -607,7 +754,7 @@ end
 
 local function CreateTroopAssignView()
     local rival = selectedRival_
-    local region = selectedRegion_
+    local stage = selectedStage_
     local selectedCount = GetSelectedCount()
 
     local maxInfantry = RivalClans.GetPlayerInfantry()
@@ -642,7 +789,7 @@ local function CreateTroopAssignView()
                             UI.Panel {
                                 paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
                                 backgroundColor = Theme.BG_INPUT,
-                                onClick = function(self)
+                                onTap = function()
                                     AudioManager.Click()
                                     phase_ = "member_select"
                                     BattlePrepPage.Refresh()
@@ -666,7 +813,7 @@ local function CreateTroopAssignView()
                         borderWidth = 1, borderColor = Theme.BORDER,
                         gap = 6,
                         children = {
-                            UI.Label { text = "征伐 " .. (region and region.name or ""), fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
+                            UI.Label { text = "征伐 " .. (stage and stage.name or ""), fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
                             UI.Panel {
                                 flexDirection = "row", justifyContent = "space-around", flexWrap = "wrap", gap = 4,
                                 children = {
@@ -706,12 +853,10 @@ local function CreateTroopAssignView()
                     CreateAdjustRow(
                         "步兵（近战）", deployInfantry_, maxInfantry,
                         function()
-                            -- 减
                             deployInfantry_ = math.max(0, deployInfantry_ - 100)
                             BattlePrepPage.Refresh()
                         end,
                         function(setTo)
-                            -- 加 或设定值
                             if setTo ~= nil then
                                 deployInfantry_ = math.max(0, math.min(maxInfantry, math.floor(setTo / 100) * 100))
                             else
@@ -737,6 +882,45 @@ local function CreateTroopAssignView()
                             BattlePrepPage.Refresh()
                         end
                     ),
+
+                    -- 战斗加持广告
+                    (function()
+                        local AdSystem = require("Systems.AdSystem")
+                        local s = GameData.state
+                        if s.adBattleBoost then
+                            return UI.Panel {
+                                width = "100%", padding = 8, borderRadius = 6,
+                                backgroundColor = { 56, 168, 120, 20 },
+                                borderWidth = 1, borderColor = Theme.PRIMARY,
+                                flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 6,
+                                children = {
+                                    UI.Label { text = "战力加持已激活", fontSize = 12, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                                    UI.Label { text = "从军族人属性+10%", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                                },
+                            }
+                        elseif AdSystem.IsAvailable("battle_boost") then
+                            local adRemain = AdSystem.GetRemaining("battle_boost")
+                            return UI.Panel {
+                                width = "100%", height = 38, borderRadius = 6,
+                                backgroundGradient = { direction = "to-right", from = { 180, 130, 50, 255 }, to = { 160, 110, 30, 255 } },
+                                flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 6,
+                                onTap = function()
+                                    AudioManager.Click()
+                                    AdSystem.BattleBoost(function(success)
+                                        if success then
+                                            Toast.Show("战力加持已激活！从军族人本月属性+10%")
+                                            BattlePrepPage.Refresh()
+                                        end
+                                    end)
+                                end,
+                                children = {
+                                    UI.Label { text = "▶ 看广告·战力加持+10%", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                    UI.Label { text = "(" .. adRemain .. "次)", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                                },
+                            }
+                        end
+                        return nil
+                    end)(),
 
                     -- 奖励预览
                     rival and UI.Panel {
@@ -766,7 +950,7 @@ end
 -- ============================================================================
 
 local function CreateBottomButton()
-    -- 阶段2：下一步按钮
+    -- 阶段3：下一步按钮
     if phase_ == "member_select" then
         local selectedCount = GetSelectedCount()
         local total = RivalClans.GetPlayerSoldierCount()
@@ -782,7 +966,7 @@ local function CreateBottomButton()
                     backgroundColor = canProceed and Theme.PRIMARY or Theme.BG_INPUT,
                     justifyContent = "center", alignItems = "center",
                     opacity = canProceed and 1.0 or 0.5,
-                    onClick = function(self)
+                    onTap = function()
                         if not canProceed then
                             Toast.Show("至少选择1名将领或拥有兵力")
                             return
@@ -805,7 +989,7 @@ local function CreateBottomButton()
         }
     end
 
-    -- 阶段3：出征按钮
+    -- 阶段4：出征按钮
     if phase_ == "troop_assign" then
         local totalDeploy = deployInfantry_ + deployArchers_
         local selectedCount = GetSelectedCount()
@@ -822,7 +1006,7 @@ local function CreateBottomButton()
                     backgroundColor = canFight and nil or Theme.BG_INPUT,
                     justifyContent = "center", alignItems = "center",
                     opacity = canFight and 1.0 or 0.5,
-                    onClick = function(self)
+                    onTap = function()
                         if not canFight then
                             Toast.Show("至少选择1名将领或分配兵力才能出战")
                             return
@@ -850,7 +1034,8 @@ local function CreateBottomButton()
                                 infantry = deployInfantry_,
                                 archers = deployArchers_,
                                 trainingLevel = RivalClans.GetTrainingLevel(),
-                                regionId = selectedRegion_ and selectedRegion_.id or nil,
+                                stageId = selectedStage_ and selectedStage_.id or nil,
+                                regionId = selectedArea_ and selectedArea_.id or nil,
                             })
                         end
                     end,
@@ -879,12 +1064,16 @@ end
 ---@param gs table GameScreen 引用
 function BattlePrepPage.Create(pageTitle, gs)
     gameScreen_ = gs
-    phase_ = "region_select"
-    selectedRegion_ = nil
-    selectedRival_ = nil
-    selectedMembers_ = {}
-    deployInfantry_ = 0
-    deployArchers_ = 0
+    if not skipReset_ then
+        phase_ = "area_select"
+        selectedArea_ = nil
+        selectedStage_ = nil
+        selectedRival_ = nil
+        selectedMembers_ = {}
+        deployInfantry_ = 0
+        deployArchers_ = 0
+    end
+    skipReset_ = false
 
     return BattlePrepPage.BuildView()
 end
@@ -892,8 +1081,10 @@ end
 --- 构建当前视图
 function BattlePrepPage.BuildView()
     local content
-    if phase_ == "region_select" then
-        content = CreateRegionSelectView()
+    if phase_ == "area_select" then
+        content = CreateAreaSelectView()
+    elseif phase_ == "stage_select" then
+        content = CreateStageSelectView()
     elseif phase_ == "member_select" then
         content = CreateMemberSelectView()
     else
@@ -914,6 +1105,7 @@ end
 --- 刷新页面
 function BattlePrepPage.Refresh()
     if not gameScreen_ then return end
+    skipReset_ = true  -- 内部刷新时保留当前状态（phase/选区/选人等）
     if gameScreen_.RefreshContent then
         gameScreen_.RefreshContent()
     end
@@ -921,10 +1113,11 @@ end
 
 --- 重置状态
 function BattlePrepPage.Reset()
-    selectedRegion_ = nil
+    selectedArea_ = nil
+    selectedStage_ = nil
     selectedRival_ = nil
     selectedMembers_ = {}
-    phase_ = "region_select"
+    phase_ = "area_select"
     deployInfantry_ = 0
     deployArchers_ = 0
 end

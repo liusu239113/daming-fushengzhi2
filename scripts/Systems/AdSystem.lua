@@ -25,6 +25,8 @@ AdSystem.AD_SLOTS = {
     free_training   = { id = "free_training",    name = "免费培养",     yearlyLimit = 24 },
     market_discount = { id = "market_discount",  name = "集市优惠",     yearlyLimit = 12 },
     exam_boost      = { id = "exam_boost",       name = "科举加持",     yearlyLimit = 4 },
+    exam_retry      = { id = "exam_retry",      name = "重考机会",     yearlyLimit = 8 },
+    exam_hint       = { id = "exam_hint",       name = "考题提示",     yearlyLimit = 12 },
     battle_boost    = { id = "battle_boost",      name = "战力提升",     yearlyLimit = 6 },
     revive_member   = { id = "revive_member",    name = "族人复活",     yearlyLimit = 3 },
     extra_reward    = { id = "extra_reward",     name = "额外奖励",     yearlyLimit = 12 },
@@ -35,6 +37,7 @@ AdSystem.AD_SLOTS = {
     year_bonus      = { id = "year_bonus",       name = "年终奖励翻倍", yearlyLimit = 1 },
     health_cure     = { id = "health_cure",      name = "神医诊治",     yearlyLimit = 4 },
     marriage_refresh = { id = "marriage_refresh", name = "换一批佳人",   yearlyLimit = 12 },
+    clinic_boost     = { id = "clinic_boost",    name = "郎中加持",     yearlyLimit = 12 },
 }
 
 -- ============================================================================
@@ -179,7 +182,7 @@ local function GetRealTime()
     return os.time()
 end
 
---- 检查加速是否在有效期内（24小时真实时间）
+--- 检查加速是否在有效期内（30分钟真实时间）
 ---@return boolean
 function AdSystem.IsSpeedUnlocked()
     AdSystem.EnsureState()
@@ -187,7 +190,7 @@ function AdSystem.IsSpeedUnlocked()
     local unlockTime = adState.speedUnlockTime or 0
     if unlockTime <= 0 then return false end
     local elapsed = GetRealTime() - unlockTime
-    return elapsed < 86400  -- 24 * 60 * 60 = 86400秒
+    return elapsed < 1800  -- 30 * 60 = 1800秒
 end
 
 --- 获取加速剩余时间（秒）
@@ -197,11 +200,11 @@ function AdSystem.GetSpeedRemainingSeconds()
     local adState = GameData.state.adState
     local unlockTime = adState.speedUnlockTime or 0
     if unlockTime <= 0 then return 0 end
-    local remaining = 86400 - (GetRealTime() - unlockTime)
+    local remaining = 1800 - (GetRealTime() - unlockTime)
     return math.max(0, remaining)
 end
 
---- 看广告解锁加速，成功后24小时内可用 2x/3x
+--- 看广告解锁加速，成功后30分钟内可用 2x/3x
 ---@param onDone function|nil callback(success, msg)
 function AdSystem.UnlockSpeed(onDone)
     if AdSystem.IsSpeedUnlocked() then
@@ -212,7 +215,7 @@ function AdSystem.UnlockSpeed(onDone)
     AdSystem.ShowRewardAd("speed_boost", function()
         local adState = GameData.state.adState
         adState.speedUnlockTime = GetRealTime()
-        GameData.AddLog("观看广告解锁加速特权，24小时内可使用2倍/3倍速")
+        GameData.AddLog("观看广告解锁加速特权，30分钟内可使用2倍/3倍速")
         if onDone then onDone(true) end
     end, function(msg)
         if onDone then onDone(false, msg) end
@@ -407,6 +410,53 @@ function AdSystem.HealthCure(memberId, onDone)
         local healed = member.health - oldHealth
         GameData.AddLog(member.name .. "经神医诊治，健康恢复+" .. healed)
         if onDone then onDone(true, member.name .. "恢复健康（+" .. healed .. "）") end
+    end, function(msg)
+        if onDone then onDone(false, msg) end
+    end)
+end
+
+-- ============================================================================
+-- 坐堂郎中加持（看广告，24小时内年度治疗上限从3次提升至6次）
+-- ============================================================================
+
+--- 检查坐堂郎中加持是否在有效期内（24小时真实时间）
+---@return boolean
+function AdSystem.IsClinicBoosted()
+    AdSystem.EnsureState()
+    local adState = GameData.state.adState
+    local boostTime = adState.clinicBoostTime or 0
+    if boostTime <= 0 then return false end
+    return (GetRealTime() - boostTime) < 86400
+end
+
+--- 获取坐堂郎中加持剩余时间（秒）
+---@return number
+function AdSystem.GetClinicBoostRemainingSeconds()
+    AdSystem.EnsureState()
+    local adState = GameData.state.adState
+    local boostTime = adState.clinicBoostTime or 0
+    if boostTime <= 0 then return 0 end
+    return math.max(0, 86400 - (GetRealTime() - boostTime))
+end
+
+--- 获取坐堂郎中当前年度治疗上限
+---@return number
+function AdSystem.GetClinicYearlyLimit()
+    return AdSystem.IsClinicBoosted() and 6 or 3
+end
+
+--- 看广告解锁坐堂郎中加持
+---@param onDone function|nil callback(success, msg)
+function AdSystem.BoostClinicDoctor(onDone)
+    if AdSystem.IsClinicBoosted() then
+        if onDone then onDone(true, "加持仍在有效期内") end
+        return
+    end
+    AdSystem.ShowRewardAd("clinic_boost", function()
+        local adState = GameData.state.adState
+        adState.clinicBoostTime = GetRealTime()
+        GameData.AddLog("观看广告，坐堂郎中24小时内可诊治6人/年")
+        if onDone then onDone(true) end
     end, function(msg)
         if onDone then onDone(false, msg) end
     end)

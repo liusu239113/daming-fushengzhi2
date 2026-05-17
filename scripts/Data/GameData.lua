@@ -28,7 +28,7 @@ GameData.REGIONS = {
 }
 
 -- 宗族品级
-GameData.CLAN_RANKS = { "寒门", "农户", "乡绅", "望族", "世家", "勋贵" }
+GameData.CLAN_RANKS = { "寒门", "农户", "乡绅", "望族", "世家", "勋贵", "名门", "豪阀", "国柱" }
 
 --- 品级升级需求表（索引 = 目标品级）
 --- silver: 银两, fame: 声望, population: 最低族人数
@@ -39,6 +39,22 @@ GameData.RANK_UP_REQUIREMENTS = {
     [4] = { silver = 4000,  fame = 2000,  grain = 1200, cloth = 300, population = 15 },  -- 乡绅 → 望族
     [5] = { silver = 10000, fame = 5000,  grain = 3000, cloth = 800, population = 22 },  -- 望族 → 世家
     [6] = { silver = 25000, fame = 12000, grain = 6000, cloth = 2000, population = 30 },  -- 世家 → 勋贵
+    [7] = { silver = 60000, fame = 30000, grain = 15000, cloth = 5000, population = 40 },  -- 勋贵 → 名门
+    [8] = { silver = 150000,fame = 80000, grain = 40000, cloth = 12000, population = 55 },  -- 名门 → 豪阀
+    [9] = { silver = 400000,fame = 200000,grain = 100000,cloth = 30000, population = 75 },  -- 豪阀 → 国柱
+}
+
+--- 每个品级允许拥有的最大产业数量
+GameData.INDUSTRY_LIMIT_BY_RANK = {
+    [1] = 4,   -- 寒门
+    [2] = 6,   -- 农户
+    [3] = 9,   -- 乡绅
+    [4] = 12,  -- 望族
+    [5] = 16,  -- 世家
+    [6] = 20,  -- 勋贵
+    [7] = 25,  -- 名门
+    [8] = 30,  -- 豪阀
+    [9] = 40,  -- 国柱
 }
 
 -- ============================================================================
@@ -171,6 +187,44 @@ GameData.EXPEDITION_TYPES = {
       cost = { silver = 150, grain = 80 },
       rewards = { recruit_chance = 0.4, fame = { 3, 10 } },
       riskRate = 0.08, riskDesc = "遇到骗子" },
+
+    -- === 勋贵（6级）===
+    { id = "sea_trade",  name = "海上通商", icon = "帆",
+      desc = "扬帆出海，与番邦贸易，利润极高", duration = 4,
+      cost = { silver = 300, grain = 150 },
+      rewards = { silver = { 500, 1200 }, fame = { 8, 20 } },
+      riskRate = 0.25, riskDesc = "遭遇海寇" },
+    { id = "court_visit", name = "进京面圣", icon = "朝",
+      desc = "上京朝觐，结交朝中权贵", duration = 3,
+      cost = { silver = 500, grain = 200 },
+      rewards = { fame = { 20, 50 }, silver = { 100, 300 } },
+      riskRate = 0.10, riskDesc = "卷入党争" },
+
+    -- === 名门（7级）===
+    { id = "border_patrol", name = "巡边戍守", icon = "戍",
+      desc = "率族中精锐巡视边关，军功换声望", duration = 3,
+      cost = { silver = 200, grain = 200 },
+      rewards = { fame = { 15, 40 }, martial_boost = { 3, 8 } },
+      riskRate = 0.18, riskDesc = "遭遇敌袭" },
+    { id = "treasure_hunt", name = "寻访古迹", icon = "古",
+      desc = "探访前朝遗迹，寻觅传世珍宝", duration = 3,
+      cost = { silver = 250, grain = 120 },
+      rewards = { silver = { 100, 800 }, item_chance = 0.5, fame = { 5, 15 } },
+      riskRate = 0.20, riskDesc = "机关陷阱" },
+
+    -- === 豪阀（8级）===
+    { id = "silk_road",  name = "丝路远征", icon = "驼",
+      desc = "沿丝绸之路远赴西域，带回奇珍异宝", duration = 6,
+      cost = { silver = 800, grain = 400 },
+      rewards = { silver = { 1000, 3000 }, fame = { 20, 50 }, item_chance = 0.6 },
+      riskRate = 0.30, riskDesc = "沙匪劫掠" },
+
+    -- === 国柱（9级）===
+    { id = "tributary_mission", name = "万邦来朝", icon = "使",
+      desc = "代天子出使四方，宣扬国威；声望名利双收", duration = 5,
+      cost = { silver = 1500, grain = 600 },
+      rewards = { fame = { 50, 120 }, silver = { 800, 2000 } },
+      riskRate = 0.15, riskDesc = "外邦刁难" },
 }
 
 -- ============================================================================
@@ -436,7 +490,7 @@ GameData.YEARLY_GOAL_POOL = {
     { id = "rank_up",      name = "光宗耀祖", desc = "本年宗族品级提升一次",
       icon = "族", reward = { silver = 20, grain = 20, fame = 10 },
       check = function(s, snapshot) return s.clanRank > snapshot.clanRank end,
-      condition = function(s) return s.clanRank < 6 end },
+      condition = function(s) return s.clanRank < 9 end },
 
     -- === 生存目标（后期） ===
     { id = "no_death",   name = "全族平安", desc = "本年无一族人死亡",
@@ -498,6 +552,12 @@ GameData.EXPEDITION_UNLOCK = {
     trade_route = 5,  -- 世家解锁：行商远途
     explore     = 4,  -- 望族解锁：深山探秘
     recruit     = 4,  -- 望族解锁：招贤纳士
+    sea_trade   = 6,  -- 勋贵解锁：海上通商
+    court_visit = 6,  -- 勋贵解锁：进京面圣
+    border_patrol = 7, -- 名门解锁：巡边戍守
+    treasure_hunt = 7, -- 名门解锁：寻访古迹
+    silk_road     = 8, -- 豪阀解锁：丝路远征
+    tributary_mission = 9, -- 国柱解锁：万邦来朝
 }
 
 --- 族规可启用上限
@@ -508,6 +568,9 @@ GameData.RULES_MAX_BY_RANK = {
     [4] = 3,  -- 望族：3条
     [5] = 3,  -- 世家：3条
     [6] = 3,  -- 勋贵：3条
+    [7] = 4,  -- 名门：4条
+    [8] = 4,  -- 豪阀：4条
+    [9] = 5,  -- 国柱：5条
 }
 
 --- 仕途子功能解锁
@@ -565,7 +628,42 @@ GameData.RANK_UNLOCK_DESC = {
         "钱庄产业：放贷收息，按总资产额外生利",
         "船队产业：海上贸易，利润极高",
         "庄园产业：粮银名三收的终极产业",
-        "恭喜！所有功能已全部解锁！",
+    },
+    [7] = {  -- 名门
+        "当铺产业：典当质押，乱世暴利，按银两存量+1%收益",
+        "染坊产业：染制锦缎彩绸，布匹银两双收",
+        "私塾产业：开馆授徒，声名远播，全族学识+10%",
+        "漕运码头：扼守漕运要道，南北货物中转抽成",
+        "皇亲国戚联姻：皇室姻亲，声望飞涨，配偶全属性+20",
+        "巡边戍守历练：率精锐巡视边关，军功换声望",
+        "寻访古迹历练：探访前朝遗迹，寻觅传世珍宝",
+        "名师授业/名将指点：高级培养，成长×2.5",
+        "商队领队打工：率领商队远行，收入丰厚",
+        "镖局可进化为漕运码头",
+        "族规上限提升至4条，产业上限提升至25个",
+    },
+    [8] = {  -- 豪阀
+        "军械坊产业：铸造兵器甲胄，从军族人战力+25%",
+        "织造局产业：承接官府织造，布匹银两声望三收",
+        "钱庄/当铺可进化为票号：汇通天下，总资产额外生利2%",
+        "藩镇将门联姻：配偶武艺+35，赠送精兵50",
+        "丝路远征历练：远赴西域，带回奇珍异宝",
+        "矿监打工：监管矿山开采，收入极高",
+        "高阶天灾应对：需调动更多资源赈灾",
+        "敌对势力进攻：组织防御抵御外敌入侵",
+        "产业上限提升至30个",
+    },
+    [9] = {  -- 国柱
+        "皇商行产业：皇家特许经营，垄断盐铁茶叶，暴利产业",
+        "海关行产业：把持海关贸易，坐收厘金，银两声望双收",
+        "万亩良田产业：终极农业，粮银双收且不受天灾",
+        "宰辅门第联姻：宰相之家，全族声望月产+5",
+        "万邦来朝历练：代天子出使四方，声望名利双收",
+        "全才培养：文武兼修，全属性成长×2.0",
+        "税使打工：代征赋税，权势滔天",
+        "盐场可进化为海关行，庄园可进化为万亩良田",
+        "族规上限提升至5条，产业上限提升至40个",
+        "恭喜！已达最高品级——国柱！",
     },
 }
 
@@ -725,7 +823,8 @@ local DefaultState = {
         archers = 0,        -- 弓兵数量
         trainingLevel = 0,  -- 训练等级 0-5
     },
-    conqueredRegions = {},  -- 已征服的区域ID列表
+    conqueredRegions = {},  -- 已征服的区域ID列表（旧版兼容）
+    conqueredStages = {},   -- 已征服的关卡ID列表（新版：stageId = areaId*100+stageNum）
 
     -- 宠物（单只，纯装饰，消耗粮食）
     pet = nil,  -- { type="dog", name="大黄", adoptYear=1370, adoptMonth=3, lifespan=12, alive=true, deathYear=nil, deathMonth=nil }
@@ -836,6 +935,7 @@ function GameData.CreateMember(opts)
         health = opts.health or 100,      -- 健康 0-100
         militaryRank = opts.militaryRank or nil,
         assignment = opts.assignment or nil, -- 当前分配的产业id
+        aptitude = opts.aptitude or MemberData.GenerateAptitude(), -- 资质（终身属性上限）
         alive = true,
     }
 
@@ -949,6 +1049,12 @@ function GameData.AddIndustry(typeId)
     end
     if not indType then return nil end
 
+    -- A1: 产业数量上限检查
+    local limit = GameData.INDUSTRY_LIMIT_BY_RANK[s.clanRank] or 4
+    if #s.industries >= limit then
+        return nil, "产业已达上限（" .. limit .. "个），需提升品级"
+    end
+
     local id = s.nextIndustryId
     s.nextIndustryId = id + 1
 
@@ -965,6 +1071,44 @@ function GameData.AddIndustry(typeId)
     end
 
     return industry
+end
+
+--- 变卖产业，回收建造成本的50%
+--- @return boolean success, string message
+function GameData.SellIndustry(industryId)
+    local s = GameData.state
+    if not s then return false, "无存档" end
+
+    local idx = nil
+    local ind = nil
+    for i, v in ipairs(s.industries) do
+        if v.id == industryId then
+            idx = i
+            ind = v
+            break
+        end
+    end
+    if not ind then return false, "产业不存在" end
+
+    local indType = GameData.GetIndustryType(ind.typeId)
+    if not indType then return false, "产业类型未知" end
+
+    -- 回收价 = 建造成本 50%
+    local refund = math.floor(indType.cost * 0.5)
+
+    -- 寨堡计数
+    if ind.typeId == "fort" then
+        s.fortCount = math.max(0, s.fortCount - 1)
+    end
+
+    -- 移除产业
+    table.remove(s.industries, idx)
+
+    -- 回收银两
+    GameData.AddResource("silver", refund)
+    GameData.AddLog("变卖" .. indType.name .. "，回收银两" .. refund)
+
+    return true, "变卖" .. indType.name .. "，获得银两" .. refund
 end
 
 --- 检查产业是否可以进化
@@ -1027,16 +1171,20 @@ end
 function GameData.AddResource(name, amount)
     local s = GameData.state
     if s[name] ~= nil then
-        s[name] = math.max(0, s[name] + amount)
+        s[name] = s[name] + amount
     end
 end
 
 function GameData.CanAfford(silver, grain, cloth, fame)
     local s = GameData.state
-    return s.silver >= (silver or 0)
-        and s.grain >= (grain or 0)
-        and s.cloth >= (cloth or 0)
-        and s.fame >= (fame or 0)
+    silver = silver or 0
+    grain = grain or 0
+    cloth = cloth or 0
+    fame = fame or 0
+    return (silver <= 0 or s.silver >= silver)
+        and (grain <= 0 or s.grain >= grain)
+        and (cloth <= 0 or s.cloth >= cloth)
+        and (fame <= 0 or s.fame >= fame)
 end
 
 function GameData.SpendResources(silver, grain, cloth, fame)
@@ -1047,6 +1195,19 @@ function GameData.SpendResources(silver, grain, cloth, fame)
     s.cloth = s.cloth - (cloth or 0)
     s.fame = s.fame - (fame or 0)
     return true
+end
+
+--- 强制花费资源，允许扣成负数（用于紧急事件等不可避免的场景）
+---@param silver number|nil
+---@param grain number|nil
+---@param cloth number|nil
+---@param fame number|nil
+function GameData.ForceSpend(silver, grain, cloth, fame)
+    local s = GameData.state
+    s.silver = s.silver - (silver or 0)
+    s.grain = s.grain - (grain or 0)
+    s.cloth = s.cloth - (cloth or 0)
+    s.fame = s.fame - (fame or 0)
 end
 
 --- 尝试花费资源，不足时自动弹出 Toast 提示并返回 false

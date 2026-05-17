@@ -91,6 +91,9 @@ function MonthlyUpdate.Execute()
     -- 7.7 宠物寿命检查
     MonthlyUpdate.ProcessPetAging(report)
 
+    -- 7.8 坐堂郎中自动治疗（每季度检查一次，年上限3人）
+    MonthlyUpdate.ProcessClinicDoctor(report)
+
     -- 8. 族规每月固定效果
     MonthlyUpdate.ProcessClanRulesDrain(report, ruleEffects)
 
@@ -160,6 +163,7 @@ function MonthlyUpdate.Execute()
         -- 重置年度统计
         s.yearStats = nil
         s.yearStartSnapshot = nil
+        s._clinicHealsThisYear = 0  -- 重置坐堂郎中年度治疗计数
 
         -- 年末自动存档
         local SaveSystem = require("Systems.SaveSystem")
@@ -194,7 +198,10 @@ function MonthlyUpdate.Execute()
         end
     end
 
-    -- 12. 检查隐藏结局（每月检查，优先级高的先触发）
+    -- 12. 检查破产挫折（不终止游戏，降级+惩罚）
+    EndingSystem.CheckBankruptcy(report)
+
+    -- 13. 检查隐藏结局（每月检查，优先级高的先触发）
     EndingSystem.Check(report)
 
     return report
@@ -233,6 +240,7 @@ function MonthlyUpdate.ProcessIndustries(report, ruleEffects)
         -- 收集全局特殊效果
         if indType.specialEffect == "reduce_sick_15" then hasHerbShop = true end
         if indType.specialEffect == "military_boost_15" then hasHorseRanch = true end
+        if indType.specialEffect == "military_boost_25" then hasHorseRanch = true end  -- 军械坊：更强军事加成
         if indType.specialEffect == "martial_grow_10" then hasSmithyCount = hasSmithyCount + 1 end
         if indType.specialEffect == "study_grow_10" then hasBookshopCount = hasBookshopCount + 1 end
 
@@ -244,7 +252,9 @@ function MonthlyUpdate.ProcessIndustries(report, ruleEffects)
         if ind.assignedMemberId then
             local member = GameData.GetMember(ind.assignedMemberId)
             if member and member.alive then
-                manageMul = 1.3
+                -- 兼职管理（读书/从军/经商/为官等非"在家"状态）加成降低
+                local isPartTime = member.state ~= "在家" and member.state ~= "生病"
+                manageMul = isPartTime and 1.15 or 1.3
                 -- 天赋加成
                 if member.talent then
                     if member.talent.id == "diligent" then
@@ -278,7 +288,8 @@ function MonthlyUpdate.ProcessIndustries(report, ruleEffects)
 
         -- === 处理主资源 ===
         local function calcResourceOutput(res, baseOut)
-            local output = baseOut * ind.level
+            -- A4: 对数递减公式替代线性公式
+            local output = baseOut * (1 + math.log(ind.level) * 1.5)
             output = output * manageMul
 
             local resMul = commonMul
@@ -354,15 +365,66 @@ function MonthlyUpdate.ProcessIndustries(report, ruleEffects)
             report.expenses.grain = report.expenses.grain + 3
         end
 
-        -- 钱庄：按总银两额外生利2%
+        -- 皇商行：每月消耗声望3
+        if indType.specialEffect == "consume_fame_3" then
+            report.expenses.fame = (report.expenses.fame or 0) + 3
+        end
+
+        -- 当铺：按银两存量+1%收益（多个当铺不叠加利率，上限150）
+        if indType.specialEffect == "interest_1pct" then
+            if not report._pawnshopProcessed then
+                report._pawnshopProcessed = true
+                local pawnCount = 0
+                for _, ind2 in ipairs(s.industries) do
+                    local it2 = GameData.GetIndustryType(ind2.typeId)
+                    if it2 and it2.specialEffect == "interest_1pct" then
+                        pawnCount = pawnCount + 1
+                    end
+                end
+                local cap = 100 + (pawnCount - 1) * 50
+                local interest = math.min(cap, math.floor(s.silver * 0.01))
+                if interest > 0 then
+                    report.incomes.silver = report.incomes.silver + interest
+                end
+            end
+        end
+
+        -- 钱庄：按总银两额外生利2%（多个钱庄不叠加利率，仅提升利息上限）
+        -- 基础上限200，每多一个钱庄+100
         if indType.specialEffect == "interest_2pct" then
-            local interest = math.floor(s.silver * 0.02)
-            if interest > 0 then
-                report.incomes.silver = report.incomes.silver + interest
+            if not report._moneyHouseProcessed then
+                report._moneyHouseProcessed = true
+                -- 统计钱庄数量
+                local moneyHouseCount = 0
+                for _, ind2 in ipairs(s.industries) do
+                    local it2 = GameData.GetIndustryType(ind2.typeId)
+                    if it2 and it2.specialEffect == "interest_2pct" then
+                        moneyHouseCount = moneyHouseCount + 1
+                    end
+                end
+                local interestCap = 200 + (moneyHouseCount - 1) * 100
+                local interest = math.min(interestCap, math.floor(s.silver * 0.02))
+                if interest > 0 then
+                    report.incomes.silver = report.incomes.silver + interest
+                end
             end
         end
 
         ::continueInd::
+    end
+
+    -- === A2: 产业月维护费 ===
+    local totalMaintenance = 0
+    for _, ind in ipairs(s.industries) do
+        local indType = GameData.GetIndustryType(ind.typeId)
+        if indType and indType.resource ~= "none" then
+            local fee = math.floor(indType.cost * 0.018 * ind.level)
+            totalMaintenance = totalMaintenance + fee
+        end
+    end
+    if totalMaintenance > 0 then
+        report.expenses.silver = report.expenses.silver + totalMaintenance
+        report.maintenanceFee = totalMaintenance
     end
 
     -- === 全局特殊效果存入report，供其他系统使用 ===
@@ -484,10 +546,10 @@ function MonthlyUpdate.ProcessArmyMaintenance(report)
     local totalSoldiers = (s.army.infantry or 0) + (s.army.archers or 0)
     if totalSoldiers <= 0 then return end
 
-    -- 每1000兵月耗
+    -- 每1000兵月耗（银1200 粮1500）
     local batches = totalSoldiers / 1000
-    local silverCost = math.ceil(batches * 5)
-    local grainCost = math.ceil(batches * 8)
+    local silverCost = math.ceil(batches * 1200)
+    local grainCost = math.ceil(batches * 1500)
 
     -- 检查是否能承受
     local canAffordSilver = s.silver >= silverCost
@@ -502,8 +564,8 @@ function MonthlyUpdate.ProcessArmyMaintenance(report)
     else
         -- 资源不足，部分士兵逃亡
         -- 能养活多少兵：取银两和粮食能支撑的较小值
-        local canSupportBySilver = (s.silver > 0) and math.floor(s.silver / 5 * 1000) or 0
-        local canSupportByGrain = (s.grain > 0) and math.floor(s.grain / 8 * 1000) or 0
+        local canSupportBySilver = (s.silver > 0) and math.floor(s.silver / 1200 * 1000) or 0
+        local canSupportByGrain = (s.grain > 0) and math.floor(s.grain / 1500 * 1000) or 0
         local canSupport = math.min(canSupportBySilver, canSupportByGrain)
         canSupport = math.max(0, canSupport)
 
@@ -517,8 +579,8 @@ function MonthlyUpdate.ProcessArmyMaintenance(report)
 
             -- 扣除实际能支付的费用
             local actualBatches = canSupport / 1000
-            local actualSilver = math.min(s.silver, math.ceil(actualBatches * 5))
-            local actualGrain = math.min(s.grain, math.ceil(actualBatches * 8))
+            local actualSilver = math.min(s.silver, math.ceil(actualBatches * 1200))
+            local actualGrain = math.min(s.grain, math.ceil(actualBatches * 1500))
             GameData.AddResource("silver", -actualSilver)
             GameData.AddResource("grain", -actualGrain)
             report.expenses.silver = report.expenses.silver + actualSilver
@@ -550,6 +612,21 @@ function MonthlyUpdate.ProcessTax(report)
         taxRate = taxRate * EraSystem.GetTaxModifier(s.year)
         -- 难度影响税率
         taxRate = taxRate * difficulty.taxMul
+
+        -- 官员减税：族中最高官职提供税赋减免
+        local taxReduceMax = 0
+        for _, m in ipairs(GameData.GetAliveMembers()) do
+            if m.state == "为官" and m.officialRank then
+                for _, rank in ipairs(MemberData.OFFICIAL_RANKS) do
+                    if rank.id == m.officialRank and rank.taxReduce > taxReduceMax then
+                        taxReduceMax = rank.taxReduce
+                    end
+                end
+            end
+        end
+        if taxReduceMax > 0 then
+            taxRate = taxRate * (1.0 - taxReduceMax)
+        end
 
         local taxSilver = math.ceil(s.silver * taxRate * 0.3)
         local taxGrain = math.ceil(report.incomes.grain * taxRate)
@@ -592,6 +669,37 @@ function MonthlyUpdate.ProcessCareer(report, ruleEffects)
             end
             if inc.silver > 0 then
                 report.incomes.silver = report.incomes.silver + inc.silver
+            end
+        end
+    end
+
+    -- 为官族人月处理（俸禄、声望、任期、贬谪）
+    for _, m in ipairs(GameData.GetMembersByState("为官")) do
+        if m.officialRank then
+            local rankInfo = nil
+            for _, r in ipairs(MemberData.OFFICIAL_RANKS) do
+                if r.id == m.officialRank then rankInfo = r; break end
+            end
+            if rankInfo then
+                -- 俸禄
+                report.incomes.silver = report.incomes.silver + rankInfo.silver
+                report.incomes.fame = report.incomes.fame + rankInfo.fame
+                -- 布政使月产声望
+                if rankInfo.famePerMonth then
+                    report.incomes.fame = report.incomes.fame + rankInfo.famePerMonth
+                end
+                -- 任期累计
+                m.officialTenure = (m.officialTenure or 0) + 1
+                -- 贬谪风险（每月3%）
+                if math.random() < (rankInfo.demotionRate or 0.03) then
+                    m.state = "在家"
+                    local oldRank = rankInfo.name
+                    m.officialRank = nil
+                    m.officialTenure = nil
+                    report.events[#report.events + 1] = m.name .. "因朝廷变故，被免去" .. oldRank .. "之职。"
+                    GameData.AddLog(m.name .. "被免去" .. oldRank .. "之职，返乡赋闲。")
+                    report.incomes.fame = math.max(0, report.incomes.fame - 5)
+                end
             end
         end
     end
@@ -1409,6 +1517,71 @@ function MonthlyUpdate.ProcessPetAging(report)
             },
         }
     end
+end
+
+-- ============================================================================
+-- 坐堂郎中自动治疗（每季度检查，年上限3人）
+-- 条件：已分配女性族人（学识>=60）为坐堂郎中
+-- 效果：自动治疗健康<30的族人，恢复20~35健康
+-- ============================================================================
+
+function MonthlyUpdate.ProcessClinicDoctor(report)
+    local s = GameData.state
+    if not s then return end
+
+    -- 每季度执行一次（3/6/9/12月）
+    if s.month % 3 ~= 0 then return end
+
+    local doctorId = s.clinicDoctorId
+    if not doctorId then return end
+
+    local doctor = GameData.GetMember(doctorId)
+    -- 验证郎中仍然有效
+    if not doctor or not doctor.alive or doctor.gender ~= "female" or (doctor.study or 0) < 60 then
+        s.clinicDoctorId = nil
+        return
+    end
+
+    -- 检查年度上限（看广告可提升至6次）
+    local AdSystem = require("Systems.AdSystem")
+    local yearlyLimit = AdSystem.GetClinicYearlyLimit()
+    local healsThisYear = s._clinicHealsThisYear or 0
+    if healsThisYear >= yearlyLimit then return end
+
+    -- 找到健康<30的族人（排除郎中本人）
+    local patients = {}
+    for _, m in ipairs(GameData.GetAliveMembers()) do
+        if m.id ~= doctorId and m.health < 30 then
+            patients[#patients + 1] = m
+        end
+    end
+
+    if #patients == 0 then return end
+
+    -- 按健康值升序排列，优先治疗最虚弱的
+    table.sort(patients, function(a, b) return a.health < b.health end)
+
+    -- 本次最多治疗1人（每季度1人，年上限3人）
+    local patient = patients[1]
+    local healAmount = math.random(20, 35)
+    -- 郎中学识越高治疗效果越好
+    if doctor.study >= 80 then healAmount = healAmount + math.random(5, 10) end
+
+    local oldHealth = patient.health
+    patient.health = math.min(100, patient.health + healAmount)
+    local actualHeal = patient.health - oldHealth
+
+    -- 如果治好了，解除生病状态
+    if patient.state == "生病" and patient.health >= 60 then
+        patient.state = patient.prevState or "在家"
+        patient.prevState = nil
+    end
+
+    s._clinicHealsThisYear = healsThisYear + 1
+
+    local logMsg = "坐堂郎中" .. doctor.name .. "为" .. patient.name .. "把脉施药，健康恢复+" .. actualHeal
+    GameData.AddLog(logMsg)
+    report.events[#report.events + 1] = logMsg
 end
 
 return MonthlyUpdate

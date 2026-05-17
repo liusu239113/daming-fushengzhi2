@@ -33,10 +33,12 @@ function ShowScreen(screenId, ...)
                 ShowScreen("create")
             end,
             onContinue = function()
-                local ok, slot = SaveSystem.LoadLatest()
+                local ok, slotOrErr = SaveSystem.LoadLatest()
                 if ok then
-                    print("[Main] 继续游戏，加载" .. (SaveSystem.SLOT_NAMES[slot] or slot))
+                    print("[Main] 继续游戏，加载" .. (SaveSystem.SLOT_NAMES[slotOrErr] or slotOrErr))
                     ShowScreen("game")
+                elseif slotOrErr == "version_too_new" then
+                    ShowVersionMismatchModal()
                 end
             end,
             onSaveManage = function()
@@ -71,6 +73,78 @@ function ShowScreen(screenId, ...)
     if root then
         UI.SetRoot(root)
     end
+end
+
+-- ============================================================================
+-- 版本不匹配弹窗（存档版本高于客户端 → 强制更新）
+-- ============================================================================
+
+function ShowVersionMismatchModal()
+    local modal = UI.Modal {
+        title = "版本过旧",
+        size = "sm",
+        showCloseButton = false,
+        closeOnOverlay = false,
+    }
+
+    modal:AddContent(UI.Panel {
+        width = "100%",
+        gap = 12,
+        padding = 12,
+        alignItems = "center",
+        children = {
+            -- 警告图标
+            UI.Panel {
+                width = 56, height = 56, borderRadius = 28,
+                backgroundColor = { 220, 80, 60, 40 },
+                justifyContent = "center", alignItems = "center",
+                children = {
+                    UI.Label { text = "!", fontSize = 28, fontColor = { 220, 80, 60, 255 }, fontWeight = "bold" },
+                },
+            },
+
+            UI.Label {
+                text = "检测到存档版本更新",
+                fontSize = 16,
+                fontColor = Theme.TEXT_PRIMARY,
+                fontWeight = "bold",
+                textAlign = "center",
+            },
+
+            UI.Label {
+                text = "您的存档由更新版本的游戏创建。为防止存档数据丢失或损坏，请先更新游戏至最新版本后再登录。",
+                fontSize = 12,
+                fontColor = Theme.TEXT_SECONDARY,
+                textAlign = "center",
+                whiteSpace = "normal",
+            },
+
+            UI.Label {
+                text = "更新方式：点击右上角「...」→ 检查更新，更新完成后请重新启动游戏",
+                fontSize = 11,
+                fontColor = Theme.GOLD,
+                textAlign = "center",
+                whiteSpace = "normal",
+            },
+
+            -- 知道了按钮
+            UI.Panel {
+                width = "80%", height = 40, borderRadius = 8,
+                backgroundGradient = Theme.GRADIENT_GOLD,
+                justifyContent = "center", alignItems = "center",
+                marginTop = 4,
+                onClick = function(self)
+                    AudioManager.Click()
+                    modal:Close()
+                end,
+                children = {
+                    UI.Label { text = "知道了", fontSize = 14, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                },
+            },
+        },
+    })
+
+    modal:Open()
 end
 
 -- ============================================================================
@@ -128,9 +202,13 @@ function ShowSaveManageModal()
                                     borderRadius = 4,
                                     backgroundGradient = Theme.GRADIENT_GOLD,
                                     onClick = function(self)
-                                        if SaveSystem.Load(slotId) then
+                                        local loadOk, errType = SaveSystem.Load(slotId)
+                                        if loadOk then
                                             modal:Close()
                                             ShowScreen("game")
+                                        elseif errType == "version_too_new" then
+                                            modal:Close()
+                                            ShowVersionMismatchModal()
                                         end
                                     end,
                                     children = {

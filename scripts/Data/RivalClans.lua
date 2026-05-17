@@ -47,6 +47,19 @@ local RIVAL_TITLES_FEMALE = {
 }
 
 -- ============================================================================
+-- 品阶缩放表（兵力和属性随品阶指数增长）
+-- 征伐在品阶5解锁，品阶5为基准倍率1.0
+-- ============================================================================
+
+RivalClans.RANK_SCALING = {
+    [5] = { soldierMul = 1.0,  statBonus = 0,  memberExtra = 0, rewardMul = 1.0 },
+    [6] = { soldierMul = 3.0,  statBonus = 8,  memberExtra = 1, rewardMul = 2.0 },
+    [7] = { soldierMul = 8.0,  statBonus = 15, memberExtra = 2, rewardMul = 4.0 },
+    [8] = { soldierMul = 20.0, statBonus = 22, memberExtra = 3, rewardMul = 7.0 },
+    [9] = { soldierMul = 40.0, statBonus = 30, memberExtra = 4, rewardMul = 12.0 },
+}
+
+-- ============================================================================
 -- 敌族难度等级
 -- ============================================================================
 
@@ -88,8 +101,9 @@ RivalClans.BASE_REWARDS = {
 ---@param tier table 难度等级
 ---@param isLeader boolean
 ---@param memberIndex number 成员序号（用于头像分配）
+---@param rankScale table|nil 品阶缩放数据
 ---@return table member
-local function GenerateRivalMember(surname, tier, isLeader, memberIndex)
+local function GenerateRivalMember(surname, tier, isLeader, memberIndex, rankScale)
     -- 征伐限定男性（敌方出战成员均为男性）
     local gender = "male"
 
@@ -104,6 +118,11 @@ local function GenerateRivalMember(surname, tier, isLeader, memberIndex)
 
     local martial = math.random(tier.martialRange[1], tier.martialRange[2])
     local health = math.random(tier.healthRange[1], tier.healthRange[2])
+
+    -- 品阶属性加成
+    local statBonus = rankScale and rankScale.statBonus or 0
+    martial = math.min(100, martial + statBonus)
+    health = math.min(100, health + statBonus)
 
     -- 首领属性更高
     if isLeader then
@@ -141,11 +160,15 @@ function RivalClans.Generate()
     -- 玩家姓氏不能出现
     local playerSurname = GameData.state and GameData.state.surname or ""
 
+    -- 获取品阶缩放
+    local s = GameData.state
+    local clanRank = s and s.clanRank or 5
+    local rankScale = RivalClans.RANK_SCALING[clanRank] or RivalClans.RANK_SCALING[5]
+
     -- 生成3个不同难度的敌族
     local tierIndices = { 1, 2, 3 }
     -- 世家以上额外出现精英敌族
-    local s = GameData.state
-    if s and s.clanRank >= 6 then
+    if clanRank >= 6 then
         tierIndices = { 2, 3, 4 }
     end
 
@@ -163,21 +186,23 @@ function RivalClans.Generate()
         local suffix = CLAN_SUFFIXES[math.random(1, #CLAN_SUFFIXES)]
         local clanName = surname .. suffix
 
-        -- 成员数
+        -- 成员数（品阶越高成员越多）
         local memberCount = math.random(tier.memberRange[1], tier.memberRange[2])
+            + (rankScale.memberExtra or 0)
         local members = {}
         for j = 1, memberCount do
-            members[j] = GenerateRivalMember(surname, tier, j == 1, j)
+            members[j] = GenerateRivalMember(surname, tier, j == 1, j, rankScale)
         end
 
-        -- 兵力（总士兵数）
-        local soldiers = math.random(tier.soldierRange[1], tier.soldierRange[2])
+        -- 兵力（总士兵数）= 基础范围 × 品阶倍率
+        local baseSoldiers = math.random(tier.soldierRange[1], tier.soldierRange[2])
+        local soldiers = math.floor(baseSoldiers * rankScale.soldierMul)
         -- 取整到100
         soldiers = math.floor(soldiers / 100) * 100
         if soldiers < 100 then soldiers = 100 end
 
-        -- 奖励
-        local rewardMul = tier.rewardMul
+        -- 奖励 = 基础奖励 × 难度倍率 × 品阶奖励倍率
+        local rewardMul = tier.rewardMul * rankScale.rewardMul
         local rewards = {
             silver = math.floor(math.random(RivalClans.BASE_REWARDS.silver[1], RivalClans.BASE_REWARDS.silver[2]) * rewardMul),
             grain  = math.floor(math.random(RivalClans.BASE_REWARDS.grain[1], RivalClans.BASE_REWARDS.grain[2]) * rewardMul),
@@ -243,18 +268,35 @@ end
 --- 将小兵（每100个为一个单位）转换为战斗单位
 ---@param unitIndex number 第几个小兵单位
 ---@param side string "player" 或 "enemy"
+---@param clanRank number|nil 品阶（仅敌方使用，用于缩放属性）
 ---@return table battleUnit
-function RivalClans.SoldierToBattleUnit(unitIndex, side)
-    -- 小兵基础属性固定偏低
+function RivalClans.SoldierToBattleUnit(unitIndex, side, clanRank)
+    -- 小兵基础属性
+    local atk, hp, spd, def = 12, 80, 18, 2
+
+    -- 敌方小兵按品阶强化
+    if side == "enemy" and clanRank then
+        local scale = RivalClans.RANK_SCALING[clanRank]
+        if scale then
+            local bonus = scale.statBonus
+            atk = atk + math.floor(bonus * 0.4)
+            hp  = hp  + bonus * 3
+            def = def + math.floor(bonus * 0.2)
+        end
+    end
+
+    -- 注意：我方小兵的训练加成在 BattleScene 中统一应用（含筑寨、弓兵等修正），
+    -- 此处不再重复叠加，避免双重加成 bug。
+
     return {
         name = (side == "player" and "我军" or "敌军") .. "第" .. unitIndex .. "营",
         memberId = nil,
         isSoldier = true,
-        atk = 12,
-        hp = 80,
-        maxHp = 80,
-        spd = 18,
-        def = 2,
+        atk = atk,
+        hp = hp,
+        maxHp = hp,
+        spd = spd,
+        def = def,
         side = side,
     }
 end
@@ -342,12 +384,12 @@ end
 
 -- 征兵费用：每100人
 RivalClans.CONSCRIPT_COST = {
-    silver = 15,  -- 银两
-    grain = 10,   -- 粮食
+    silver = 800,  -- 银两（每100人）
+    grain = 600,   -- 粮食（每100人）
 }
 
 -- 兵力上限
-RivalClans.MAX_ARMY_SIZE = 20000
+RivalClans.MAX_ARMY_SIZE = 50000
 
 --- 征兵
 ---@param unitType string "infantry" 或 "archers"
@@ -404,8 +446,8 @@ end
 
 -- 训练费用：每级
 RivalClans.TRAINING_COST = {
-    silver = 30,
-    grain = 20,
+    silver = 3000,
+    grain = 2000,
 }
 
 -- 最高训练等级

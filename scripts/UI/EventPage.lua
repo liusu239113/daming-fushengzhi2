@@ -9,6 +9,8 @@ local GameData = require("Data.GameData")
 local MonthlyUpdate = require("Systems.MonthlyUpdate")
 local SaveSystem = require("Systems.SaveSystem")
 local AudioManager = require("Systems.AudioManager")
+local AdSystem = require("Systems.AdSystem")
+local Toast = require("Systems.Toast")
 
 local EventPage = {}
 
@@ -87,7 +89,7 @@ function EventPage.Create(PageTitle, screen)
                                 width = "100%", height = 40, borderRadius = 6,
                                 backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER_GOLD,
                                 justifyContent = "center", alignItems = "center",
-                                onPointerDown = function(self)
+                                onClick = function(self)
                                     AudioManager.Select()
                                     local ok2, err2 = pcall(choice.effect)
                                     if not ok2 then
@@ -100,6 +102,30 @@ function EventPage.Create(PageTitle, screen)
                                 children = { UI.Label { text = choice.text, fontSize = 13, fontColor = Theme.GOLD } },
                             }
                         end
+                    end
+                    -- 额外奖励广告按钮
+                    if AdSystem.IsAvailable("extra_reward") then
+                        local adRemain = AdSystem.GetRemaining("extra_reward")
+                        evtChildren[#evtChildren + 1] = UI.Panel {
+                            width = "100%", height = 32, borderRadius = 6, marginTop = 2,
+                            backgroundGradient = { direction = "to-right", from = { 180, 130, 50, 255 }, to = { 160, 110, 30, 255 } },
+                            flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
+                            onClick = function(self)
+                                AudioManager.Click()
+                                -- 固定额外奖励：银两+粮食
+                                local bonusReward = { silver = 10, grain = 8 }
+                                AdSystem.ExtraEventReward(bonusReward, function(success)
+                                    if success then
+                                        Toast.Show("获得额外奖励：银两+5 粮食+4")
+                                    end
+                                    screen.RefreshAll()
+                                end)
+                            end,
+                            children = {
+                                UI.Label { text = "▶ 看广告·额外奖励", fontSize = 10, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                UI.Label { text = "(" .. adRemain .. "次)", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                            },
+                        }
                     end
                     return evtChildren
                 end)(),

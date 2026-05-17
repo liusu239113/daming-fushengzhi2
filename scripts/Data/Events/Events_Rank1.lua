@@ -1341,4 +1341,103 @@ events[#events + 1] = {
     end,
 }
 
+-- ============================================================================
+-- 捡钱事件（寒门专属，低概率意外之财）
+-- ============================================================================
+events[#events + 1] = {
+    id = "find_money",
+    title = "路边拾银",
+    rankRange = { 1, 2 },
+    weight = 1,
+    cooldownMonths = 12,
+    check = function() return true end,
+    execute = function(report)
+        return {
+            title = "路边拾银",
+            desc = "族中小儿在村口老槐树下玩耍，忽然从土里刨出一个油布包袱，打开一看，竟是一包碎银。约莫有二十两上下，不知是哪家埋的私房钱，年深日久早已无人认领。族长思量再三，决定留下这笔意外之财贴补家用。",
+            choices = {
+                {
+                    text = "收下这笔意外之财",
+                    result = "虽说来路不明，但眼下家中正缺银子使。族长让人把银子称了称，整整二十两。小儿乐得手舞足蹈，嚷着要吃糖葫芦。族长笑骂一句，转头却也松了口气——这笔钱来得正是时候。",
+                    effect = function()
+                        GameData.AddResource("silver", 20)
+                        GameData.AddLog("族中小儿在村口老槐树下刨出一包碎银，约有二十两，贴补了家用。")
+                        report.events[#report.events + 1] = "路边拾银二十两"
+                    end
+                },
+            }
+        }
+    end,
+}
+
+-- ============================================================================
+-- 商人路过事件（寒门专属，资源互换）
+-- ============================================================================
+events[#events + 1] = {
+    id = "passing_merchant",
+    title = "商人路过",
+    rankRange = { 1, 2 },
+    weight = 1,
+    cooldownMonths = 6,
+    check = function() return true end,
+    execute = function(report)
+        local s = GameData.state
+        return {
+            title = "商人路过",
+            desc = "一个赶着骡车的行商路过村口，车上满载着粮食、布匹和杂货。他说是从南边来的，因为赶路错过了宿头，想在村里歇一晚。见他货物齐全，不妨趁机做些交易。",
+            choices = {
+                {
+                    text = "卖粮换银（10粮→6银）",
+                    cost = { grain = 10 },
+                    result = "商人验过粮食成色，连连点头：'北边的粮食就是实在，粒粒饱满。'一手交粮一手交银，六两白银入了口袋。商人还多送了一把南方的竹扇，说是交个朋友。",
+                    effect = function()
+                        GameData.AddResource("silver", 6)
+                        GameData.AddLog("与路过的商人做了笔买卖，卖了十斗粮食，得银六两。")
+                        report.events[#report.events + 1] = "商人路过，卖粮得银"
+                    end
+                },
+                {
+                    text = "用银买粮（5银→10粮）",
+                    cost = { silver = 5 },
+                    result = "掏出五两银子，商人从车上搬下几袋粮食，整整十斗。'这批是湖广的新米，煮出来又香又糯。'搬回家里堆满了半间屋子，这下仓里可充实多了。",
+                    effect = function()
+                        GameData.AddResource("grain", 10)
+                        GameData.AddLog("向路过的商人买了十斗湖广新米，花去五两银子。")
+                        report.events[#report.events + 1] = "商人路过，买粮囤积"
+                    end
+                },
+                {
+                    text = "卖布换银（6布→4银）",
+                    cost = { cloth = 6 },
+                    result = "拿出家中存的六匹土布，商人摸了摸质地，说织工不错，南边正缺这种结实耐穿的布料。爽快地付了四两银子，还说下回路过再来收。",
+                    effect = function()
+                        GameData.AddResource("silver", 4)
+                        GameData.AddLog("将家中六匹土布卖给了路过的商人，得银四两。")
+                        report.events[#report.events + 1] = "商人路过，卖布得银"
+                    end
+                },
+                {
+                    text = "用银买布（3银→6布）",
+                    cost = { silver = 3 },
+                    result = "花三两银子从商人手里挑了六匹好布，有素色的棉布也有带花纹的细布。商人笑道：'这可是苏州出的好料子，外头卖还贵些呢。'回去后一家人摸着新布爱不释手。",
+                    effect = function()
+                        GameData.AddResource("cloth", 6)
+                        GameData.AddLog("向路过的商人买了六匹苏州布料，花去三两银子。")
+                        report.events[#report.events + 1] = "商人路过，购入布匹"
+                    end
+                },
+                {
+                    text = "不做交易，只留他住一晚",
+                    result = "没什么需要买卖的，便只管他一顿饭一晚住处。商人感激不尽，临走时讲了许多外头的见闻——南边的物价、北边的战事、哪条路好走哪个渡口安全。这些消息比什么都值钱。",
+                    effect = function()
+                        GameData.AddResource("fame", 2)
+                        GameData.AddLog("留宿了一位路过的商人，虽未交易，但从他口中得知许多外头的消息。")
+                        report.events[#report.events + 1] = "留宿商人，打听见闻"
+                    end
+                },
+            }
+        }
+    end,
+}
+
 return events

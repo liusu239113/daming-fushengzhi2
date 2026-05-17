@@ -14,7 +14,7 @@ local allEvents = {}
 -- 持久化存储在 GameData.state.eventCooldowns 中
 
 -- ============================================================================
--- 初始化：加载6级事件池
+-- 初始化：加载9级事件池
 -- ============================================================================
 
 function EventRegistry.Init()
@@ -27,6 +27,12 @@ function EventRegistry.Init()
         require("Data.Events.Events_Rank4"),  -- 望族
         require("Data.Events.Events_Rank5"),  -- 世家
         require("Data.Events.Events_Rank6"),  -- 勋贵
+        require("Data.Events.Events_Rank7"),  -- 名门
+        require("Data.Events.Events_Rank8"),  -- 豪阀
+        require("Data.Events.Events_Rank9"),  -- 国柱
+        require("Data.Events.Events_CourtMissions"),  -- 朝廷差事（C2）
+        require("Data.Events.Events_FamilyConflict"),  -- 家族内斗（C3）
+        require("Data.Events.Events_RivalAttack"),     -- 敌对势力进攻（C4）
     }
 
     for _, pool in ipairs(pools) do
@@ -82,7 +88,7 @@ function EventRegistry.GetAvailableEvents(s, report)
         -- 1. 品阶范围过滤
         if evt.rankRange then
             local minRank = evt.rankRange[1] or 1
-            local maxRank = evt.rankRange[2] or 6
+            local maxRank = evt.rankRange[2] or 9
             if s.clanRank < minRank or s.clanRank > maxRank then
                 canTrigger = false
             end

@@ -3,11 +3,12 @@
 -- ============================================================================
 
 local GameData = require("Data.GameData")
+local MemberData = require("Data.MemberData")
 
 local SaveSystem = {}
 
 -- 当前存档版本（每次添加新字段时递增）
-SaveSystem.CURRENT_VERSION = 2
+SaveSystem.CURRENT_VERSION = 4
 
 -- 存档槽位定义
 SaveSystem.SLOT_AUTO   = "auto"    -- 自动存档
@@ -64,6 +65,7 @@ function SaveSystem.MigrateState(state, fromVersion)
     local defaults = GameData.GetDefaultState()
     if not defaults then return state end
 
+    -- 通用：补齐缺失字段
     for key, defaultVal in pairs(defaults) do
         if state[key] == nil then
             if type(defaultVal) == "table" then
@@ -72,6 +74,43 @@ function SaveSystem.MigrateState(state, fromVersion)
                 state[key] = defaultVal
             end
             print("[SaveSystem] Migrated missing field: " .. key)
+        end
+    end
+
+    -- v2→v3: 将旧 conqueredRegions 转换为 conqueredStages
+    if fromVersion < 3 then
+        local CampaignRegions = require("Data.CampaignRegions")
+        if state.conqueredRegions and #state.conqueredRegions > 0 and
+           (not state.conqueredStages or #state.conqueredStages == 0) then
+            state.conqueredStages = {}
+            for _, regionId in ipairs(state.conqueredRegions) do
+                -- 旧版每个 regionId 代表征服了一个完整区域
+                -- 将对应区域的所有关卡标记为已征服
+                local area = CampaignRegions.GetArea(regionId)
+                if area and area.stages then
+                    for _, stage in ipairs(area.stages) do
+                        state.conqueredStages[#state.conqueredStages + 1] = stage.id
+                    end
+                end
+            end
+            print("[SaveSystem] v2→v3: Migrated " .. #state.conqueredRegions ..
+                  " regions → " .. #state.conqueredStages .. " stages")
+        end
+    end
+
+    -- v3→v4: 为所有族人补上资质（aptitude）
+    if fromVersion < 4 then
+        if state.members then
+            local count = 0
+            for _, m in ipairs(state.members) do
+                if not m.aptitude then
+                    m.aptitude = MemberData.GenerateAptitude()
+                    count = count + 1
+                end
+            end
+            if count > 0 then
+                print("[SaveSystem] v3→v4: Added aptitude to " .. count .. " members")
+            end
         end
     end
 
@@ -89,13 +128,15 @@ function SaveSystem.DeepCopy(orig)
 end
 
 --- 加载指定槽位
+--- @return boolean success 是否加载成功
+--- @return string|nil errorType 错误类型："version_too_new" 表示存档版本高于客户端
 function SaveSystem.Load(slotId)
     slotId = slotId or SaveSystem.SLOT_AUTO
     local path = GetSlotPath(slotId)
 
     if not fileSystem:FileExists(path) then
         print("[SaveSystem] No save file found: " .. path)
-        return false
+        return false, nil
     end
 
     local file = File(path, FILE_READ)
@@ -106,6 +147,14 @@ function SaveSystem.Load(slotId)
         if ok and saveData and saveData.state then
             local savedVersion = saveData.version or 1
 
+            -- 存档版本高于客户端版本 → 拒绝加载，防止数据丢失
+            if savedVersion > SaveSystem.CURRENT_VERSION then
+                print("[SaveSystem] BLOCKED: save v" .. savedVersion ..
+                      " > client v" .. SaveSystem.CURRENT_VERSION ..
+                      ". Refusing to load to prevent data loss.")
+                return false, "version_too_new"
+            end
+
             if savedVersion < SaveSystem.CURRENT_VERSION then
                 print("[SaveSystem] Migrating save from v" .. savedVersion .. " to v" .. SaveSystem.CURRENT_VERSION)
                 saveData.state = SaveSystem.MigrateState(saveData.state, savedVersion)
@@ -113,12 +162,12 @@ function SaveSystem.Load(slotId)
 
             GameData.state = saveData.state
             print("[SaveSystem] Loaded from " .. slotId .. " (" .. (SaveSystem.SLOT_NAMES[slotId] or slotId) .. ", v" .. savedVersion .. ")")
-            return true
+            return true, nil
         else
             print("[SaveSystem] Failed to parse save file")
         end
     end
-    return false
+    return false, nil
 end
 
 --- 检查指定槽位是否有存档
@@ -178,10 +227,17 @@ function SaveSystem.GetLatestSlot()
 end
 
 --- 加载最新存档（用于"继续游戏"）
+--- @return boolean success
+--- @return string|nil slotOrError 成功时返回槽位ID，失败时返回错误类型
 function SaveSystem.LoadLatest()
     local slot = SaveSystem.GetLatestSlot()
     if slot then
-        return SaveSystem.Load(slot), slot
+        local ok, errType = SaveSystem.Load(slot)
+        if ok then
+            return true, slot
+        else
+            return false, errType
+        end
     end
     return false, nil
 end

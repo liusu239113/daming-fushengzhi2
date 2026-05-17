@@ -20,6 +20,7 @@ local INDUSTRY_IMAGES = {
     paddy_field    = "image/industry_paddy_field_20260512085628.png",
     fish_pond      = "image/industry_fish_pond_20260512085810.png",
     livestock      = "image/industry_livestock_20260512085647.png",
+    handicraft     = "image/industry_handicraft_20260513183510.png",
     shop           = "image/industry_shop_20260512085629.png",
     tea_garden     = "image/industry_tea_garden_20260512085644.png",
     inn            = "image/industry_inn_20260512085621.png",
@@ -38,6 +39,17 @@ local INDUSTRY_IMAGES = {
     fertile_field  = "image/industry_fertile_field_20260512085930.png",
     trade_house    = "image/industry_trade_house_20260512090335.png",
     silk_house     = "image/industry_silk_house_20260512090831.png",
+    -- 品阶7-9新产业
+    pawnshop           = "image/industry_pawnshop_20260515215243.png",
+    dye_house          = "image/industry_dye_house_20260515215243.png",
+    private_school     = "image/industry_private_school_20260515215244.png",
+    canal_wharf        = "image/industry_canal_wharf_20260515215243.png",
+    arsenal            = "image/industry_arsenal_20260515215255.png",
+    weaving_bureau     = "image/industry_weaving_bureau_20260515215249.png",
+    imperial_merchant  = "image/industry_imperial_merchant_20260515215244.png",
+    customs_house      = "image/industry_customs_house_20260515215243.png",
+    grand_farmland     = "image/industry_grand_farmland_20260515215243.png",
+    piaohao            = "image/industry_piaohao_20260515215247.png",
 }
 
 -- ============================================================================
@@ -49,25 +61,37 @@ local function CreateIndustryCard(industry, PageTitle, screen)
     if not indType then return UI.Panel {} end
     local assignee = industry.assignedMemberId and GameData.GetMember(industry.assignedMemberId) or nil
     local assigneeName = (assignee and assignee.alive) and assignee.name or "无人管理"
-    local manageMul = (assignee and assignee.alive) and 1.3 or 1.0
+    local isPartTime = false
+    local manageMul = 1.0
+    local stateLabel = ""
+    if assignee and assignee.alive then
+        isPartTime = assignee.state ~= "在家" and assignee.state ~= "生病"
+        manageMul = isPartTime and 1.15 or 1.3
+        if isPartTime then
+            stateLabel = "（" .. assignee.state .. "中）"
+        end
+    end
 
     -- 资源名映射
     local RES_NAMES = { silver = "银两", grain = "粮食", cloth = "布匹", fame = "声望", none = "防御" }
 
+    -- A4: 对数递减公式（与MonthlyUpdate保持一致）
+    local levelMul = 1 + math.log(industry.level) * 1.5
+
     -- 主资源产出文本
-    local output1 = math.floor(indType.baseOutput * industry.level * manageMul)
+    local output1 = math.floor(indType.baseOutput * levelMul * manageMul)
     local outputParts = {}
     if indType.resource ~= "none" then
         outputParts[#outputParts + 1] = (RES_NAMES[indType.resource] or indType.resource) .. "+" .. output1
     end
     -- 第二资源
     if indType.resource2 and indType.baseOutput2 then
-        local o2 = math.floor(indType.baseOutput2 * industry.level * manageMul)
+        local o2 = math.floor(indType.baseOutput2 * levelMul * manageMul)
         outputParts[#outputParts + 1] = (RES_NAMES[indType.resource2] or indType.resource2) .. "+" .. o2
     end
     -- 第三资源
     if indType.resource3 and indType.baseOutput3 then
-        local o3 = math.floor(indType.baseOutput3 * industry.level * manageMul)
+        local o3 = math.floor(indType.baseOutput3 * levelMul * manageMul)
         outputParts[#outputParts + 1] = (RES_NAMES[indType.resource3] or indType.resource3) .. "+" .. o3
     end
     local outputText = #outputParts > 0 and ("月产 " .. table.concat(outputParts, " / ")) or "防御设施"
@@ -110,17 +134,37 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                     backgroundColor = { 255, 170, 50, 25 } } or nil,
             },
         },
-        -- 产出
-        UI.Label { text = outputText, fontSize = 10, fontColor = Theme.GREEN },
+        -- 产出 + 维护费
+        UI.Panel {
+            flexDirection = "row", justifyContent = "space-between", alignItems = "center",
+            children = {
+                UI.Label { text = outputText, fontSize = 10, fontColor = Theme.GREEN },
+                indType.resource ~= "none" and UI.Label {
+                    text = "维护 银-" .. math.floor(indType.cost * 0.018 * industry.level),
+                    fontSize = 9, fontColor = Theme.TEXT_MUTED,
+                } or nil,
+            },
+        },
         -- 管理行
         UI.Panel {
             flexDirection = "row", justifyContent = "space-between", alignItems = "center",
             children = {
-                UI.Label { text = "管理：" .. assigneeName, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                UI.Panel {
+                    flexDirection = "row", gap = 4, alignItems = "center", flexShrink = 1,
+                    children = {
+                        UI.Label { text = "管理：" .. assigneeName .. stateLabel, fontSize = 11, fontColor = isPartTime and Theme.GOLD_DARK or Theme.TEXT_SECONDARY },
+                        (assignee and assignee.alive) and UI.Label {
+                            text = "x" .. string.format("%.2f", manageMul),
+                            fontSize = 9, fontColor = isPartTime and Theme.GOLD_DARK or Theme.GREEN,
+                            paddingHorizontal = 3, paddingVertical = 1, borderRadius = 3,
+                            backgroundColor = isPartTime and { 200, 160, 50, 20 } or { 56, 168, 120, 20 },
+                        } or nil,
+                    },
+                },
                 UI.Panel {
                     paddingHorizontal = 10, paddingVertical = 4, borderRadius = 4,
                     backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
-                    onClick = function(self) AudioManager.Click() screen.ShowAssignMember(industry) end,
+                    onTap = function() AudioManager.Click() screen.ShowAssignMember(industry) end,
                     children = { UI.Label { text = "分配", fontSize = 11, fontColor = Theme.GOLD } },
                 },
             },
@@ -135,7 +179,7 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                     backgroundColor = canEvolve and { 180, 100, 30, 40 } or Theme.BG_INPUT,
                     borderWidth = 1, borderColor = canEvolve and Theme.GOLD or Theme.BORDER,
                     opacity = canEvolve and 1.0 or 0.5,
-                    onClick = function(self)
+                    onTap = function()
                         if not canEvolve then
                             Toast.Show(evoReason or "条件不满足")
                             return
@@ -162,7 +206,7 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                     paddingHorizontal = 10, paddingVertical = 4, borderRadius = 4,
                     backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
                     opacity = GameData.CanAfford(indType.cost * industry.level, 0, 0, 0) and 1.0 or 0.5,
-                    onClick = function(self)
+                    onTap = function()
                         local cost = indType.cost * industry.level
                         if GameData.SpendResources(cost, 0, 0, 0) then
                             AudioManager.Gain()
@@ -173,6 +217,27 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                     end,
                     children = {
                         UI.Label { text = "升级(-" .. (indType.cost * industry.level) .. "银)", fontSize = 10, fontColor = Theme.GOLD },
+                    },
+                },
+                -- 变卖按钮
+                UI.Panel {
+                    paddingHorizontal = 10, paddingVertical = 4, borderRadius = 4,
+                    backgroundColor = { 120, 40, 40, 30 }, borderWidth = 1, borderColor = { 180, 80, 80, 100 },
+                    onTap = function()
+                        local refund = math.floor(indType.cost * 0.5)
+                        screen.ShowConfirm("变卖产业", "确定要变卖「" .. indType.name .. "（Lv." .. industry.level .. "）」吗？\n\n可回收银两 " .. refund .. "（建造成本的50%）\n\n变卖后不可恢复！", "变卖", function()
+                            local ok, msg = GameData.SellIndustry(industry.id)
+                            if ok then
+                                AudioManager.Click()
+                                Toast.Success(msg)
+                                screen.RefreshAll()
+                            else
+                                Toast.Show(msg or "变卖失败")
+                            end
+                        end)
+                    end,
+                    children = {
+                        UI.Label { text = "变卖(+" .. math.floor(indType.cost * 0.5) .. "银)", fontSize = 10, fontColor = { 200, 80, 80, 255 } },
                     },
                 },
             },
@@ -238,7 +303,13 @@ function IndustryPage.Create(PageTitle, screen)
                     backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
                     flexDirection = "row", alignItems = "center",
                     opacity = GameData.CanAfford(indType.cost, 0, 0, 0) and 1.0 or 0.5,
-                    onClick = function(self)
+                    onTap = function()
+                        -- A1: 产业数量上限检查
+                        local limit = GameData.INDUSTRY_LIMIT_BY_RANK[GameData.state.clanRank] or 4
+                        if #GameData.state.industries >= limit then
+                            Toast.Warn("产业已达上限（" .. limit .. "个），需提升品级")
+                            return
+                        end
                         if not GameData.CanAfford(indType.cost, 0, 0, 0) then
                             Toast.NotEnough("银两")
                             return
@@ -286,7 +357,7 @@ function IndustryPage.Create(PageTitle, screen)
                     backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
                     flexDirection = "row", alignItems = "center",
                     opacity = 0.35,
-                    onClick = function(self)
+                    onTap = function()
                         AudioManager.Click()
                         Toast.Locked(indType.name, GameData.GetUnlockRankName(reqRank))
                     end,
@@ -322,7 +393,16 @@ function IndustryPage.Create(PageTitle, screen)
                 width = "100%", gap = 10, padding = 12, paddingBottom = 20,
                 children = {
                     PageTitle("田庄产业", "管理家族产业"),
-                    UI.Label { text = "现有产业", fontSize = 15, fontColor = Theme.GOLD },
+                    UI.Panel {
+                        flexDirection = "row", justifyContent = "space-between", alignItems = "center",
+                        children = {
+                            UI.Label { text = "现有产业", fontSize = 15, fontColor = Theme.GOLD },
+                            UI.Label {
+                                text = #s.industries .. "/" .. (GameData.INDUSTRY_LIMIT_BY_RANK[s.clanRank] or 4),
+                                fontSize = 12, fontColor = #s.industries >= (GameData.INDUSTRY_LIMIT_BY_RANK[s.clanRank] or 4) and Theme.RED or Theme.TEXT_SECONDARY,
+                            },
+                        },
+                    },
                     table.unpack(indCards),
                 },
             },

@@ -8,12 +8,12 @@ local MemberData = {}
 
 -- 族人身份
 MemberData.IDENTITIES = {
-    "白丁", "童生", "秀才", "监生", "举人", "进士", "知县", "知府",
+    "白丁", "童生", "秀才", "监生", "举人", "进士", "知县", "知府", "布政使",
     "士兵", "把总", "守备", "商人"
 }
 
 -- 族人状态
-MemberData.STATES = { "在家", "读书", "赶考", "经商", "从军", "出征", "生病", "筑寨", "历练", "打工" }
+MemberData.STATES = { "在家", "读书", "赶考", "经商", "从军", "出征", "生病", "筑寨", "历练", "打工", "为官" }
 
 -- 天赋列表
 MemberData.TALENTS = {
@@ -26,6 +26,86 @@ MemberData.TALENTS = {
     { id = "charisma", name = "容貌出众", effect = "联姻加成+20%", marriageBonus = 0.2 },
     { id = "fertile", name = "多子多福", effect = "生育率+25%", fertilityBonus = 0.25 },
 }
+
+-- ============================================================================
+-- 资质系统：决定每个属性的终身上限（50-100）
+-- 星级：1★50-59(30%) 2★60-69(30%) 3★70-79(25%) 4★80-89(12%) 5★90-100(3%)
+-- ============================================================================
+
+--- 资质星级定义（概率权重制）
+MemberData.APTITUDE_TIERS = {
+    { stars = 1, minCap = 50, maxCap = 59, weight = 30, label = "★" },
+    { stars = 2, minCap = 60, maxCap = 69, weight = 30, label = "★★" },
+    { stars = 3, minCap = 70, maxCap = 79, weight = 25, label = "★★★" },
+    { stars = 4, minCap = 80, maxCap = 89, weight = 12, label = "★★★★" },
+    { stars = 5, minCap = 90, maxCap = 100, weight = 3,  label = "★★★★★" },
+}
+
+--- 按权重随机抽取一个资质上限值
+---@return number cap 属性上限(50-100)
+---@return number stars 星级(1-5)
+function MemberData.RollAptitude()
+    local totalWeight = 0
+    for _, t in ipairs(MemberData.APTITUDE_TIERS) do
+        totalWeight = totalWeight + t.weight
+    end
+    local roll = math.random() * totalWeight
+    local acc = 0
+    for _, t in ipairs(MemberData.APTITUDE_TIERS) do
+        acc = acc + t.weight
+        if roll <= acc then
+            return math.random(t.minCap, t.maxCap), t.stars
+        end
+    end
+    -- fallback
+    return math.random(50, 59), 1
+end
+
+--- 为一个族人生成完整的三维资质
+---@return table aptitude { study={cap,stars}, martial={cap,stars}, health={cap,stars} }
+function MemberData.GenerateAptitude()
+    local sC, sS = MemberData.RollAptitude()
+    local mC, mS = MemberData.RollAptitude()
+    local hC, hS = MemberData.RollAptitude()
+    return {
+        study   = { cap = sC, stars = sS },
+        martial = { cap = mC, stars = mS },
+        health  = { cap = hC, stars = hS },
+    }
+end
+
+--- 根据cap值返回星级
+---@param cap number
+---@return number stars
+function MemberData.GetStarsFromCap(cap)
+    if cap >= 90 then return 5
+    elseif cap >= 80 then return 4
+    elseif cap >= 70 then return 3
+    elseif cap >= 60 then return 2
+    else return 1 end
+end
+
+--- 获取星级显示文本（五角星）
+---@param stars number 1-5
+---@return string
+function MemberData.GetStarsLabel(stars)
+    local labels = { "★", "★★", "★★★", "★★★★", "★★★★★" }
+    return labels[stars] or "★"
+end
+
+--- 获取星级颜色
+---@param stars number 1-5
+---@return table rgba
+function MemberData.GetStarsColor(stars)
+    local colors = {
+        { 160, 160, 160, 255 },  -- 1星 灰色
+        { 100, 180, 100, 255 },  -- 2星 绿色
+        { 70, 130, 220, 255 },   -- 3星 蓝色
+        { 180, 100, 220, 255 },  -- 4星 紫色
+        { 220, 180, 40, 255 },   -- 5星 金色
+    }
+    return colors[stars] or colors[1]
+end
 
 -- 年龄阶段
 MemberData.AGE_STAGES = {
@@ -45,11 +125,25 @@ MemberData.EXAM_LEVELS = {
     { id = "dianshi", name = "殿试", reqStudy = 95, passRate = 0.05, result = "进士", famePlus = 60 },
 }
 
--- 军职等级
+-- 军职等级（阵亡率已下调，避免从军即送死）
 MemberData.MILITARY_RANKS = {
-    { id = "soldier", name = "士兵", deathRate = 0.08, silverPay = 3, famePlus = 2 },
-    { id = "bazong", name = "把总", deathRate = 0.05, silverPay = 8, famePlus = 8 },
-    { id = "shoubei", name = "守备", deathRate = 0.03, silverPay = 15, famePlus = 15 },
+    { id = "soldier", name = "士兵", deathRate = 0.03, silverPay = 3, famePlus = 2 },
+    { id = "bazong", name = "把总", deathRate = 0.015, silverPay = 8, famePlus = 8 },
+    { id = "shoubei", name = "守备", deathRate = 0.008, silverPay = 15, famePlus = 15 },
+}
+
+-- 官职等级（殿试进士可入仕为官）
+MemberData.OFFICIAL_RANKS = {
+    { id = "zhixian",    name = "知县", reqIdentity = "进士",
+      silver = 20, fame = 15, taxReduce = 0.10, demotionRate = 0.03,
+      desc = "治理一县，月俸20两，声望+15，税赋-10%" },
+    { id = "zhifu",      name = "知府", reqIdentity = "知县",
+      silver = 40, fame = 25, taxReduce = 0.20, demotionRate = 0.03,
+      desc = "统辖一府，月俸40两，声望+25，税赋-20%" },
+    { id = "buzhengshi", name = "布政使", reqIdentity = "知府",
+      silver = 80, fame = 40, taxReduce = 0.30, demotionRate = 0.03,
+      famePerMonth = 5,
+      desc = "掌管一省，月俸80两，声望+40，税赋-30%，月产声望+5" },
 }
 
 -- 联姻等级
@@ -62,6 +156,14 @@ MemberData.MARRIAGE_TIERS = {
       desc = "声望大增，官场人脉+1", bonusType = "fame", bonusValue = 10 },
     { id = "military", name = "军户世家", silverCost = 180, grainCost = 100, fameReq = 10, famePlus = 5,
       desc = "配偶武艺+25，从军存活率+10%", bonusType = "martial", bonusValue = 25 },
+    { id = "noble", name = "名门望族", silverCost = 800, grainCost = 300, fameReq = 60, famePlus = 25,
+      desc = "配偶学识+15武艺+15，声望大增，子女天赋概率+20%", bonusType = "all", bonusValue = 15 },
+    { id = "royal_kin", name = "皇亲国戚", silverCost = 1500, grainCost = 500, fameReq = 120, famePlus = 40,
+      desc = "皇室姻亲，声望飞涨；配偶全属性+20，税赋减免10%", bonusType = "all", bonusValue = 20 },
+    { id = "warlord", name = "藩镇将门", silverCost = 1200, grainCost = 600, fameReq = 80, famePlus = 30,
+      desc = "配偶武艺+35，从军存活率+20%，赠送精兵50", bonusType = "martial", bonusValue = 35 },
+    { id = "prime_minister", name = "宰辅门第", silverCost = 2500, grainCost = 800, fameReq = 200, famePlus = 60,
+      desc = "宰相之家联姻，全族声望月产+5，配偶全属性+25", bonusType = "all", bonusValue = 25 },
 }
 
 -- 联姻门第解锁要求
@@ -70,6 +172,10 @@ MemberData.MARRIAGE_UNLOCK = {
     scholar  = 3,  -- 乡绅解锁
     official = 4,  -- 望族解锁
     military = 5,  -- 世家解锁
+    noble    = 6,  -- 勋贵解锁
+    royal_kin = 7, -- 名门解锁
+    warlord  = 8,  -- 豪阀解锁
+    prime_minister = 9, -- 国柱解锁
 }
 
 -- 纳捐监生费用
@@ -264,16 +370,28 @@ end
 MemberData.TRAINING_OPTIONS = {
     { id = "study_train",  name = "延师教学", icon = "读",
       desc = "聘请名师，学识成长×1.5",
-      cost = { silver = 5, grain = 3 },
+      cost = { silver = 10, grain = 5 },
       attr = "study", multiplier = 1.5 },
     { id = "martial_train", name = "习武练功", icon = "武",
       desc = "苦练武艺，武艺成长×1.5",
-      cost = { silver = 3, grain = 5 },
+      cost = { silver = 8, grain = 8 },
       attr = "martial", multiplier = 1.5 },
     { id = "health_care",  name = "调养身体", icon = "药",
       desc = "请医调养，健康恢复，延寿",
       cost = { silver = 8, grain = 0 },
       attr = "health", multiplier = 2.0 },
+    { id = "elite_study",  name = "名师授业", icon = "儒", rank = 7,
+      desc = "延请鸿儒大学士，学识成长×2.5",
+      cost = { silver = 30, grain = 10 },
+      attr = "study", multiplier = 2.5 },
+    { id = "elite_martial", name = "名将指点", icon = "将", rank = 7,
+      desc = "边关名将亲授，武艺成长×2.5",
+      cost = { silver = 25, grain = 15 },
+      attr = "martial", multiplier = 2.5 },
+    { id = "grand_nurture", name = "全才培养", icon = "全", rank = 9,
+      desc = "文武兼修、强身健体，全属性成长×2.0",
+      cost = { silver = 50, grain = 20 },
+      attr = "all", multiplier = 2.0 },
 }
 
 -- ============================================================================
@@ -284,14 +402,20 @@ MemberData.TRAINING_OPTIONS = {
 -- 工资设计原则：略低于人均月消耗（成人3粮/月 + 季度布匹0.5 ≈ 月开销折银约4~6两）
 -- 让玩家能续命但无法躺赢
 MemberData.LABOR_JOBS = {
-    { id = "coolie",     name = "帮工",   rank = 1, wage = 3,  desc = "码头搬运，卖力气换铜板" },
-    { id = "farmhand",   name = "佃农",   rank = 1, wage = 4,  desc = "替人耕种，辛苦度日" },
-    { id = "peddler",    name = "货郎",   rank = 2, wage = 6,  desc = "走街串巷，贩卖杂货" },
-    { id = "craftsman",  name = "匠人",   rank = 2, wage = 7,  desc = "手艺谋生，略有余钱" },
-    { id = "clerk",      name = "账房",   rank = 3, wage = 9,  desc = "商号记账，薪俸稳定" },
-    { id = "foreman",    name = "工头",   rank = 3, wage = 10, desc = "管人管事，待遇尚可" },
-    { id = "steward",    name = "掌柜",   rank = 4, wage = 12, desc = "店铺坐堂，收入丰厚" },
-    { id = "tutor",      name = "西席",   rank = 4, wage = 14, desc = "设帐授徒，束脩不菲" },
+    { id = "coolie",     name = "帮工",   rank = 1, wage = 5,  desc = "码头搬运，卖力气换铜板" },
+    { id = "farmhand",   name = "佃农",   rank = 1, wage = 6,  desc = "替人耕种，辛苦度日" },
+    { id = "peddler",    name = "货郎",   rank = 2, wage = 8,  desc = "走街串巷，贩卖杂货" },
+    { id = "craftsman",  name = "匠人",   rank = 2, wage = 9,  desc = "手艺谋生，略有余钱" },
+    { id = "clerk",      name = "账房",   rank = 3, wage = 11, desc = "商号记账，薪俸稳定" },
+    { id = "foreman",    name = "工头",   rank = 3, wage = 12, desc = "管人管事，待遇尚可" },
+    { id = "steward",    name = "掌柜",   rank = 4, wage = 14, desc = "店铺坐堂，收入丰厚" },
+    { id = "tutor",      name = "西席",   rank = 4, wage = 16, desc = "设帐授徒，束脩不菲" },
+    { id = "broker",     name = "牙行经纪", rank = 5, wage = 20, desc = "撮合交易，佣金丰厚" },
+    { id = "physician",  name = "坐堂郎中", rank = 5, wage = 18, desc = "悬壶济世，诊金可观" },
+    { id = "magistrate_aide", name = "师爷", rank = 6, wage = 24, desc = "幕府参谋，俸禄优厚" },
+    { id = "caravan_lead", name = "商队领队", rank = 7, wage = 30, desc = "率领商队远行，收入丰厚但辛苦" },
+    { id = "mine_overseer", name = "矿监", rank = 8, wage = 37, desc = "监管矿山开采，收入极高" },
+    { id = "tax_collector", name = "税使", rank = 9, wage = 47, desc = "代征赋税，权势滔天" },
 }
 
 --- 获取当前品级可用的打工工种

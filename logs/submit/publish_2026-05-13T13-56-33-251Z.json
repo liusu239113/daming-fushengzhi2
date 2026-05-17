@@ -1,0 +1,275 @@
+{
+  "startTime": "2026-05-13T13:56:33.251Z",
+  "endTime": "2026-05-13T13:57:13.253Z",
+  "duration": "40002ms",
+  "result": {
+    "success": true
+  },
+  "steps": [
+    {
+      "time": "2026-05-13T13:56:33.406Z",
+      "stage": "upload_to_cdn",
+      "data": {
+        "status": "start"
+      }
+    },
+    {
+      "time": "2026-05-13T13:56:58.810Z",
+      "stage": "upload_to_cdn",
+      "data": {
+        "status": "done"
+      }
+    },
+    {
+      "time": "2026-05-13T13:56:58.810Z",
+      "stage": "network_config",
+      "data": {
+        "env": "production"
+      }
+    },
+    {
+      "time": "2026-05-13T13:56:58.813Z",
+      "stage": "load_config",
+      "data": {
+        "projectId": "p_eshc",
+        "configPath": "/userspaces/e2bdc2b8-94f8-43cc-8c1a-5501aa5ebfc6/workspace/.project/project.json",
+        "taptap_publish": {
+          "title": "大明浮生志2",
+          "description": "《大明浮生志2》是一款以大明王朝为背景的深度宗族模拟经营游戏。玩家将从一介寒门起步，白手起家，历经农户、乡绅、望族、世家，直至位极人臣的勋贵，亲手书写一段跨越数百年的家族传奇。\n\n【宗族经营 · 六级品阶递进】\n游戏设有六级品阶体系（寒门→农户→乡绅→望族→世家→勋贵），每个品级解锁全新玩法与建筑。从最初的旱田耕种、族人生育，到后期的钱庄放贷、海上船队、庄园经营，玩法层层递进，给予持续的成就感与探索欲。\n\n【家族传承 · 族谱延续】\n培养族人的学识与武艺，安排联姻扩大势力，选拔继承人延续血脉。每一位族人都有独立的天赋、能力与命运——他们可能金榜题名成为进士，也可能投身军旅建功立业，更可能在一场瘟疫中不幸离世。家族的兴衰荣辱，尽在你的决策之间。\n\n【3D实时战斗 · 沙场点兵】\n独创3D俯视角实时战斗系统！亲自统率将领、步兵与弓兵列阵出征。战场上箭矢纷飞、刀光剑影，每一场战斗都紧张刺激。筑寨可为全军提供防御与血量加成，训练则提升士兵基础战力。支持1x/2x/3x战斗加速，攻城掠地、征伐四方！\n\n【产业帝国 · 多元经营】\n超过20种产业可供经营：旱田、水田、鱼塘、商铺、茶园、药铺、织坊、酒坊、铁匠铺、马场、镖局、盐场……产业可升级进化，商铺升级为商号，织坊升级为绸缎庄。搭建你的商业网络，成为富甲一方的豪族。\n\n【族规策略 · 灵活应变】\n制定族规为全族提供增益：储粮备荒降低消耗、习武自卫提升战力、耕读传家加速成长、重商兴族提高收益。不同阶段启用不同族规，运筹帷幄之中。\n\n【筑寨防御 · 固若金汤】\n建造寨堡抵御流寇侵袭，每座寨堡提升10%防御力。征伐出征时，寨堡为全军提供额外防御与血量加成。最多五座寨堡，铜墙铁壁，固若金汤。\n\n【历练探索 · 奇遇不断】\n派遣族人外出历练：赶集贸易赚取银两、游学求教提升学识、深山探秘发现宝物、招贤纳士壮大族人。每次探险都充满未知与惊喜。\n\n【仕途功名 · 科举从军】\n两条晋升之路：科举路线从秀才到举人再到进士，光耀门楣；从军路线从士兵到把总再到守备，战功赫赫。还可纳捐加速仕途，书院武馆培养人才。\n\n【史实事件 · 风云变幻】\n从洪武开国到甲申之变，游戏融入大量明朝史实事件：靖难之役、郑和下西洋、土木堡之变、张献忠之乱……历史洪流滚滚而来，你的家族能否在乱世中屹立不倒？\n\n【七大结局 · 多周目收集】\n香火断绝、满门抄斩、诗书传家、将门世家、货殖帝国、世外桃源……七种隐藏结局等你解锁，每种都代表一条截然不同的家族命运。不同的家训、地域、策略组合，带来无限重玩价值。\n\n【更多特色玩法】\n- 四大地域选择（陕北/河南/江南/湖广），各有独特挑战\n- 三档难度（太平盛世/风雨飘摇/末世浩劫）\n- 年度目标系统，每年随机挑战\n- 集市交易、库房物品、钱庄借贷\n- 花魁大赛、天子诰封、祭天祈福等特色活动\n- 25+成就系统，记录你的每一步成长",
+          "category": "simulation",
+          "screen_orientation": "portrait",
+          "collection_type": "sce",
+          "trial_note": "各位玩家好！我是《大明浮生志2》的开发者。这款游戏源于我对明朝历史的热爱和对家族模拟类游戏的执念。\n\n从最初的一个简单想法——\"如果我生在明朝，能否带领家族兴盛数百年？\"——到现在拥有完整的品阶系统、3D战斗、产业经营、族谱传承等十余个玩法模块，这个项目倾注了大量心血。\n\n游戏中的每一个系统都力求真实与有趣的平衡：科举考试参考了真实的明代制度，产业体系涵盖了从农耕到海贸的多元经济，3D战斗则让征伐不再只是数字比拼。\n\n希望你能在这片大明天地中，体验一段属于自己的家族浮生记。如有任何建议或bug反馈，欢迎随时联系！\n\n祝游戏愉快！",
+          "app_platforms": "1,2",
+          "developer_id": 377480,
+          "app_id": 855392,
+          "miniapp_id": "tapmcvpnktjxssf3is",
+          "gameplay_demo_video_source": "https://tapcode-sce.spark.xd.com/videos/p_eshc/1778607778473-rec_a60806e0-558c-406d-837a-59236a6d616d.mp4"
+        },
+        "assets": {
+          "icon": "./assets/image/icon_guofeng_v1_20260512155330.png",
+          "screenshots": [
+            "./game_material/SCREENSHOT_2026-05-12T15-37-59_01.png",
+            "./game_material/SCREENSHOT_2026-05-12T15-37-59_02.png",
+            "./game_material/SCREENSHOT_2026-05-12T15-37-59_03.png"
+          ],
+          "promotional_image": "./game_material/PROMO_2026-05-12T15-41-24_01.jpg",
+          "icon_url": "https://tapcode-sce.spark.xd.com/assets/game_material/p_eshc/icon_guofeng_v1_20260512155330.png",
+          "screenshot_urls": [
+            "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/SCREENSHOT_2026-05-12T15-37-59_01.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/SCREENSHOT_2026-05-12T15-37-59_02.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/SCREENSHOT_2026-05-12T15-37-59_03.png"
+          ],
+          "promotional_image_url": "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/PROMO_2026-05-12T15-41-24_01.jpg",
+          "cover_vertical": "./.project/game_material/COVER_VERTICAL_2026-05-12T16-27-02_01.png",
+          "cover_vertical_url": "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/COVER_VERTICAL_2026-05-12T16-27-02_01.png",
+          "cover_horizontal": "./.project/game_material/COVER_HORIZONTAL_2026-05-12T16-27-02_01.png",
+          "cover_horizontal_url": "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/COVER_HORIZONTAL_2026-05-12T16-27-02_01.png",
+          "square_promotional_image": "./assets/image/edited_square_promo_v2_compressed.jpg",
+          "square_promotional_image_url": "https://tapcode-sce.spark.xd.com/assets/game_material/p_eshc/edited_square_promo_v2_compressed.jpg"
+        }
+      }
+    },
+    {
+      "time": "2026-05-13T13:56:59.112Z",
+      "stage": "update_game",
+      "data": {
+        "app_id": 855392,
+        "developer_id": 377480
+      }
+    },
+    {
+      "time": "2026-05-13T13:56:59.123Z",
+      "stage": "upload_assets",
+      "data": {
+        "status": "start",
+        "assets": {
+          "icon": "./assets/image/icon_guofeng_v1_20260512155330.png",
+          "screenshots": [
+            "./game_material/SCREENSHOT_2026-05-12T15-37-59_01.png",
+            "./game_material/SCREENSHOT_2026-05-12T15-37-59_02.png",
+            "./game_material/SCREENSHOT_2026-05-12T15-37-59_03.png"
+          ],
+          "promotional_image": "./game_material/PROMO_2026-05-12T15-41-24_01.jpg",
+          "icon_url": "https://tapcode-sce.spark.xd.com/assets/game_material/p_eshc/icon_guofeng_v1_20260512155330.png",
+          "screenshot_urls": [
+            "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/SCREENSHOT_2026-05-12T15-37-59_01.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/SCREENSHOT_2026-05-12T15-37-59_02.png",
+            "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/SCREENSHOT_2026-05-12T15-37-59_03.png"
+          ],
+          "promotional_image_url": "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/PROMO_2026-05-12T15-41-24_01.jpg",
+          "cover_vertical": "./.project/game_material/COVER_VERTICAL_2026-05-12T16-27-02_01.png",
+          "cover_vertical_url": "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/COVER_VERTICAL_2026-05-12T16-27-02_01.png",
+          "cover_horizontal": "./.project/game_material/COVER_HORIZONTAL_2026-05-12T16-27-02_01.png",
+          "cover_horizontal_url": "https://tapcode-sce.spark.xd.com/assets/game_material/大明浮生志2/COVER_HORIZONTAL_2026-05-12T16-27-02_01.png",
+          "square_promotional_image": "./assets/image/edited_square_promo_v2_compressed.jpg",
+          "square_promotional_image_url": "https://tapcode-sce.spark.xd.com/assets/game_material/p_eshc/edited_square_promo_v2_compressed.jpg"
+        }
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:02.895Z",
+      "stage": "upload_cover_horizontal",
+      "data": {
+        "path": "./.project/game_material/COVER_HORIZONTAL_2026-05-12T16-27-02_01.png",
+        "resolvedPath": "/userspaces/e2bdc2b8-94f8-43cc-8c1a-5501aa5ebfc6/workspace/.project/game_material/COVER_HORIZONTAL_2026-05-12T16-27-02_01.png"
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:02.911Z",
+      "stage": "upload_cover_horizontal",
+      "data": {
+        "fileSize": 2495328
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:03.809Z",
+      "stage": "upload_cover_horizontal",
+      "data": {
+        "response": {
+          "result": true,
+          "image_url": "https://img-tc.tapimg.com/market/images/FrwW-3222hcAB4EcQ_yVnRir1Zo3.png"
+        }
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:03.809Z",
+      "stage": "upload_cover_vertical",
+      "data": {
+        "path": "./.project/game_material/COVER_VERTICAL_2026-05-12T16-27-02_01.png",
+        "resolvedPath": "/userspaces/e2bdc2b8-94f8-43cc-8c1a-5501aa5ebfc6/workspace/.project/game_material/COVER_VERTICAL_2026-05-12T16-27-02_01.png"
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:03.825Z",
+      "stage": "upload_cover_vertical",
+      "data": {
+        "fileSize": 2354627
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:04.813Z",
+      "stage": "upload_cover_vertical",
+      "data": {
+        "response": {
+          "result": true,
+          "image_url": "https://img-tc.tapimg.com/market/images/FpzARf9uU5N-xbflTtnAwzf2fbcl.png"
+        }
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:05.473Z",
+      "stage": "upload_assets",
+      "data": {
+        "status": "done",
+        "uploadedAssets": {
+          "iconUrl": "https://img-tc.tapimg.com/market/images/Fg-jBxe7NYhzxjOvD8I4O5aaeWfE.png",
+          "screenshotUrls": [
+            "https://img-tc.tapimg.com/market/images/Fta3KnUdag9q5bNvBG6toQNoSxD-.png",
+            "https://img-tc.tapimg.com/market/images/FlNzxakF5XTzp6kilAWNZdNTlVNl.png",
+            "https://img-tc.tapimg.com/market/images/FqmYaclBQpxte0onE29Olm5vkIEH.png"
+          ],
+          "bannerUrl": "https://img-tc.tapimg.com/market/images/FmwPJlwHzZFkaY8Is-3D97YAlWXB.jpg",
+          "coverUrl": "https://img-tc.tapimg.com/market/images/FrwW-3222hcAB4EcQ_yVnRir1Zo3.png",
+          "coverVerticalUrl": "https://img-tc.tapimg.com/market/images/FpzARf9uU5N-xbflTtnAwzf2fbcl.png",
+          "squarePromoImageUrl": "https://img-tc.tapimg.com/market/images/FmAIp0Khz5J0V7evM4O6QMyGFON5.jpg"
+        }
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:05.473Z",
+      "stage": "resolve_gameplay_demo_video",
+      "data": {
+        "source": "https://tapcode-sce.spark.xd.com/videos/p_eshc/1778607778473-rec_a60806e0-558c-406d-837a-59236a6d616d.mp4",
+        "sourceType": "remote",
+        "appId": 855392,
+        "developerId": 377480
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:05.570Z",
+      "stage": "resolve_gameplay_demo_video_cache_lookup",
+      "data": {
+        "cacheEntry": {
+          "source": "https://tapcode-sce.spark.xd.com/videos/p_eshc/1778607778473-rec_a60806e0-558c-406d-837a-59236a6d616d.mp4",
+          "source_type": "remote",
+          "video_id": 5655818,
+          "sha256": "08f42f5956491fae5d702546dae4312cca46b5b091b6716b239e2a483b2f8a8a",
+          "etag": "\"C8641C8CBEC68C32AE5E38BD68343C7A\"",
+          "last_modified": "Tue, 12 May 2026 17:43:06 GMT",
+          "content_length": 45282172
+        }
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:10.804Z",
+      "stage": "submit_spark_request",
+      "data": {
+        "app_id": 855392,
+        "developer_id": 377480,
+        "map_version": "14",
+        "sce_project_id": "p_eshc",
+        "category": "simulation",
+        "collection_type": "simulation",
+        "description": "《大明浮生志2》是一款以大明王朝为背景的深度宗族模拟经营游戏。玩家将从一介寒门起步，白手起家，历经农户、乡绅、望族、世家，直至位极人臣的勋贵，亲手书写一段跨越数百年的家族传奇。\n\n【宗族经营 · 六级品阶递进】\n游戏设有六级品阶体系（寒门→农户→乡绅→望族→世家→勋贵），每个品级解锁全新玩法与建筑。从最初的旱田耕种、族人生育，到后期的钱庄放贷、海上船队、庄园经营，玩法层层递进，给予持续的成就感与探索欲。\n\n【家族传承 · 族谱延续】\n培养族人的学识与武艺，安排联姻扩大势力，选拔继承人延续血脉。每一位族人都有独立的天赋、能力与命运——他们可能金榜题名成为进士，也可能投身军旅建功立业，更可能在一场瘟疫中不幸离世。家族的兴衰荣辱，尽在你的决策之间。\n\n【3D实时战斗 · 沙场点兵】\n独创3D俯视角实时战斗系统！亲自统率将领、步兵与弓兵列阵出征。战场上箭矢纷飞、刀光剑影，每一场战斗都紧张刺激。筑寨可为全军提供防御与血量加成，训练则提升士兵基础战力。支持1x/2x/3x战斗加速，攻城掠地、征伐四方！\n\n【产业帝国 · 多元经营】\n超过20种产业可供经营：旱田、水田、鱼塘、商铺、茶园、药铺、织坊、酒坊、铁匠铺、马场、镖局、盐场……产业可升级进化，商铺升级为商号，织坊升级为绸缎庄。搭建你的商业网络，成为富甲一方的豪族。\n\n【族规策略 · 灵活应变】\n制定族规为全族提供增益：储粮备荒降低消耗、习武自卫提升战力、耕读传家加速成长、重商兴族提高收益。不同阶段启用不同族规，运筹帷幄之中。\n\n【筑寨防御 · 固若金汤】\n建造寨堡抵御流寇侵袭，每座寨堡提升10%防御力。征伐出征时，寨堡为全军提供额外防御与血量加成。最多五座寨堡，铜墙铁壁，固若金汤。\n\n【历练探索 · 奇遇不断】\n派遣族人外出历练：赶集贸易赚取银两、游学求教提升学识、深山探秘发现宝物、招贤纳士壮大族人。每次探险都充满未知与惊喜。\n\n【仕途功名 · 科举从军】\n两条晋升之路：科举路线从秀才到举人再到进士，光耀门楣；从军路线从士兵到把总再到守备，战功赫赫。还可纳捐加速仕途，书院武馆培养人才。\n\n【史实事件 · 风云变幻】\n从洪武开国到甲申之变，游戏融入大量明朝史实事件：靖难之役、郑和下西洋、土木堡之变、张献忠之乱……历史洪流滚滚而来，你的家族能否在乱世中屹立不倒？\n\n【七大结局 · 多周目收集】\n香火断绝、满门抄斩、诗书传家、将门世家、货殖帝国、世外桃源……七种隐藏结局等你解锁，每种都代表一条截然不同的家族命运。不同的家训、地域、策略组合，带来无限重玩价值。\n\n【更多特色玩法】\n- 四大地域选择（陕北/河南/江南/湖广），各有独特挑战\n- 三档难度（太平盛世/风雨飘摇/末世浩劫）\n- 年度目标系统，每年随机挑战\n- 集市交易、库房物品、钱庄借贷\n- 花魁大赛、天子诰封、祭天祈福等特色活动\n- 25+成就系统，记录你的每一步成长",
+        "screen_orientation": 1,
+        "title": "大明浮生志2",
+        "icon": "https://img-tc.tapimg.com/market/images/Fg-jBxe7NYhzxjOvD8I4O5aaeWfE.png",
+        "screenshots": [
+          "https://img-tc.tapimg.com/market/images/Fta3KnUdag9q5bNvBG6toQNoSxD-.png",
+          "https://img-tc.tapimg.com/market/images/FlNzxakF5XTzp6kilAWNZdNTlVNl.png",
+          "https://img-tc.tapimg.com/market/images/FqmYaclBQpxte0onE29Olm5vkIEH.png"
+        ],
+        "banner": "https://img-tc.tapimg.com/market/images/FmwPJlwHzZFkaY8Is-3D97YAlWXB.jpg",
+        "trial_note": "各位玩家好！我是《大明浮生志2》的开发者。这款游戏源于我对明朝历史的热爱和对家族模拟类游戏的执念。\n\n从最初的一个简单想法——\"如果我生在明朝，能否带领家族兴盛数百年？\"——到现在拥有完整的品阶系统、3D战斗、产业经营、族谱传承等十余个玩法模块，这个项目倾注了大量心血。\n\n游戏中的每一个系统都力求真实与有趣的平衡：科举考试参考了真实的明代制度，产业体系涵盖了从农耕到海贸的多元经济，3D战斗则让征伐不再只是数字比拼。\n\n希望你能在这片大明天地中，体验一段属于自己的家族浮生记。如有任何建议或bug反馈，欢迎随时联系！\n\n祝游戏愉快！",
+        "app_platforms": "1,2",
+        "cover": "https://img-tc.tapimg.com/market/images/FrwW-3222hcAB4EcQ_yVnRir1Zo3.png",
+        "cover_vertical": "https://img-tc.tapimg.com/market/images/FpzARf9uU5N-xbflTtnAwzf2fbcl.png",
+        "gameplay_demo_video_id": 5655818,
+        "square_promo_image": "https://img-tc.tapimg.com/market/images/FmAIp0Khz5J0V7evM4O6QMyGFON5.jpg",
+        "publish_intl": false
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:12.725Z",
+      "stage": "submit_spark_response",
+      "data": {
+        "app_id": 855392,
+        "app_title": "大明浮生志2",
+        "category": "simulation",
+        "category_label": "模拟",
+        "display_app_title": "模拟经营合集"
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:12.725Z",
+      "stage": "update_project_app_id",
+      "data": {
+        "stage": "start",
+        "project_id": "p_eshc",
+        "app_id": 855392
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:13.253Z",
+      "stage": "update_project_app_id",
+      "data": {
+        "stage": "success",
+        "project_id": "p_eshc",
+        "app_id": 855392
+      }
+    },
+    {
+      "time": "2026-05-13T13:57:13.253Z",
+      "stage": "publish_result",
+      "data": {
+        "action": "updated",
+        "status": "pending_review",
+        "game_id": 855392,
+        "message": "成功更新游戏 \"大明浮生志2\"",
+        "developer_id": 377480,
+        "config_file_path": "/userspaces/e2bdc2b8-94f8-43cc-8c1a-5501aa5ebfc6/workspace/.project/project.json"
+      }
+    }
+  ]
+}

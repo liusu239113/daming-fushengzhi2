@@ -70,6 +70,38 @@ IndustryData.INDUSTRY_TYPES = {
       desc = "良田美宅，粮银名三收",
       resource2 = "silver", baseOutput2 = 8,
       resource3 = "fame", baseOutput3 = 3 },
+
+    -- === 名门（7级）===
+    { id = "pawnshop",    name = "当铺", resource = "silver", baseOutput = 22, cost = 1600,
+      desc = "典当质押，乱世暴利；每月额外按银两存量+1%收益", specialEffect = "interest_1pct",
+      evolvesTo = "piaohao" },
+    { id = "dye_house",   name = "染坊", resource = "cloth", baseOutput = 10, cost = 1300,
+      desc = "染制锦缎彩绸，布匹兼赚银两",
+      resource2 = "silver", baseOutput2 = 10 },
+    { id = "private_school", name = "私塾", resource = "fame", baseOutput = 8, cost = 1100,
+      desc = "开馆授徒，声名远播；全族学识成长+10%", specialEffect = "study_grow_10",
+      resource2 = "silver", baseOutput2 = 6 },
+    { id = "canal_wharf", name = "漕运码头", resource = "silver", baseOutput = 28, cost = 1800,
+      desc = "扼守漕运要道，南北货物中转抽成", specialEffect = "trade_hub" },
+
+    -- === 豪阀（8级）===
+    { id = "arsenal",     name = "军械坊", resource = "silver", baseOutput = 20, cost = 2200,
+      desc = "铸造兵器甲胄，供给官军；从军族人战力+25%",
+      resource2 = "fame", baseOutput2 = 6, specialEffect = "military_boost_25" },
+    { id = "weaving_bureau", name = "织造局", resource = "cloth", baseOutput = 16, cost = 2000,
+      desc = "承接官府织造，丝绸贡品；布匹银两声望三收",
+      resource2 = "silver", baseOutput2 = 15,
+      resource3 = "fame", baseOutput3 = 4 },
+
+    -- === 国柱（9级）===
+    { id = "imperial_merchant", name = "皇商行", resource = "silver", baseOutput = 50, cost = 4000,
+      desc = "皇家特许经营，垄断盐铁茶叶；暴利但每月消耗声望3", specialEffect = "consume_fame_3" },
+    { id = "customs_house", name = "海关行", resource = "silver", baseOutput = 40, cost = 3500,
+      desc = "把持海关贸易，坐收厘金；银两兼得声望",
+      resource2 = "fame", baseOutput2 = 8 },
+    { id = "grand_farmland", name = "万亩良田", resource = "grain", baseOutput = 40, cost = 3000,
+      desc = "良田万亩，粮仓丰盈；粮食银两双收，不受天灾影响",
+      resource2 = "silver", baseOutput2 = 15, specialEffect = "weather_immune" },
 }
 
 -- 产业进化表：从低级进化为高级（需产业等级>=3 + 品级达标 + 银两）
@@ -84,6 +116,16 @@ IndustryData.INDUSTRY_EVOLUTION = {
                      desc = "扩大经营，升级为商号" },
     workshop     = { to = "silk_house",    reqLevel = 3, reqRank = 5, cost = 550,
                      desc = "改织丝绸，升级为绸缎庄" },
+    money_house  = { to = "piaohao",      reqLevel = 3, reqRank = 8, cost = 1200,
+                     desc = "扩张网络，升级为票号" },
+    pawnshop     = { to = "piaohao",      reqLevel = 3, reqRank = 8, cost = 1000,
+                     desc = "典当升级，升级为票号" },
+    escort       = { to = "canal_wharf",  reqLevel = 3, reqRank = 7, cost = 900,
+                     desc = "镖路转漕运，升级为漕运码头" },
+    salt_field   = { to = "customs_house",reqLevel = 3, reqRank = 9, cost = 2000,
+                     desc = "盐政转关务，升级为海关行" },
+    estate       = { to = "grand_farmland", reqLevel = 3, reqRank = 9, cost = 1800,
+                     desc = "良田扩展，升级为万亩良田" },
 }
 
 -- 进化后的高级产业（不在建造菜单中出现，只能通过进化获得）
@@ -96,6 +138,9 @@ IndustryData.EVOLVED_INDUSTRY_TYPES = {
     { id = "silk_house",    name = "绸缎庄", resource = "cloth", baseOutput = 12, cost = 0,
       desc = "丝绸锦缎，布匹兼赚银两",
       resource2 = "silver", baseOutput2 = 5, evolved = true },
+    { id = "piaohao",     name = "票号", resource = "silver", baseOutput = 35, cost = 0,
+      desc = "汇通天下，跨省银票兑付；按总资产额外生利2%",
+      specialEffect = "interest_2pct", evolved = true },
 }
 
 -- 注册进化产业到查询表中（让 GetIndustryType 能找到）
@@ -132,6 +177,18 @@ IndustryData.INDUSTRY_UNLOCK = {
     money_house  = 6,
     fleet        = 6,
     estate       = 6,
+    -- 名门（7级）
+    pawnshop        = 7,
+    dye_house       = 7,
+    private_school  = 7,
+    canal_wharf     = 7,
+    -- 豪阀（8级）
+    arsenal         = 8,
+    weaving_bureau  = 8,
+    -- 国柱（9级）
+    imperial_merchant = 9,
+    customs_house     = 9,
+    grand_farmland    = 9,
 }
 
 --- 查找产业类型配置

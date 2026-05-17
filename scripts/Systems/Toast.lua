@@ -125,7 +125,7 @@ local function ShowPopup(variant, title, desc, duration)
         width = 100, height = 32, borderRadius = 6, marginTop = 8,
         backgroundGradient = Theme.GRADIENT_PRIMARY,
         justifyContent = "center", alignItems = "center",
-        onPointerDown = function(self)
+        onTap = function()
             Toast.DismissPopup()
         end,
         children = {

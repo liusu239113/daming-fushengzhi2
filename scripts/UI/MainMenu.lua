@@ -32,6 +32,16 @@ function MainMenu.Create(callbacks)
                 pointerEvents = "none",
             },
 
+            -- 左下角版本号
+            UI.Label {
+                text = "v1.0.22",
+                fontSize = 11,
+                fontColor = { 120, 100, 80, 150 },
+                position = "absolute",
+                bottom = 8,
+                left = 10,
+            },
+
             -- 主内容区
             UI.Panel {
                 width = "92%",

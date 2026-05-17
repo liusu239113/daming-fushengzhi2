@@ -1,0 +1,9 @@
+{
+  "$schema": "../schemas/resources.schema.json",
+
+  "aliases": {
+  
+  },
+  
+  "comment": "Define aliases for AI coding. Config: \"player-icon\": \"uuid://xxx\". Usage: cache:GetResource('Texture2D', 'alias://player-icon')"
+}

@@ -281,7 +281,7 @@ function MarketPage.Create(pageTitle, gameScreen)
             width = "100%", padding = 10, borderRadius = 8,
             backgroundGradient = { direction = "horizontal", from = {218, 165, 32, 255}, to = {255, 200, 50, 255} },
             flexDirection = "row", justifyContent = "space-between", alignItems = "center",
-            onPointerDown = function(self, event)
+            onClick = function(self)
                 -- 以本月已消费总额的20%作为返还基础
                 local spent = (GameData.state.market and GameData.state.market.monthlySpent) or 0
                 if spent <= 0 then

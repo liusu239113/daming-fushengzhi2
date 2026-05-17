@@ -564,7 +564,7 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
             borderRadius = btnSize / 2,
             backgroundImage = Theme.IMG.NAV_LOAN, backgroundFit = "contain",
             justifyContent = "center", alignItems = "center",
-            onPointerDown = function(self) AudioManager.Click() cbs.onLoan() end,
+            onTap = function() AudioManager.Click() cbs.onLoan() end,
         }
         btnTop = btnTop + btnGap
     end
@@ -578,7 +578,7 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
             borderRadius = btnSize / 2,
             backgroundImage = Theme.IMG.NAV_CLINIC, backgroundFit = "contain",
             justifyContent = "center", alignItems = "center",
-            onPointerDown = function(self) AudioManager.Click() cbs.onClinic() end,
+            onTap = function() AudioManager.Click() cbs.onClinic() end,
         }
         btnTop = btnTop + btnGap
     end
@@ -592,7 +592,7 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
             borderRadius = btnSize / 2,
             backgroundImage = Theme.IMG.NAV_LABOR, backgroundFit = "contain",
             justifyContent = "center", alignItems = "center",
-            onPointerDown = function(self) AudioManager.Click() cbs.onLabor() end,
+            onTap = function() AudioManager.Click() cbs.onLabor() end,
         }
         btnTop = btnTop + btnGap
     end
@@ -606,7 +606,7 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
             borderRadius = btnSize / 2,
             backgroundImage = Theme.IMG.NAV_PRAY, backgroundFit = "contain",
             justifyContent = "center", alignItems = "center",
-            onPointerDown = function(self) AudioManager.Click() cbs.onPray() end,
+            onTap = function() AudioManager.Click() cbs.onPray() end,
         }
         btnTop = btnTop + btnGap
     end
@@ -620,7 +620,7 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
             borderRadius = btnSize / 2,
             backgroundImage = Theme.IMG.NAV_COURTESAN, backgroundFit = "contain",
             justifyContent = "center", alignItems = "center",
-            onPointerDown = function(self) AudioManager.Click() cbs.onCourtesan() end,
+            onTap = function() AudioManager.Click() cbs.onCourtesan() end,
         }
         btnTop = btnTop + btnGap
     end
@@ -634,7 +634,7 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
             borderRadius = btnSize / 2,
             backgroundImage = Theme.IMG.NAV_SEAL, backgroundFit = "contain",
             justifyContent = "center", alignItems = "center",
-            onPointerDown = function(self) AudioManager.Click() cbs.onImperialSeal() end,
+            onTap = function() AudioManager.Click() cbs.onImperialSeal() end,
         }
         btnTop = btnTop + btnGap
     end

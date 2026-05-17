@@ -12,6 +12,26 @@ local GrowthSystem = require("Systems.GrowthSystem")
 local EventSystem = {}
 
 -- ============================================================================
+-- C1: 天灾品阶缩放 — 品级越高天灾损失越大
+-- ============================================================================
+local DISASTER_SCALE = {
+    [1] = 1.0,   -- 寒门
+    [2] = 1.0,   -- 农户
+    [3] = 1.1,   -- 乡绅
+    [4] = 1.2,   -- 望族
+    [5] = 1.4,   -- 世家
+    [6] = 1.6,   -- 勋贵
+    [7] = 1.8,   -- 名门
+    [8] = 2.0,   -- 豪阀
+    [9] = 2.5,   -- 国柱
+}
+
+--- 获取天灾损失倍率
+function EventSystem.GetDisasterScale(clanRank)
+    return DISASTER_SCALE[clanRank] or 1.0
+end
+
+-- ============================================================================
 -- 事件战斗辅助函数（调用3D战斗系统）
 -- ============================================================================
 
@@ -635,13 +655,17 @@ EventSystem.RANDOM_EVENTS = {
         weight = 10,
         check = function(s) return EraSystem.CanTriggerEvent(s.year, "drought") end,
         execute = function(s, report)
-            local grainLoss = math.ceil(s.grain * 0.2)
+            -- C1: 品阶越高天灾越猛
+            local scale = EventSystem.GetDisasterScale(s.clanRank)
+            local lossRate = math.min(0.5, 0.2 * scale)
+            local grainLoss = math.ceil(s.grain * lossRate)
+            local buyCost = math.ceil(15 * scale)
             report.events[#report.events + 1] = "旱灾降临，庄稼欠收！粮食-" .. grainLoss
             GameData.AddLog("天降大旱，庄稼枯萎。")
-            return { title = "旱灾降临", desc = "天旱数月，庄稼干枯，今季粮食大幅减产。",
+            return { title = "旱灾降临", desc = "天旱数月，庄稼干枯，今季粮食大幅减产。\n损失粮食" .. grainLoss,
                      choices = {
                          { text = "节衣缩食度日", effect = function() GameData.AddResource("grain", -grainLoss) end },
-                         { text = "花银两购粮（-15银两）", cost = {silver = 15}, effect = function()
+                         { text = "花银两购粮（-" .. buyCost .. "银两）", cost = {silver = buyCost}, effect = function()
                              GameData.AddResource("grain", -math.ceil(grainLoss * 0.3))
                          end },
                      } }
@@ -652,13 +676,16 @@ EventSystem.RANDOM_EVENTS = {
         weight = 7,
         check = function(s) return s.regionId == "henan" or s.regionId == "huguang" end,
         execute = function(s, report)
-            local grainLoss = math.ceil(s.grain * 0.25)
-            local silverLoss = math.random(5, 15)
+            local scale = EventSystem.GetDisasterScale(s.clanRank)
+            local lossRate = math.min(0.6, 0.25 * scale)
+            local grainLoss = math.ceil(s.grain * lossRate)
+            local silverLoss = math.ceil(math.random(5, 15) * scale)
+            local rescueCost = math.ceil(10 * scale)
             report.events[#report.events + 1] = "洪水泛滥！田产受损。"
             GameData.AddLog("大水漫堤，田庄遭灾。")
             return { title = "水灾泛滥", desc = "连日暴雨，河水暴涨，淹没田地。\n损失粮食" .. grainLoss .. "、银两" .. silverLoss,
                      choices = {
-                         { text = "组织排涝（-10银两减半损失）", cost = {silver = 10}, effect = function()
+                         { text = "组织排涝（-" .. rescueCost .. "银两减半损失）", cost = {silver = rescueCost}, effect = function()
                              GameData.AddResource("grain", -math.ceil(grainLoss * 0.5))
                          end },
                          { text = "听天由命", effect = function() GameData.AddResource("grain", -grainLoss); GameData.AddResource("silver", -silverLoss) end },
@@ -670,7 +697,9 @@ EventSystem.RANDOM_EVENTS = {
         weight = 6,
         check = function(s) return EraSystem.CanTriggerEvent(s.year, "locust") end,
         execute = function(s, report)
-            local grainLoss = math.ceil(s.grain * 0.3)
+            local scale = EventSystem.GetDisasterScale(s.clanRank)
+            local lossRate = math.min(0.7, 0.3 * scale)
+            local grainLoss = math.ceil(s.grain * lossRate)
             report.events[#report.events + 1] = "蝗虫铺天盖地，庄稼被啃食殆尽！"
             GameData.AddLog("蝗灾肆虐，颗粒无收。")
             return { title = "蝗灾肆虐", desc = "蝗虫遮天蔽日而来，所过之处寸草不生！\n损失粮食" .. grainLoss,
@@ -685,21 +714,26 @@ EventSystem.RANDOM_EVENTS = {
         weight = 6,
         check = function(s) return EraSystem.CanTriggerEvent(s.year, "plague") end,
         execute = function(s, report)
+            local scale = EventSystem.GetDisasterScale(s.clanRank)
             local members = GameData.GetAliveMembers()
+            local infectionRate = math.min(0.6, 0.25 * scale)
             local infected = 0
+            local dmgLow = math.ceil(15 * scale)
+            local dmgHigh = math.ceil(35 * scale)
             for _, m in ipairs(members) do
-                if math.random() < 0.25 then
-                    m.health = math.max(10, m.health - math.random(15, 35))
+                if math.random() < infectionRate then
+                    m.health = math.max(5, m.health - math.random(dmgLow, dmgHigh))
                     if m.state ~= "生病" then m.prevState = m.state end
                     m.state = "生病"
                     infected = infected + 1
                 end
             end
+            local healCost = math.ceil(20 * scale)
             report.events[#report.events + 1] = "瘟疫来袭，" .. infected .. "人感染！"
             GameData.AddLog("瘟疫蔓延，族中" .. infected .. "人感染。")
             return { title = "瘟疫蔓延", desc = "瘟疫在附近村镇蔓延开来，族中" .. infected .. "人不幸感染！",
                      choices = {
-                         { text = "购药救治（-20银两）", cost = {silver = 20}, effect = function()
+                         { text = "购药救治（-" .. healCost .. "银两）", cost = {silver = healCost}, effect = function()
                              for _, m in ipairs(GameData.GetAliveMembers()) do
                                  if m.state == "生病" then m.health = math.min(100, m.health + 15) end
                              end

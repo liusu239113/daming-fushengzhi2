@@ -74,7 +74,8 @@ local onSettleOverride_ = nil  -- 自定义结算回调（事件战斗用）func
 local deployInfantry_ = 0      -- 本次出征步兵数
 local deployArchers_ = 0       -- 本次出征弓兵数
 local trainingLevel_ = 0       -- 本次出征训练等级
-local regionId_ = nil          -- 本次出征区域ID（征伐战役用）
+local regionId_ = nil          -- 本次出征区域ID（征伐战役用，兼容旧代码）
+local stageId_ = nil           -- 本次出征关卡ID（新版关卡系统）
 
 -- ============================================================================
 -- 场景创建
@@ -407,8 +408,9 @@ local function DeployUnits()
     local eSoldierUnits = math.floor(rivalData_.soldiers / 100)
     eSoldierUnits = math.max(eSoldierUnits, 1)
     eSoldierUnits = math.min(eSoldierUnits, 30)
+    local enemyRank = GameData.state and GameData.state.clanRank or 5
     for i = 1, eSoldierUnits do
-        local bd = RivalClans.SoldierToBattleUnit(i, "enemy")
+        local bd = RivalClans.SoldierToBattleUnit(i, "enemy", enemyRank)
         bd.unitStyle = enemyStyle
         enemyUnitData[#enemyUnitData + 1] = bd
     end
@@ -883,8 +885,15 @@ local function SettleBattle(result)
         GameData.AddLog("讨伐" .. rivalData_.name .. "大获全胜！缴获银两" ..
             report.rewards.silver .. "、粮食" .. report.rewards.grain)
 
-        -- 征伐战役：标记区域征服
-        if regionId_ then
+        -- 征伐战役：标记关卡征服
+        if stageId_ then
+            CampaignRegions.MarkStageConquered(stageId_)
+            local stage = CampaignRegions.GetStage(stageId_)
+            if stage then
+                GameData.AddLog("成功征服【" .. stage.name .. "】！")
+            end
+        elseif regionId_ then
+            -- 旧版兼容
             CampaignRegions.MarkConquered(regionId_)
             local region = CampaignRegions.GetById(regionId_)
             if region then
@@ -1400,6 +1409,7 @@ function BattleScene.Enter(rival, deployedMemberIds, soldierCount, onEndCallback
     deployArchers_ = (options and options.archers) or 0
     trainingLevel_ = (options and options.trainingLevel) or 0
     regionId_ = (options and options.regionId) or nil
+    stageId_ = (options and options.stageId) or nil
 
     log:Write(LOG_INFO, "[Battle] ======= 讨伐战斗开始 =======")
     log:Write(LOG_INFO, "[Battle] 目标: " .. rival.name .. " (" .. rival.tierName .. ")")
@@ -1408,7 +1418,9 @@ function BattleScene.Enter(rival, deployedMemberIds, soldierCount, onEndCallback
         log:Write(LOG_INFO, string.format("[Battle] 出征步兵: %d, 弓兵: %d, 训练等级: %d",
             deployInfantry_, deployArchers_, trainingLevel_))
     end
-    if regionId_ then
+    if stageId_ then
+        log:Write(LOG_INFO, "[Battle] 征伐关卡: " .. tostring(stageId_))
+    elseif regionId_ then
         log:Write(LOG_INFO, "[Battle] 征伐区域: " .. tostring(regionId_))
     end
 
