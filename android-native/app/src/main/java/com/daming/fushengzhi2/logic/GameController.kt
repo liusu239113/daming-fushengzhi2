@@ -99,13 +99,29 @@ class GameController(private val saveStore: SaveStore) {
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
+    fun sellIndustry(industryId: Int) {
+        val before = requireState()
+        val next = GameEngine.sellIndustry(before, industryId)
+        state = next
+        message = if (next != before) "产业已变卖" else "产业不存在"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
+    fun evolveIndustry(industryId: Int) {
+        val before = requireState()
+        val next = GameEngine.evolveIndustry(before, industryId)
+        state = next
+        message = if (next != before) "产业已进化" else "等级、品级或银两不足"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
     fun assignIndustry(industryId: Int, memberId: Int?) {
         state = GameEngine.assignIndustry(requireState(), industryId, memberId)
         saveStore.save(requireState(), SaveStore.Slot.Auto)
     }
 
-    fun setMemberState(memberId: Int, memberState: MemberState) {
-        state = GameEngine.setMemberState(requireState(), memberId, memberState)
+    fun setMemberState(memberId: Int, memberState: MemberState, laborJobId: String? = null) {
+        state = GameEngine.setMemberState(requireState(), memberId, memberState, laborJobId)
         saveStore.save(requireState(), SaveStore.Slot.Auto)
     }
 
@@ -114,13 +130,11 @@ class GameController(private val saveStore: SaveStore) {
         saveStore.save(requireState(), SaveStore.Slot.Auto)
     }
 
-
-
     fun buyMarketItem(itemId: String, count: Int = 1) {
         val before = requireState()
         val next = GameEngine.buyMarketItem(before, itemId, count)
         state = next
-        message = if (next \!= before) "交易完成" else "银两不足或商品无效"
+        message = if (next != before) "交易完成" else "银两不足或商品无效"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
@@ -128,7 +142,7 @@ class GameController(private val saveStore: SaveStore) {
         val before = requireState()
         val next = GameEngine.sellMarketItem(before, itemId, count)
         state = next
-        message = if (next \!= before) "交易完成" else "库存不足或商品无效"
+        message = if (next != before) "交易完成" else "库存不足或商品无效"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
@@ -136,7 +150,7 @@ class GameController(private val saveStore: SaveStore) {
         val before = requireState()
         val next = GameEngine.useItem(before, itemId, memberId)
         state = next
-        message = if (next \!= before) "物品已使用" else "物品不足"
+        message = if (next != before) "物品已使用" else "物品不足"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
@@ -144,7 +158,7 @@ class GameController(private val saveStore: SaveStore) {
         val before = requireState()
         val next = GameEngine.upgradeAcademy(before, typeId)
         state = next
-        message = if (next \!= before) "设施已升级" else "未解锁或银两不足"
+        message = if (next != before) "设施已升级" else "未解锁或银两不足"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
@@ -157,7 +171,7 @@ class GameController(private val saveStore: SaveStore) {
         val before = requireState()
         val next = GameEngine.startExpedition(before, typeId, memberId)
         state = next
-        message = if (next \!= before) "历练已开始" else "条件不足或族人不可用"
+        message = if (next != before) "历练已开始" else "条件不足或族人不可用"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
@@ -165,7 +179,31 @@ class GameController(private val saveStore: SaveStore) {
         val before = requireState()
         val next = GameEngine.takeExam(before, memberId, examId)
         state = next
-        message = if (next \!= before) "科举已结算" else "学识不足"
+        message = if (next != before) "科举已结算" else "学识不足"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
+    fun donateIdentity(memberId: Int) {
+        val before = requireState()
+        val next = GameEngine.donateIdentity(before, memberId)
+        state = next
+        message = if (next != before) "已纳捐监生" else "需要望族、银500、声望15"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
+    fun appointOfficial(memberId: Int, rankId: String) {
+        val before = requireState()
+        val next = GameEngine.appointOfficial(before, memberId, rankId)
+        state = next
+        message = if (next != before) "已入仕为官" else "身份条件不足"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
+    fun arrangeMarriage(memberId: Int, tierId: String) {
+        val before = requireState()
+        val next = GameEngine.arrangeMarriage(before, memberId, tierId)
+        state = next
+        message = if (next != before) "联姻完成" else "聘礼、声望、品级或族人状态不足"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
@@ -173,7 +211,15 @@ class GameController(private val saveStore: SaveStore) {
         val before = requireState()
         val next = GameEngine.recruitArmy(before, infantry, archers)
         state = next
-        message = if (next \!= before) "士兵已招募" else "资源不足"
+        message = if (next != before) "士兵已招募" else "资源不足"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
+    fun trainArmy() {
+        val before = requireState()
+        val next = GameEngine.trainArmy(before)
+        state = next
+        message = if (next != before) "训练完成" else "训练已满或银两不足"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 
@@ -181,7 +227,23 @@ class GameController(private val saveStore: SaveStore) {
         val before = requireState()
         val next = GameEngine.attackStage(before, stageId)
         state = next
-        message = if (next \!= before) "征伐已结算" else "关卡无效或已征服"
+        message = if (next != before) "征伐已结算" else "关卡无效或已征服"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
+    fun adoptPet(type: String) {
+        val before = requireState()
+        val next = GameEngine.adoptPet(before, type)
+        state = next
+        message = if (next != before) "宠物已收养" else "已有宠物或粮食不足"
+        saveStore.save(next, SaveStore.Slot.Auto)
+    }
+
+    fun sacrifice() {
+        val before = requireState()
+        val next = GameEngine.sacrifice(before)
+        state = next
+        message = if (next != before) "祭祀完成" else "本年已祭祀或粮食不足"
         saveStore.save(next, SaveStore.Slot.Auto)
     }
 

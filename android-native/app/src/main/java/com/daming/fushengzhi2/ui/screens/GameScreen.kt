@@ -89,7 +89,7 @@ fun GameScreen(controller: GameController) {
                     Text("收入：银${report.incomeSilver} 粮${report.incomeGrain} 布${report.incomeCloth} 名${report.incomeFame}")
                     Text("支出：银${report.expenseSilver} 粮${report.expenseGrain} 布${report.expenseCloth} 名${report.expenseFame}")
                     DividerLine()
-                    report.events.take(8).forEach { Text("· $it", fontSize = 13.sp) }
+                    report.events.take(10).forEach { Text("· $it", fontSize = 13.sp) }
                 }
             }
         )
@@ -141,16 +141,28 @@ private fun TopBar(state: GameState, controller: GameController) {
 
 @Composable
 private fun FamilyTreePage(state: GameState, controller: GameController) {
-    SectionTitle("族谱", "以族人为中心查看宗族传承")
+    SectionTitle("族谱", "以族人为中心查看宗族传承、联姻和血脉")
     GameEngine.aliveMembers(state).forEach { member ->
         MingCard {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
                     Text(member.name, color = MingColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    val spouse = member.spouseId?.let { id -> state.members.firstOrNull { it.id == id }?.name } ?: "未婚"
                     Text("${if (member.gender.name == "Male") "男" else "女"} · ${member.age}岁 · 第${member.generation}代 · ${member.identity}", color = MingColors.TextSecondary, fontSize = 12.sp)
-                    Text("状态：${member.state.label}  学识${member.study}  武艺${member.martial}  健康${member.health}", color = MingColors.TextMuted, fontSize = 12.sp)
+                    Text("配偶：$spouse  子女：${member.childrenIds.size}  天赋：${GameContent.talent(member.talentId)?.name ?: "无"}", color = MingColors.TextMuted, fontSize = 12.sp)
+                    Text("状态：${member.state.label}  学识${member.study}/${member.aptitude.study.cap}  武艺${member.martial}/${member.aptitude.martial.cap}  健康${member.health}/${member.aptitude.health.cap}", color = MingColors.TextMuted, fontSize = 12.sp)
                 }
                 Text(if (member.id == state.patriarchId) "族长" else "族人", color = MingColors.Gold, fontWeight = FontWeight.Bold)
+            }
+            if (member.spouseId == null && member.age in 16..40) {
+                GameContent.marriageTiers.filter { state.clanRank >= it.unlockRank }.take(3).forEach { tier ->
+                    Text(
+                        "联姻：${tier.name}（银${tier.silverCost} 粮${tier.grainCost} 名望需${tier.fameReq}）",
+                        modifier = Modifier.fillMaxWidth().clickable { controller.arrangeMarriage(member.id, tier.id) }.padding(6.dp),
+                        color = MingColors.Primary,
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     }
@@ -158,11 +170,12 @@ private fun FamilyTreePage(state: GameState, controller: GameController) {
 
 @Composable
 private fun ClanPage(state: GameState, controller: GameController) {
-    SectionTitle("宗族", "宗祠、族规、家族志")
+    SectionTitle("宗族", "宗祠、族规、年度目标、成就和家族志")
     MingCard {
         Text("宗族信息", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
         Text("门第：${GameEngine.clanRankName(state)}", color = MingColors.TextPrimary)
         Text("族人：${GameEngine.aliveMembers(state).size} 人，产业：${state.industries.size} 个，寨堡：${state.fortCount} 座", color = MingColors.TextSecondary)
+        state.pet?.let { Text("宠物：${it.name}${if (it.alive) "" else "（已故）"}", color = MingColors.TextSecondary) }
         val req = GameContent.rankRequirements[state.clanRank + 1]
         if (req != null) {
             DividerLine()
@@ -171,6 +184,14 @@ private fun ClanPage(state: GameState, controller: GameController) {
             MingButton("晋升宗族", Modifier.fillMaxWidth(), enabled = GameEngine.canRankUp(state), onClick = controller::rankUp)
         } else {
             Text("已达最高品级。", color = MingColors.Gold)
+        }
+    }
+    MingCard {
+        Text("年度目标", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        if (state.yearlyGoals.isEmpty()) EmptyHint("暂无年度目标")
+        state.yearlyGoals.forEach { goalState ->
+            val goal = GameContent.yearlyGoal(goalState.goalId)
+            Text("${goal?.icon ?: "目"} ${goal?.name ?: goalState.goalId}：${goal?.desc ?: ""}${if (goalState.completed) " · 已完成" else ""}", color = if (goalState.completed) MingColors.Green else MingColors.TextSecondary, fontSize = 12.sp)
         }
     }
     MingCard {
@@ -191,18 +212,33 @@ private fun ClanPage(state: GameState, controller: GameController) {
         }
     }
     MingCard {
+        Text("祭祀与宠物", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MingButton("祭天祈福", Modifier.weight(1f), enabled = state.lastSacrificeYear != state.year && state.grain >= 50) { controller.sacrifice() }
+            MingButton("收养黄犬", Modifier.weight(1f), enabled = state.pet?.alive != true && state.grain >= 20) { controller.adoptPet("dog") }
+        }
+    }
+    MingCard {
+        Text("成就", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        Text("已达成 ${state.unlockedAchievements.size}/${GameContent.achievements.size}", color = MingColors.TextMuted, fontSize = 12.sp)
+        state.unlockedAchievements.take(12).forEach { id ->
+            val ach = GameContent.achievement(id)
+            Text("${ach?.icon ?: "成"} ${ach?.name ?: id}", color = MingColors.Green, fontSize = 12.sp)
+        }
+    }
+    MingCard {
         Text("家族志", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
-        state.eventLog.take(20).forEach { Text("${it.year}年${it.month}月 · ${it.text}", color = MingColors.TextSecondary, fontSize = 12.sp) }
+        state.eventLog.take(30).forEach { Text("${it.year}年${it.month}月 · ${it.text}", color = MingColors.TextSecondary, fontSize = 12.sp) }
     }
 }
 
 @Composable
 private fun MembersPage(state: GameState, controller: GameController) {
-    SectionTitle("族人", "安排读书、经商、从军或打工")
+    SectionTitle("族人", "安排读书、经商、从军、打工和管理产业")
     GameEngine.aliveMembers(state).forEach { member ->
         MingCard {
             Text(member.name, color = MingColors.TextPrimary, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-            Text("${member.age}岁 · ${member.identity} · 当前：${member.state.label}", color = MingColors.TextSecondary)
+            Text("${member.age}岁 · ${member.identity} · 当前：${member.state.label} · 天赋：${GameContent.talent(member.talentId)?.name ?: "无"}", color = MingColors.TextSecondary)
             Text("学识 ${member.study}/${member.aptitude.study.cap}  武艺 ${member.martial}/${member.aptitude.martial.cap}  健康 ${member.health}/${member.aptitude.health.cap}", color = MingColors.TextMuted, fontSize = 12.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(MemberState.Home, MemberState.Study, MemberState.Trade, MemberState.Military, MemberState.Labor).forEach { target ->
@@ -217,30 +253,52 @@ private fun MembersPage(state: GameState, controller: GameController) {
                     )
                 }
             }
+            if (member.state == MemberState.Labor) {
+                GameEngine.availableLaborJobs(state).takeLast(4).forEach { job ->
+                    Text("工种：${job.name} 月银${job.wage} · ${job.desc}", modifier = Modifier.fillMaxWidth().clickable { controller.setMemberState(member.id, MemberState.Labor, job.id) }.padding(4.dp), color = MingColors.Primary, fontSize = 12.sp)
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun IndustryPage(state: GameState, controller: GameController) {
-    SectionTitle("经营", "产业、库房与集市")
+    SectionTitle("经营", "产业建造、升级、进化、变卖和管理分配")
     MingCard {
         Text("已有产业", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
         if (state.industries.isEmpty()) EmptyHint("暂无产业")
         state.industries.forEach { ind ->
             val type = GameContent.industry(ind.typeId)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f)) {
-                    Text("${type?.name ?: ind.typeId} · ${ind.level}级", color = MingColors.TextPrimary, fontWeight = FontWeight.Bold)
-                    Text(type?.desc ?: "", color = MingColors.TextMuted, fontSize = 12.sp)
+            val manager = ind.assignedMemberId?.let { id -> state.members.firstOrNull { it.id == id }?.name } ?: "无"
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${type?.name ?: ind.typeId} · ${ind.level}级", color = MingColors.TextPrimary, fontWeight = FontWeight.Bold)
+                        Text("管理：$manager · ${type?.desc ?: ""}", color = MingColors.TextMuted, fontSize = 12.sp)
+                    }
+                    MingButton("升级", Modifier.width(76.dp)) { controller.upgradeIndustry(ind.id) }
                 }
-                MingButton("升级", Modifier.width(86.dp)) { controller.upgradeIndustry(ind.id) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val evo = GameContent.evolution(ind.typeId)
+                    MingButton("进化", Modifier.weight(1f), enabled = evo != null && ind.level >= (evo?.reqLevel ?: 99) && state.clanRank >= (evo?.reqRank ?: 99) && state.silver >= (evo?.cost ?: 999999)) { controller.evolveIndustry(ind.id) }
+                    MingButton("变卖", Modifier.weight(1f), danger = true) { controller.sellIndustry(ind.id) }
+                }
+                val assignable = GameEngine.adults(state).take(4)
+                if (assignable.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        assignable.forEach { m ->
+                            Text(m.name.takeLast(2), modifier = Modifier.background(if (ind.assignedMemberId == m.id) MingColors.Primary else MingColors.BgPanel).clickable { controller.assignIndustry(ind.id, m.id) }.padding(6.dp), color = if (ind.assignedMemberId == m.id) MingColors.BgWhite else MingColors.TextPrimary, fontSize = 11.sp)
+                        }
+                    }
+                }
             }
             DividerLine()
         }
     }
     MingCard {
         Text("可建产业", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        Text("上限：${state.industries.size}/${GameContent.industryLimitByRank[state.clanRank] ?: 4}", color = MingColors.TextMuted, fontSize = 12.sp)
         GameContent.industryTypes.filter { !it.evolved && state.clanRank >= it.unlockRank }.forEach { type ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
@@ -256,7 +314,7 @@ private fun IndustryPage(state: GameState, controller: GameController) {
 
 @Composable
 private fun CareerPage(state: GameState, controller: GameController) {
-    SectionTitle("功业", "仕途、书院、历练、战斗的原生迁移入口")
+    SectionTitle("功业", "科举、纳捐、入仕、军功和历史大势")
     MingCard {
         Text("仕途概览", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
         Text("读书族人：${state.members.count { it.alive && it.state == MemberState.Study }}", color = MingColors.TextSecondary)
@@ -265,11 +323,42 @@ private fun CareerPage(state: GameState, controller: GameController) {
         Text("打工族人：${state.members.count { it.alive && it.state == MemberState.Labor }}", color = MingColors.TextSecondary)
     }
     MingCard {
-        Text("原 3D 战斗迁移说明", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
-        Text("原项目 BattleScene.lua 依赖 UrhoX 场景、MDL 模型、材质和 FSM。此 Kotlin 原生版先保留战略入口与资源归档，3D 战斗可后续接入 Filament、SceneView 或其他 Android 3D 渲染方案。", color = MingColors.TextSecondary, fontSize = 13.sp)
+        Text("科举取士", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        GameEngine.aliveMembers(state).filter { it.age >= 12 }.take(8).forEach { member ->
+            Text("${member.name} · 学识${member.study} · ${member.identity}", color = MingColors.TextPrimary, fontSize = 13.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                GameContent.examLevels.take(4).forEach { exam ->
+                    Text(exam.name, modifier = Modifier.background(if (member.study >= exam.reqStudy) MingColors.BgPanel else MingColors.Border).clickable { controller.takeExam(member.id, exam.id) }.padding(6.dp), color = MingColors.Primary, fontSize = 11.sp)
+                }
+            }
+            DividerLine()
+        }
+    }
+    MingCard {
+        Text("纳捐与入仕", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        GameEngine.aliveMembers(state).filter { it.age >= 16 }.take(8).forEach { member ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f)) {
+                    Text("${member.name} · ${member.identity}", color = MingColors.TextPrimary, fontSize = 13.sp)
+                    Text("望族可纳捐监生；进士可授知县，知县可升知府。", color = MingColors.TextMuted, fontSize = 11.sp)
+                }
+                Column(Modifier.width(110.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MingButton("纳捐", Modifier.fillMaxWidth(), enabled = state.clanRank >= 4 && state.silver >= 500 && state.fame >= 15) { controller.donateIdentity(member.id) }
+                    GameContent.officialRanks.firstOrNull { it.reqIdentity == member.identity }?.let { rank ->
+                        MingButton("任${rank.name}", Modifier.fillMaxWidth()) { controller.appointOfficial(member.id, rank.id) }
+                    }
+                }
+            }
+            DividerLine()
+        }
+    }
+    MingCard {
+        Text("历史大势", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        GameContent.historyEvents.filter { it.year >= state.year }.take(5).forEach { evt ->
+            Text("${evt.year} · ${evt.title}：${evt.desc}", color = MingColors.TextSecondary, fontSize = 12.sp)
+        }
     }
 }
-
 
 @Composable
 private fun AcademyPage(state: GameState, controller: GameController) {
@@ -281,7 +370,7 @@ private fun AcademyPage(state: GameState, controller: GameController) {
             Text(type.desc, color = MingColors.TextSecondary, fontSize = 12.sp)
             Text("等级：${academy?.level ?: 0}  席位：${academy?.memberIds?.size ?: 0}/${(academy?.level ?: 0) * type.baseSlotsPerLevel}  解锁品级：${GameContent.rankName(type.unlockRank)}", color = MingColors.TextMuted, fontSize = 12.sp)
             MingButton(if (academy == null) "修建" else "升级", Modifier.fillMaxWidth(), enabled = state.clanRank >= type.unlockRank) { controller.upgradeAcademy(type.id) }
-            if (academy \!= null) {
+            if (academy != null) {
                 GameEngine.aliveMembers(state).filter { it.age >= 6 }.forEach { member ->
                     Text(
                         "${if (academy.memberIds.contains(member.id)) "[在席]" else "[安排]"} ${member.name} 学${member.study} 武${member.martial}",
@@ -336,8 +425,9 @@ private fun InventoryPage(state: GameState, controller: GameController) {
         MingCard {
             Text("${item?.icon ?: "物"} ${item?.name ?: inv.itemId} × ${inv.count}", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
             Text(item?.desc ?: "", color = MingColors.TextSecondary, fontSize = 12.sp)
+            val firstMember = GameEngine.aliveMembers(state).firstOrNull()
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MingButton("使用", Modifier.weight(1f)) { controller.useItem(inv.itemId, GameEngine.aliveMembers(state).firstOrNull()?.id) }
+                MingButton("使用", Modifier.weight(1f), enabled = firstMember != null) { controller.useItem(inv.itemId, firstMember?.id) }
                 MingButton("卖出", Modifier.weight(1f), danger = true) { controller.sellMarketItem(inv.itemId, 1) }
             }
         }
@@ -346,27 +436,24 @@ private fun InventoryPage(state: GameState, controller: GameController) {
 
 @Composable
 private fun MarketPage(state: GameState, controller: GameController) {
-    SectionTitle("集市", "买卖粮布与常用物品")
-    val goods = listOf("grain", "cloth", "herb", "book", "weapon", "horse")
-    goods.forEach { id ->
-        val price = state.market.prices[id] ?: 0
-        val name = when (id) {
-            "grain" -> "粮食"
-            "cloth" -> "布匹"
-            "horse" -> "马匹"
-            else -> GameContent.item(id)?.name ?: id
-        }
-        val have = when (id) {
+    SectionTitle("集市", "买卖粮布与常用物品，价格随季节与战乱波动")
+    if (state.clanRank < 3) {
+        EmptyHint("乡绅品级解锁集市")
+        return
+    }
+    GameContent.marketCommodities.forEach { commodity ->
+        val price = state.market.prices[commodity.id] ?: commodity.basePrice
+        val have = when (commodity.resourceKey) {
             "grain" -> state.grain
             "cloth" -> state.cloth
-            else -> state.inventory.firstOrNull { it.itemId == id }?.count ?: 0
+            else -> commodity.itemId?.let { id -> state.inventory.firstOrNull { it.itemId == id }?.count } ?: (state.market.stock[commodity.id] ?: 0)
         }
         MingCard {
-            Text("$name · 单价 $price", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
-            Text("持有：$have", color = MingColors.TextMuted, fontSize = 12.sp)
+            Text("${commodity.icon} ${commodity.name} · 单价 $price", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+            Text("${commodity.desc} · 持有：$have", color = MingColors.TextMuted, fontSize = 12.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MingButton("买1", Modifier.weight(1f), enabled = state.silver >= price) { controller.buyMarketItem(id, 1) }
-                MingButton("卖1", Modifier.weight(1f), danger = true, enabled = have > 0) { controller.sellMarketItem(id, 1) }
+                MingButton("买1", Modifier.weight(1f), enabled = state.silver >= price) { controller.buyMarketItem(commodity.id, 1) }
+                MingButton("卖1", Modifier.weight(1f), danger = true, enabled = have > 0) { controller.sellMarketItem(commodity.id, 1) }
             }
         }
     }
@@ -374,13 +461,14 @@ private fun MarketPage(state: GameState, controller: GameController) {
 
 @Composable
 private fun BattlePage(state: GameState, controller: GameController) {
-    SectionTitle("征伐", "原 3D 战斗的战略层原生迁移")
+    SectionTitle("征伐", "战略层征伐、军队训练与军功结算")
     MingCard {
         Text("军队", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
-        Text("步兵 ${state.army.infantry} · 弓兵 ${state.army.archers} · 训练 ${state.army.trainingLevel}", color = MingColors.TextSecondary)
+        Text("步兵 ${state.army.infantry} · 弓兵 ${state.army.archers} · 训练 ${state.army.trainingLevel}/5", color = MingColors.TextSecondary)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MingButton("募步兵10", Modifier.weight(1f)) { controller.recruitArmy(10, 0) }
             MingButton("募弓兵10", Modifier.weight(1f)) { controller.recruitArmy(0, 10) }
+            MingButton("训练", Modifier.weight(1f), enabled = state.army.trainingLevel < 5) { controller.trainArmy() }
         }
     }
     GameContent.campaignStages.forEach { stage ->
@@ -388,7 +476,7 @@ private fun BattlePage(state: GameState, controller: GameController) {
         MingCard {
             Text("${stage.name}${if (done) " · 已征服" else ""}", color = if (done) MingColors.Green else MingColors.GoldDark, fontWeight = FontWeight.Bold)
             Text("敌军战力 ${stage.enemyPower} · 奖励银${stage.rewardSilver} 名${stage.rewardFame}", color = MingColors.TextSecondary, fontSize = 12.sp)
-            MingButton("出征", Modifier.fillMaxWidth(), enabled = \!done) { controller.attackStage(stage.id) }
+            MingButton("出征", Modifier.fillMaxWidth(), enabled = !done) { controller.attackStage(stage.id) }
         }
     }
 }

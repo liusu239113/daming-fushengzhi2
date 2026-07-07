@@ -2,7 +2,7 @@ package com.daming.fushengzhi2.data
 
 import kotlinx.serialization.Serializable
 
-const val SAVE_VERSION = 4
+const val SAVE_VERSION = 5
 
 @Serializable
 data class SaveEnvelope(
@@ -40,13 +40,24 @@ data class GameState(
     val market: MarketState = MarketState(),
     val conqueredStages: List<Int> = emptyList(),
     val eventLog: List<EventLogEntry> = emptyList(),
+    val triggeredHistoryYears: List<Int> = emptyList(),
     val unlockedAchievements: List<String> = emptyList(),
+    val yearlyGoals: List<YearlyGoalState> = emptyList(),
+    val completedGoalIds: List<String> = emptyList(),
+    val goalYear: Int = 0,
+    val yearStartSnapshot: YearSnapshot? = null,
     val totalBirths: Int = 0,
     val totalDeaths: Int = 0,
     val totalExamPasses: Int = 0,
     val totalMilitaryMerits: Int = 0,
     val army: ArmyState = ArmyState(),
-    val gameEnded: Boolean = false
+    val pet: PetState? = null,
+    val lastSacrificeYear: Int = 0,
+    val clinicHealsThisYear: Int = 0,
+    val gameEnded: Boolean = false,
+    val endingChoice: String? = null,
+    val hiddenEnding: String? = null,
+    val triggeredHiddenEndings: List<String> = emptyList()
 )
 
 @Serializable
@@ -61,15 +72,23 @@ data class ClanMember(
     val childrenIds: List<Int> = emptyList(),
     val identity: String = "白丁",
     val state: MemberState = MemberState.Home,
+    val prevState: MemberState? = null,
     val talentId: String? = null,
     val study: Int = 1,
     val martial: Int = 1,
     val health: Int = 100,
     val militaryRank: String? = null,
+    val officialRank: String? = null,
+    val officialTenure: Int = 0,
     val assignmentId: Int? = null,
     val aptitude: AptitudeSet = AptitudeSet(),
     val laborJob: String? = null,
-    val alive: Boolean = true
+    val skillPath: String? = null,
+    val equipment: Map<String, String> = emptyMap(),
+    val alive: Boolean = true,
+    val deathYear: Int? = null,
+    val deathAge: Int? = null,
+    val deathCause: String? = null
 )
 
 @Serializable
@@ -89,12 +108,15 @@ enum class Gender { Male, Female }
 enum class MemberState(val label: String) {
     Home("在家"),
     Study("读书"),
+    Exam("赶考"),
     Trade("经商"),
     Military("从军"),
+    Battle("出征"),
     Sick("生病"),
     Expedition("历练"),
     Labor("打工"),
     Official("为官"),
+    Left("离族"),
     Dead("亡故")
 }
 
@@ -127,15 +149,13 @@ data class InventoryItem(val itemId: String, val count: Int)
 
 @Serializable
 data class MarketState(
-    val prices: Map<String, Int> = mapOf(
-        "grain" to 2,
-        "cloth" to 5,
-        "herb" to 80,
-        "book" to 120,
-        "weapon" to 150,
-        "horse" to 400
-    ),
-    val lastUpdatedMonth: Int = 0
+    val prices: Map<String, Int> = GameContent.defaultMarketPrices(),
+    val stock: Map<String, Int> = emptyMap(),
+    val history: Map<String, List<Int>> = emptyMap(),
+    val lastUpdatedMonth: Int = 0,
+    val totalTradeProfit: Int = 0,
+    val tradeCount: Int = 0,
+    val monthlySpent: Int = 0
 )
 
 @Serializable
@@ -146,6 +166,40 @@ data class ArmyState(
     val infantry: Int = 0,
     val archers: Int = 0,
     val trainingLevel: Int = 0
+)
+
+@Serializable
+data class PetState(
+    val type: String,
+    val name: String,
+    val adoptYear: Int,
+    val adoptMonth: Int,
+    val lifespan: Int,
+    val alive: Boolean = true,
+    val deathYear: Int? = null,
+    val deathMonth: Int? = null
+)
+
+@Serializable
+data class YearlyGoalState(
+    val goalId: String,
+    val completed: Boolean = false
+)
+
+@Serializable
+data class YearSnapshot(
+    val silver: Int,
+    val grain: Int,
+    val cloth: Int,
+    val fame: Int,
+    val aliveCount: Int,
+    val clanRank: Int,
+    val industryCount: Int,
+    val fortCount: Int,
+    val totalBirths: Int,
+    val totalDeaths: Int,
+    val totalExamPasses: Int,
+    val totalMilitaryMerits: Int
 )
 
 data class Origin(
@@ -173,6 +227,19 @@ data class Difficulty(
     val desc: String,
     val disasterMul: Double,
     val taxMul: Double
+)
+
+data class Talent(
+    val id: String,
+    val name: String,
+    val effect: String,
+    val studyBonus: Double = 0.0,
+    val tradeBonus: Double = 0.0,
+    val militaryBonus: Double = 0.0,
+    val sickRate: Double = 0.0,
+    val outputBonus: Double = 0.0,
+    val marriageBonus: Double = 0.0,
+    val fertilityBonus: Double = 0.0
 )
 
 data class ClanRule(
@@ -242,6 +309,7 @@ data class ExpeditionType(
     val rewardCloth: IntRange? = null,
     val rewardFame: IntRange? = null,
     val rewardStudy: IntRange? = null,
+    val rewardMartial: IntRange? = null,
     val itemChance: Double = 0.0,
     val recruitChance: Double = 0.0,
     val riskRate: Double,
@@ -255,6 +323,60 @@ data class ExamLevel(
     val passRate: Double,
     val result: String,
     val famePlus: Int
+)
+
+data class MilitaryRankDef(
+    val id: String,
+    val name: String,
+    val deathRate: Double,
+    val silverPay: Int,
+    val famePlus: Int
+)
+
+data class OfficialRankDef(
+    val id: String,
+    val name: String,
+    val reqIdentity: String,
+    val silver: Int,
+    val fame: Int,
+    val taxReduce: Double,
+    val demotionRate: Double,
+    val famePerMonth: Int = 0,
+    val desc: String
+)
+
+data class MarriageTier(
+    val id: String,
+    val name: String,
+    val silverCost: Int,
+    val grainCost: Int,
+    val fameReq: Int,
+    val famePlus: Int,
+    val desc: String,
+    val bonusType: String? = null,
+    val bonusValue: Int = 0,
+    val unlockRank: Int
+)
+
+data class LaborJob(
+    val id: String,
+    val name: String,
+    val rank: Int,
+    val wage: Int,
+    val desc: String
+)
+
+data class MarketCommodity(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val unit: String,
+    val basePrice: Int,
+    val batchSize: Int,
+    val fluctRange: Double,
+    val desc: String,
+    val resourceKey: String? = null,
+    val itemId: String? = null
 )
 
 data class CampaignStage(
@@ -292,6 +414,45 @@ data class RankRequirement(
     val grain: Int = 0,
     val cloth: Int = 0,
     val population: Int
+)
+
+data class IndustryEvolution(
+    val from: String,
+    val to: String,
+    val reqLevel: Int,
+    val reqRank: Int,
+    val cost: Int,
+    val desc: String
+)
+
+data class HistoryEvent(
+    val year: Int,
+    val title: String,
+    val desc: String,
+    val effect: String
+)
+
+data class AchievementDef(
+    val id: String,
+    val name: String,
+    val desc: String,
+    val icon: String,
+    val rewardSilver: Int = 0,
+    val rewardGrain: Int = 0,
+    val rewardCloth: Int = 0,
+    val rewardFame: Int = 0
+)
+
+data class YearlyGoalDef(
+    val id: String,
+    val name: String,
+    val desc: String,
+    val icon: String,
+    val rewardSilver: Int = 0,
+    val rewardGrain: Int = 0,
+    val rewardCloth: Int = 0,
+    val rewardFame: Int = 0,
+    val minRank: Int = 1
 )
 
 data class MonthlyReport(
