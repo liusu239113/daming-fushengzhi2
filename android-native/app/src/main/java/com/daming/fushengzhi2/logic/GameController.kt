@@ -14,8 +14,8 @@ import com.daming.fushengzhi2.persistence.SaveStore
 
 class GameController(private val saveStore: SaveStore, val audio: GameAudio) {
     enum class Screen { Menu, Create, Game }
-    enum class ClanSubTab(val label: String) { Main("宗祠"), Rules("族规"), Chronicle("家族志") }
-    enum class IndustrySubTab(val label: String) { Main("产业"), Market("集市"), Store("库房") }
+    enum class ClanSubTab(val label: String) { Main("宗祠"), Rules("[锁]族规"), Chronicle("家族志") }
+    enum class IndustrySubTab(val label: String) { Main("产业"), Market("[锁]集市"), Store("[锁]库房") }
     enum class CareerSubTab(val label: String) { Career("仕途"), Academy("书院"), Expedition("历练") }
 
     var screen by mutableStateOf(Screen.Menu)
