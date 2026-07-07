@@ -652,7 +652,13 @@ object GameEngine {
     }
 
     private fun processConsumption(state: GameState, report: MutableReport, effects: RuleEffects) {
-        var grainCost = aliveMembers(state).sumOf { if (it.age <= 5) 1 else if (it.age <= 14) 2 else 3 }
+        var grainCost = aliveMembers(state).fold(0) { total, member ->
+            total + when {
+                member.age <= 5 -> 1
+                member.age <= 14 -> 2
+                else -> 3
+            }
+        }
         grainCost = max(1, floor(grainCost * (1.0 + effects.grainConsumeMul)).toInt())
         if (state.pet?.alive == true) grainCost += 1
         report.expenseGrain += grainCost
