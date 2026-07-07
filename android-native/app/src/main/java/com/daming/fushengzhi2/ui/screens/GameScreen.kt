@@ -4,78 +4,92 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.daming.fushengzhi2.data.GameContent
+import com.daming.fushengzhi2.data.GameImages
 import com.daming.fushengzhi2.data.GameState
 import com.daming.fushengzhi2.data.GameTab
 import com.daming.fushengzhi2.data.MemberState
 import com.daming.fushengzhi2.logic.GameController
 import com.daming.fushengzhi2.logic.GameEngine
+import com.daming.fushengzhi2.ui.components.AssetBackground
+import com.daming.fushengzhi2.ui.components.AssetImage
 import com.daming.fushengzhi2.ui.components.DividerLine
 import com.daming.fushengzhi2.ui.components.EmptyHint
 import com.daming.fushengzhi2.ui.components.MingButton
 import com.daming.fushengzhi2.ui.components.MingCard
-import com.daming.fushengzhi2.ui.components.ResourcePill
 import com.daming.fushengzhi2.ui.components.SectionTitle
 import com.daming.fushengzhi2.ui.theme.MingColors
+import kotlinx.coroutines.delay
+
+private data class MainNavItem(val tab: GameTab, val label: String, val imagePath: String)
+
+private val mainNavItems = listOf(
+    MainNavItem(GameTab.Tree, "族谱", GameImages.NavTree),
+    MainNavItem(GameTab.Clan, "宗族", GameImages.NavClan),
+    MainNavItem(GameTab.Members, "族人", GameImages.NavMembers),
+    MainNavItem(GameTab.Industry, "经营", GameImages.NavIndustry),
+    MainNavItem(GameTab.Career, "功业", GameImages.NavCareer)
+)
 
 @Composable
 fun GameScreen(controller: GameController) {
     val state = controller.state ?: return
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MingColors.BgLight)
-    ) {
-        TopBar(state, controller)
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            when (controller.tab) {
-                GameTab.Tree -> FamilyTreePage(state, controller)
-                GameTab.Clan -> ClanPage(state, controller)
-                GameTab.Members -> MembersPage(state, controller)
-                GameTab.Industry -> IndustryPage(state, controller)
-                GameTab.Career -> CareerPage(state, controller)
-                GameTab.Academy -> AcademyPage(state, controller)
-                GameTab.Expedition -> ExpeditionPage(state, controller)
-                GameTab.Inventory -> InventoryPage(state, controller)
-                GameTab.Market -> MarketPage(state, controller)
-                GameTab.Battle -> BattlePage(state, controller)
+    LaunchedEffect(controller.speed, controller.latestReport, controller.screen) {
+        while (controller.speed > 0 && controller.latestReport == null && controller.screen == GameController.Screen.Game) {
+            delay(when (controller.speed) { 1 -> 4000L; 2 -> 2500L; else -> 1500L })
+            if (controller.speed > 0 && controller.latestReport == null && controller.screen == GameController.Screen.Game) {
+                controller.advanceMonth()
             }
         }
-        NavigationBar(containerColor = MingColors.BgPanel) {
-            GameTab.entries.forEach { tab ->
-                NavigationBarItem(
-                    selected = controller.tab == tab,
-                    onClick = { controller.switchTab(tab) },
-                    icon = { Text(tab.label.take(1), fontWeight = FontWeight.Bold) },
-                    label = { Text(tab.label) }
-                )
+    }
+
+    AssetBackground(
+        path = GameImages.BgMainLandscape,
+        modifier = Modifier.fillMaxSize(),
+        contentScale = ContentScale.Crop
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            TopBar(state, controller)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .widthIn(max = 820.dp)
+                    .align(Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                GameContentArea(state, controller)
             }
+            BottomNav(controller)
         }
     }
 
@@ -107,35 +121,291 @@ fun GameScreen(controller: GameController) {
 
 @Composable
 private fun TopBar(state: GameState, controller: GameController) {
-    Column(
-        Modifier
+    Box(
+        modifier = Modifier
             .fillMaxWidth()
-            .background(MingColors.BgPanel)
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .height(134.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text(state.clanName, color = MingColors.GoldDark, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text("${GameEngine.clanRankName(state)} · ${GameEngine.region(state).name}", color = MingColors.TextMuted, fontSize = 12.sp)
+        AssetImage(
+            path = GameImages.BgTopBar,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(state.clanName, color = MingColors.GoldDark, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text("${GameEngine.clanRankName(state)} · ${GameEngine.region(state).name}", color = MingColors.TextMuted, fontSize = 12.sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("${state.year}年${state.month}月", color = MingColors.TextPrimary, fontWeight = FontWeight.Bold)
+                    Text("传承${state.totalMonths}月", color = MingColors.TextMuted, fontSize = 12.sp)
+                }
             }
-            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
-                Text("${state.year}年${state.month}月", color = MingColors.TextPrimary, fontWeight = FontWeight.Bold)
-                Text("传承${state.totalMonths}月", color = MingColors.TextMuted, fontSize = 12.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                ResourceIconPill(GameImages.ResourceSilver, state.silver, MingColors.Silver, Modifier.weight(1f))
+                ResourceIconPill(GameImages.ResourceGrain, state.grain, MingColors.Grain, Modifier.weight(1f))
+                ResourceIconPill(GameImages.ResourceCloth, state.cloth, MingColors.Cloth, Modifier.weight(1f))
+                ResourceIconPill(GameImages.ResourceFame, state.fame, MingColors.Fame, Modifier.weight(1f))
+                ResourceIconPill(GameImages.ResourcePop, GameEngine.aliveMembers(state).size, MingColors.Green, Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SmallTopButton("存档") { controller.saveManual() }
+                    SmallTopButton("主菜单", danger = true) { controller.backToMenu() }
+                }
+                TimeControl(controller)
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            ResourcePill("银", state.silver, MingColors.Silver, Modifier.weight(1f))
-            ResourcePill("粮", state.grain, MingColors.Grain, Modifier.weight(1f))
-            ResourcePill("布", state.cloth, MingColors.Cloth, Modifier.weight(1f))
-            ResourcePill("名", state.fame, MingColors.Fame, Modifier.weight(1f))
-            ResourcePill("人", GameEngine.aliveMembers(state).size, MingColors.Green, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ResourceIconPill(icon: String, value: Int, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(androidx.compose.ui.graphics.Color(0xCCFFFCF0), RoundedCornerShape(9.dp))
+            .padding(horizontal = 5.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AssetImage(icon, null, Modifier.size(20.dp), ContentScale.Fit)
+        Text(com.daming.fushengzhi2.ui.components.formatNumber(value), color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun SmallTopButton(text: String, danger: Boolean = false, onClick: () -> Unit) {
+    Text(
+        text,
+        modifier = Modifier
+            .background(if (danger) MingColors.Red.copy(alpha = 0.9f) else MingColors.Primary.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        color = MingColors.BgWhite,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun TimeControl(controller: GameController) {
+    val icon = when (controller.speed) {
+        0 -> GameImages.IconPause
+        1 -> GameImages.IconPlay1x
+        2 -> GameImages.IconPlay2x
+        else -> GameImages.IconPlay3x
+    }
+    Box(
+        modifier = Modifier
+            .height(40.dp)
+            .width(168.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        AssetImage(GameImages.BgControlPanel, null, Modifier.fillMaxSize(), ContentScale.Crop)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            AssetImage(
+                path = icon,
+                contentDescription = "速度",
+                modifier = Modifier
+                    .size(30.dp)
+                    .clickable { controller.cycleSpeed() },
+                contentScale = ContentScale.Fit
+            )
+            Text(
+                "推进一月",
+                modifier = Modifier
+                    .background(MingColors.Primary, RoundedCornerShape(8.dp))
+                    .clickable { controller.advanceMonth() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                color = MingColors.BgWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
+    }
+}
+
+@Composable
+private fun GameContentArea(state: GameState, controller: GameController) {
+    when (controller.tab) {
+        GameTab.Tree -> FamilyTreePage(state, controller)
+        GameTab.Clan -> {
+            SubTabBar(GameController.ClanSubTab.entries, controller.clanSubTab, { it.label }, controller::switchClanSubTab)
+            when (controller.clanSubTab) {
+                GameController.ClanSubTab.Main -> ClanMainPage(state, controller)
+                GameController.ClanSubTab.Rules -> ClanRulesPage(state, controller)
+                GameController.ClanSubTab.Chronicle -> ClanChroniclePage(state)
+            }
+        }
+        GameTab.Members -> MembersPage(state, controller)
+        GameTab.Industry -> {
+            SubTabBar(GameController.IndustrySubTab.entries, controller.industrySubTab, { it.label }, controller::switchIndustrySubTab)
+            when (controller.industrySubTab) {
+                GameController.IndustrySubTab.Main -> IndustryPage(state, controller)
+                GameController.IndustrySubTab.Market -> MarketPage(state, controller)
+                GameController.IndustrySubTab.Store -> InventoryPage(state, controller)
+            }
+        }
+        GameTab.Career -> {
+            SubTabBar(GameController.CareerSubTab.entries, controller.careerSubTab, { it.label }, controller::switchCareerSubTab)
+            when (controller.careerSubTab) {
+                GameController.CareerSubTab.Career -> CareerPage(state, controller)
+                GameController.CareerSubTab.Academy -> AcademyPage(state, controller)
+                GameController.CareerSubTab.Expedition -> ExpeditionPage(state, controller)
+            }
+        }
+        GameTab.Battle -> BattlePage(state, controller)
+        GameTab.Academy -> AcademyPage(state, controller)
+        GameTab.Expedition -> ExpeditionPage(state, controller)
+        GameTab.Inventory -> InventoryPage(state, controller)
+        GameTab.Market -> MarketPage(state, controller)
+    }
+}
+
+@Composable
+private fun <T> SubTabBar(items: List<T>, selected: T, label: (T) -> String, onClick: (T) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { item ->
+            val isSelected = item == selected
+            Text(
+                label(item),
+                modifier = Modifier
+                    .weight(1f)
+                    .background(if (isSelected) MingColors.Primary else MingColors.BgWhite.copy(alpha = 0.88f), RoundedCornerShape(10.dp))
+                    .clickable { onClick(item) }
+                    .padding(vertical = 9.dp),
+                color = if (isSelected) MingColors.BgWhite else MingColors.TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun BottomNav(controller: GameController) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(96.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        AssetImage(GameImages.BgBottomNav, null, Modifier.fillMaxSize(), ContentScale.Crop)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            mainNavItems.forEach { item ->
+                BottomNavButton(item, selected = controller.tab == item.tab) { controller.switchTab(item.tab) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.BottomNavButton(item: MainNavItem, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .height(78.dp)
+            .alpha(if (selected) 1f else 0.78f)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        AssetImage(item.imagePath, item.label, Modifier.fillMaxSize(), ContentScale.Fit)
+        if (selected) {
+            Text(
+                "●",
+                modifier = Modifier.align(Alignment.TopCenter),
+                color = MingColors.Gold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun ClanMainPage(state: GameState, controller: GameController) {
+    SectionTitle("宗祠", "宗族品级、年度目标、祭祀与宠物")
+    MingCard {
+        Text("宗族信息", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        Text("门第：${GameEngine.clanRankName(state)}", color = MingColors.TextPrimary)
+        Text("族人：${GameEngine.aliveMembers(state).size} 人，产业：${state.industries.size} 个，寨堡：${state.fortCount} 座", color = MingColors.TextSecondary)
+        state.pet?.let { Text("宠物：${it.name}${if (it.alive) "" else "（已故）"}", color = MingColors.TextSecondary) }
+        val req = GameContent.rankRequirements[state.clanRank + 1]
+        if (req != null) {
+            DividerLine()
+            Text("晋升 ${GameContent.rankName(state.clanRank + 1)} 条件", color = MingColors.Gold)
+            Text("银${state.silver}/${req.silver}  粮${state.grain}/${req.grain}  布${state.cloth}/${req.cloth}  名${state.fame}/${req.fame}  人${GameEngine.aliveMembers(state).size}/${req.population}", color = MingColors.TextMuted, fontSize = 12.sp)
+            MingButton("晋升宗族", Modifier.fillMaxWidth(), enabled = GameEngine.canRankUp(state), onClick = controller::rankUp)
+        } else {
+            Text("已达最高品级。", color = MingColors.Gold)
+        }
+    }
+    MingCard {
+        Text("年度目标", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        if (state.yearlyGoals.isEmpty()) EmptyHint("暂无年度目标")
+        state.yearlyGoals.forEach { goalState ->
+            val goal = GameContent.yearlyGoal(goalState.goalId)
+            Text("${goal?.icon ?: "目"} ${goal?.name ?: goalState.goalId}：${goal?.desc ?: ""}${if (goalState.completed) " · 已完成" else ""}", color = if (goalState.completed) MingColors.Green else MingColors.TextSecondary, fontSize = 12.sp)
+        }
+    }
+    MingCard {
+        Text("祭祀与宠物", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MingButton("推进一月", Modifier.weight(1f), onClick = controller::advanceMonth)
-            MingButton("手动存档", Modifier.weight(1f), onClick = controller::saveManual)
-            MingButton("主菜单", Modifier.weight(1f), danger = true, onClick = controller::backToMenu)
+            MingButton("祭天祈福", Modifier.weight(1f), enabled = state.lastSacrificeYear != state.year && state.grain >= 50) { controller.sacrifice() }
+            MingButton("收养黄犬", Modifier.weight(1f), enabled = state.pet?.alive != true && state.grain >= 20) { controller.adoptPet("dog") }
         }
+    }
+    MingCard {
+        Text("成就", color = MingColors.GoldDark, fontWeight = FontWeight.Bold)
+        Text("已达成 ${state.unlockedAchievements.size}/${GameContent.achievements.size}", color = MingColors.TextMuted, fontSize = 12.sp)
+        state.unlockedAchievements.take(12).forEach { id ->
+            val ach = GameContent.achievement(id)
+            Text("${ach?.icon ?: "成"} ${ach?.name ?: id}", color = MingColors.Green, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun ClanRulesPage(state: GameState, controller: GameController) {
+    SectionTitle("族规", "启用家法宗规，改变长期经营节奏")
+    MingCard {
+        Text("当前可启用 ${GameContent.maxRulesByRank[state.clanRank] ?: 0} 条", color = MingColors.TextMuted, fontSize = 12.sp)
+        GameContent.clanRules.forEach { rule ->
+            val active = state.clanRules.contains(rule.id)
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { controller.toggleRule(rule.id) },
+                colors = CardDefaults.cardColors(containerColor = if (active) MingColors.BgPanel else MingColors.BgWhite),
+                border = BorderStroke(1.dp, if (active) MingColors.Gold else MingColors.Border)
+            ) {
+                Column(Modifier.padding(10.dp)) {
+                    Text("${rule.icon} ${rule.name}${if (active) " · 已启用" else ""}", color = if (active) MingColors.GoldDark else MingColors.TextPrimary, fontWeight = FontWeight.Bold)
+                    Text(rule.desc, color = MingColors.TextSecondary, fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClanChroniclePage(state: GameState) {
+    SectionTitle("家族志", "记录宗族每月兴衰与历史回响")
+    MingCard {
+        if (state.eventLog.isEmpty()) EmptyHint("尚无家族志记录")
+        state.eventLog.take(60).forEach { Text("${it.year}年${it.month}月 · ${it.text}", color = MingColors.TextSecondary, fontSize = 12.sp) }
     }
 }
 

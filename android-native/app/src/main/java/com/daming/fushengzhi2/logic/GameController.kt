@@ -3,14 +3,20 @@ package com.daming.fushengzhi2.logic
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.daming.fushengzhi2.audio.GameAudio
+import com.daming.fushengzhi2.data.BgmKey
 import com.daming.fushengzhi2.data.GameState
 import com.daming.fushengzhi2.data.GameTab
 import com.daming.fushengzhi2.data.MemberState
 import com.daming.fushengzhi2.data.MonthlyReport
+import com.daming.fushengzhi2.data.SfxKey
 import com.daming.fushengzhi2.persistence.SaveStore
 
-class GameController(private val saveStore: SaveStore) {
+class GameController(private val saveStore: SaveStore, val audio: GameAudio) {
     enum class Screen { Menu, Create, Game }
+    enum class ClanSubTab(val label: String) { Main("宗祠"), Rules("族规"), Chronicle("家族志") }
+    enum class IndustrySubTab(val label: String) { Main("产业"), Market("集市"), Store("库房") }
+    enum class CareerSubTab(val label: String) { Career("仕途"), Academy("书院"), Expedition("历练") }
 
     var screen by mutableStateOf(Screen.Menu)
         private set
@@ -18,64 +24,133 @@ class GameController(private val saveStore: SaveStore) {
         private set
     var tab by mutableStateOf(GameTab.Tree)
         private set
+    var clanSubTab by mutableStateOf(ClanSubTab.Main)
+        private set
+    var industrySubTab by mutableStateOf(IndustrySubTab.Main)
+        private set
+    var careerSubTab by mutableStateOf(CareerSubTab.Career)
+        private set
+    var speed by mutableStateOf(0)
+        private set
     var latestReport by mutableStateOf<MonthlyReport?>(null)
         private set
     var message by mutableStateOf<String?>(null)
         private set
 
     fun newGame(surname: String, originId: String, regionId: String, mottoId: String, difficultyId: String) {
+        audio.click()
         state = GameEngine.newGame(surname, originId, regionId, mottoId, difficultyId)
         tab = GameTab.Tree
+        clanSubTab = ClanSubTab.Main
+        industrySubTab = IndustrySubTab.Main
+        careerSubTab = CareerSubTab.Career
+        speed = 0
         latestReport = null
         saveStore.save(requireState(), SaveStore.Slot.Auto)
         screen = Screen.Game
+        audio.playGameBgm(requireState().year)
     }
 
     fun openCreate() {
+        audio.click()
         screen = Screen.Create
     }
 
     fun backToMenu() {
+        audio.back()
         state?.let { saveStore.save(it, SaveStore.Slot.Auto) }
         screen = Screen.Menu
+        audio.playBgm(BgmKey.Menu)
     }
 
     fun continueLatest() {
+        audio.click()
         val loaded = saveStore.loadLatest()
         if (loaded == null) {
             message = "暂无可继续的存档"
         } else {
             state = loaded
             tab = GameTab.Tree
+            clanSubTab = ClanSubTab.Main
+            industrySubTab = IndustrySubTab.Main
+            careerSubTab = CareerSubTab.Career
+            speed = 0
             latestReport = null
             screen = Screen.Game
+            audio.playGameBgm(loaded.year)
         }
     }
 
     fun hasAnySave(): Boolean = saveStore.latestSlot() != null
 
+    fun openArchiveHint() {
+        audio.click()
+        message = if (hasAnySave()) "已发现本地存档，可点击继续游戏读取最近进度。" else "暂无本地存档"
+    }
+
+    fun openSettingsHint() {
+        audio.click()
+        message = "已启用原作 BGM 与点击、切页、结算等音效。"
+    }
+
     fun saveManual() {
+        audio.click()
         saveStore.save(requireState(), SaveStore.Slot.Manual)
         message = "已保存到手动存档"
     }
 
     fun deleteSaves() {
+        audio.playSfx(SfxKey.UiBack)
         SaveStore.Slot.entries.forEach { saveStore.delete(it) }
         message = "本地存档已删除"
     }
 
     fun switchTab(next: GameTab) {
+        if (tab != next) audio.tabSwitch()
         tab = next
     }
 
+    fun switchClanSubTab(next: ClanSubTab) {
+        if (clanSubTab != next) audio.select()
+        clanSubTab = next
+    }
+
+    fun switchIndustrySubTab(next: IndustrySubTab) {
+        if (industrySubTab != next) audio.select()
+        industrySubTab = next
+    }
+
+    fun switchCareerSubTab(next: CareerSubTab) {
+        if (careerSubTab != next) audio.select()
+        careerSubTab = next
+    }
+
+    fun cycleSpeed() {
+        audio.click()
+        speed = (speed + 1) % 4
+    }
+
+    fun pauseSpeed() {
+        audio.click()
+        speed = 0
+    }
+
     fun advanceMonth() {
+        audio.monthTick()
         val (next, report) = GameEngine.advanceMonth(requireState())
         state = next
         latestReport = report
         saveStore.save(next, SaveStore.Slot.Auto)
+        audio.playGameBgm(next.year)
+        if (report.incomeSilver + report.incomeGrain + report.incomeCloth + report.incomeFame >= report.expenseSilver + report.expenseGrain + report.expenseCloth + report.expenseFame) {
+            audio.gain()
+        } else {
+            audio.loss()
+        }
     }
 
     fun rankUp() {
+        audio.celebrate()
         val before = requireState().clanRank
         val next = GameEngine.rankUp(requireState())
         state = next
@@ -84,6 +159,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun addIndustry(typeId: String) {
+        audio.click()
         val before = requireState()
         val next = GameEngine.addIndustry(before, typeId)
         state = next
@@ -92,6 +168,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun upgradeIndustry(industryId: Int) {
+        audio.click()
         val before = requireState()
         val next = GameEngine.upgradeIndustry(before, industryId)
         state = next
@@ -100,6 +177,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun sellIndustry(industryId: Int) {
+        audio.playSfx(SfxKey.UiBack)
         val before = requireState()
         val next = GameEngine.sellIndustry(before, industryId)
         state = next
@@ -108,6 +186,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun evolveIndustry(industryId: Int) {
+        audio.celebrate()
         val before = requireState()
         val next = GameEngine.evolveIndustry(before, industryId)
         state = next
@@ -121,16 +200,19 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun setMemberState(memberId: Int, memberState: MemberState, laborJobId: String? = null) {
+        audio.select()
         state = GameEngine.setMemberState(requireState(), memberId, memberState, laborJobId)
         saveStore.save(requireState(), SaveStore.Slot.Auto)
     }
 
     fun toggleRule(ruleId: String) {
+        audio.select()
         state = GameEngine.toggleClanRule(requireState(), ruleId)
         saveStore.save(requireState(), SaveStore.Slot.Auto)
     }
 
     fun buyMarketItem(itemId: String, count: Int = 1) {
+        audio.click()
         val before = requireState()
         val next = GameEngine.buyMarketItem(before, itemId, count)
         state = next
@@ -139,6 +221,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun sellMarketItem(itemId: String, count: Int = 1) {
+        audio.playSfx(SfxKey.UiBack)
         val before = requireState()
         val next = GameEngine.sellMarketItem(before, itemId, count)
         state = next
@@ -147,6 +230,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun useItem(itemId: String, memberId: Int? = null) {
+        audio.select()
         val before = requireState()
         val next = GameEngine.useItem(before, itemId, memberId)
         state = next
@@ -155,6 +239,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun upgradeAcademy(typeId: String) {
+        audio.click()
         val before = requireState()
         val next = GameEngine.upgradeAcademy(before, typeId)
         state = next
@@ -163,11 +248,13 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun assignAcademy(typeId: String, memberId: Int) {
+        audio.select()
         state = GameEngine.assignAcademy(requireState(), typeId, memberId)
         saveStore.save(requireState(), SaveStore.Slot.Auto)
     }
 
     fun startExpedition(typeId: String, memberId: Int) {
+        audio.select()
         val before = requireState()
         val next = GameEngine.startExpedition(before, typeId, memberId)
         state = next
@@ -176,6 +263,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun takeExam(memberId: Int, examId: String) {
+        audio.examPass()
         val before = requireState()
         val next = GameEngine.takeExam(before, memberId, examId)
         state = next
@@ -184,6 +272,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun donateIdentity(memberId: Int) {
+        audio.click()
         val before = requireState()
         val next = GameEngine.donateIdentity(before, memberId)
         state = next
@@ -192,6 +281,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun appointOfficial(memberId: Int, rankId: String) {
+        audio.celebrate()
         val before = requireState()
         val next = GameEngine.appointOfficial(before, memberId, rankId)
         state = next
@@ -200,6 +290,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun arrangeMarriage(memberId: Int, tierId: String) {
+        audio.celebrate()
         val before = requireState()
         val next = GameEngine.arrangeMarriage(before, memberId, tierId)
         state = next
@@ -208,6 +299,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun recruitArmy(infantry: Int, archers: Int) {
+        audio.battle()
         val before = requireState()
         val next = GameEngine.recruitArmy(before, infantry, archers)
         state = next
@@ -216,6 +308,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun trainArmy() {
+        audio.battle()
         val before = requireState()
         val next = GameEngine.trainArmy(before)
         state = next
@@ -224,6 +317,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun attackStage(stageId: Int) {
+        audio.battle()
         val before = requireState()
         val next = GameEngine.attackStage(before, stageId)
         state = next
@@ -232,6 +326,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun adoptPet(type: String) {
+        audio.celebrate()
         val before = requireState()
         val next = GameEngine.adoptPet(before, type)
         state = next
@@ -240,6 +335,7 @@ class GameController(private val saveStore: SaveStore) {
     }
 
     fun sacrifice() {
+        audio.celebrate()
         val before = requireState()
         val next = GameEngine.sacrifice(before)
         state = next
