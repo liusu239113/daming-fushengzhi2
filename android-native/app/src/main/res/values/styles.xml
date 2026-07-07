@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.DamingFushengzhi2" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">#FAF5E8</item>
+        <item name="android:statusBarColor">#FAF5E8</item>
+    </style>
+</resources>
