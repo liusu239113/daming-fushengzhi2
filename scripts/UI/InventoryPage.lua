@@ -26,7 +26,7 @@ function InventoryPage.Create(pageTitle, gameScreen)
 
     children[#children + 1] = UI.Label {
         text = "共有 " .. totalItems .. " 件物品",
-        fontSize = 12, fontColor = Theme.TEXT_SECONDARY,
+        fontSize = 14, fontColor = Theme.TEXT_SECONDARY,
     }
 
     if totalItems == 0 then
@@ -34,8 +34,8 @@ function InventoryPage.Create(pageTitle, gameScreen)
             width = "100%", paddingVertical = 40,
             justifyContent = "center", alignItems = "center",
             children = {
-                UI.Label { text = "库房空空如也", fontSize = 16, fontColor = Theme.TEXT_MUTED },
-                UI.Label { text = "通过探索历练可以获得物品", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 8 },
+                UI.Label { text = "库房空空如也", fontSize = 18, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "通过探索历练可以获得物品", fontSize = 13, fontColor = Theme.TEXT_MUTED, marginTop = 8 },
             },
         }
     else
@@ -82,13 +82,13 @@ function InventoryPage.BuildItemCard(slot, itemType, rarityColor, gameScreen)
                             backgroundColor = { rarityColor[1], rarityColor[2], rarityColor[3], 40 },
                             borderWidth = 1, borderColor = rarityColor,
                             justifyContent = "center", alignItems = "center",
-                            children = { UI.Label { text = itemType.icon, fontSize = 18 } },
+                            children = { UI.Label { text = itemType.icon, fontSize = 20 } },
                         },
                         UI.Panel {
                             gap = 2,
                             children = {
-                                UI.Label { text = itemType.name, fontSize = 14, fontColor = rarityColor },
-                                UI.Label { text = itemType.desc, fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                                UI.Label { text = itemType.name, fontSize = 16, fontColor = rarityColor },
+                                UI.Label { text = itemType.desc, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                             },
                         },
                     },
@@ -96,7 +96,7 @@ function InventoryPage.BuildItemCard(slot, itemType, rarityColor, gameScreen)
                 UI.Panel {
                     paddingHorizontal = 8, paddingVertical = 3, borderRadius = 6,
                     backgroundColor = Theme.BG_INPUT,
-                    children = { UI.Label { text = "x" .. slot.count, fontSize = 13, fontColor = Theme.TEXT_PRIMARY } },
+                    children = { UI.Label { text = "x" .. slot.count, fontSize = 15, fontColor = Theme.TEXT_PRIMARY } },
                 },
             },
         },
@@ -110,7 +110,7 @@ function InventoryPage.BuildItemCard(slot, itemType, rarityColor, gameScreen)
                 UI.Panel {
                     paddingHorizontal = 14, paddingVertical = 5, borderRadius = 6,
                     backgroundGradient = Theme.GRADIENT_PRIMARY,
-                    onClick = function(self)
+                    onTap = function(self)
                         local ok, msg = GameData.UseItem(slot.itemId, nil)
                         if ok then
                             gameScreen.ShowResultPopup("使用成功", msg)
@@ -119,7 +119,7 @@ function InventoryPage.BuildItemCard(slot, itemType, rarityColor, gameScreen)
                         end
                         gameScreen.RefreshAll()
                     end,
-                    children = { UI.Label { text = "使用", fontSize = 12, fontColor = Theme.TEXT_WHITE } },
+                    children = { UI.Label { text = "使用", fontSize = 14, fontColor = Theme.TEXT_WHITE } },
                 },
             },
         }
@@ -136,7 +136,7 @@ function InventoryPage.BuildItemCard(slot, itemType, rarityColor, gameScreen)
         end
 
         if #targets == 0 then
-            cardChildren[#cardChildren + 1] = UI.Label { text = "暂无合适使用对象", fontSize = 10, fontColor = Theme.TEXT_MUTED }
+            cardChildren[#cardChildren + 1] = UI.Label { text = "暂无合适使用对象", fontSize = 12, fontColor = Theme.TEXT_MUTED }
         else
             local memberItems = {}
             local showCount = math.min(4, #targets)
@@ -159,14 +159,14 @@ function InventoryPage.BuildItemCard(slot, itemType, rarityColor, gameScreen)
                         UI.Panel {
                             flexDirection = "row", gap = 6, alignItems = "center",
                             children = {
-                                UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-                                UI.Label { text = statText, fontSize = 10, fontColor = Theme.BLUE },
+                                UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+                                UI.Label { text = statText, fontSize = 12, fontColor = Theme.BLUE },
                             },
                         },
                         UI.Panel {
                             paddingHorizontal = 10, paddingVertical = 3, borderRadius = 5,
                             backgroundGradient = Theme.GRADIENT_PRIMARY,
-                            onClick = function(self)
+                            onTap = function(self)
                                 local ok, msg = GameData.UseItem(slot.itemId, m)
                                 if ok then
                                     gameScreen.ShowResultPopup("使用成功", msg)
@@ -175,13 +175,13 @@ function InventoryPage.BuildItemCard(slot, itemType, rarityColor, gameScreen)
                                 end
                                 gameScreen.RefreshAll()
                             end,
-                            children = { UI.Label { text = "使用", fontSize = 10, fontColor = Theme.TEXT_WHITE } },
+                            children = { UI.Label { text = "使用", fontSize = 12, fontColor = Theme.TEXT_WHITE } },
                         },
                     },
                 }
             end
             if #targets > showCount then
-                memberItems[#memberItems + 1] = UI.Label { text = "还有" .. (#targets - showCount) .. "人...", fontSize = 10, fontColor = Theme.TEXT_MUTED }
+                memberItems[#memberItems + 1] = UI.Label { text = "还有" .. (#targets - showCount) .. "人...", fontSize = 12, fontColor = Theme.TEXT_MUTED }
             end
             cardChildren[#cardChildren + 1] = UI.Panel { width = "100%", gap = 3, marginTop = 4, children = memberItems }
         end

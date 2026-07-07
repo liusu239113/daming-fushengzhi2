@@ -14,7 +14,7 @@ local CreateGame = {}
 local function SectionLabel(text)
     return UI.Label {
         text = text,
-        fontSize = 12,
+        fontSize = 14,
         fontColor = Theme.GOLD,
         marginBottom = 2,
     }
@@ -314,7 +314,7 @@ function CreateGame.Create(callbacks)
         local img = DIFF_IMGS[diff.id]
         diffCards[#diffCards + 1] = UI.Panel {
             id = "diff_" .. diff.id,
-            height = 42,
+            height = 52,
             flexGrow = 1, flexBasis = 0,
             borderRadius = 10,
             borderWidth = sel and 3 or 1,
@@ -371,12 +371,12 @@ function CreateGame.Create(callbacks)
                             if callbacks.onBack then callbacks.onBack() end
                         end,
                         children = {
-                            UI.Label { text = "<", fontSize = 18, fontColor = Theme.GOLD },
+                            UI.Label { text = "<", fontSize = 20, fontColor = Theme.GOLD },
                         },
                     },
                     UI.Label {
                         text = "开局创建",
-                        fontSize = 16,
+                        fontSize = 18,
                         fontColor = Theme.TEXT_TITLE,
                         marginLeft = 6,
                     },
@@ -396,7 +396,7 @@ function CreateGame.Create(callbacks)
                     -- 所有选择区域
                     UI.Panel {
                         width = "100%",
-                        gap = 5,
+                        gap = 14,
                         children = {
                             -- 姓氏
                             UI.Panel {
@@ -410,13 +410,13 @@ function CreateGame.Create(callbacks)
                                     UI.Panel {
                                         flexDirection = "row", alignItems = "center", gap = 6, marginTop = 1,
                                         children = {
-                                            UI.Label { text = "自定义:", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                                            UI.Label { text = "自定义:", fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
                                             UI.TextField {
                                                 id = "customSurnameField",
                                                 placeholder = "输入",
                                                 maxLength = 2,
                                                 width = 60, height = 28,
-                                                fontSize = 12,
+                                                fontSize = 14,
                                                 onChange = function(self, v)
                                                     if v and #v > 0 then
                                                         customSurname = v
@@ -459,7 +459,7 @@ function CreateGame.Create(callbacks)
                                 width = "100%", gap = 2,
                                 children = {
                                     SectionLabel("游戏难度"),
-                                    UI.Panel { flexDirection = "row", gap = 6, width = "100%", children = diffCards },
+                                    UI.Panel { flexDirection = "row", gap = 10, width = "100%", children = diffCards },
                                 },
                             },
                             -- 选中项信息
@@ -474,7 +474,7 @@ function CreateGame.Create(callbacks)
                                     UI.Label {
                                         id = "infoText",
                                         text = infoText,
-                                        fontSize = 10,
+                                        fontSize = 12,
                                         fontColor = Theme.TEXT_SECONDARY,
                                         lineHeight = 1.4,
                                         whiteSpace = "normal",

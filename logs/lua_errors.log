@@ -1,4 +1,20 @@
-Lua Errors: 0 | Dir: /workspace/scripts | Time: 2026-05-16 06:04:15
+Lua Errors: 17 | Dir: /workspace/scripts | Time: 2026-07-07 21:21:15
 EmmyLua Types: /workspace/.emmylua
 ---
-✅ No errors
+ERROR | BattleScene.lua:1022:38 | expected `LabelProps?` but found `{ id = "enemyInfo", text = never, fontSize = 14, fontColor = (255,180,180,255), ... }`. [param-type-mismatch]
+ERROR | MonthlyUpdate.lua:622:25 | Cannot assign `(0.1|0.2|0.3)` to `integer`. [assign-type-mismatch]
+ERROR | SkillSystem.lua:38:23 | Annotations specify that return value 2 has a type of `string`, returning value of type `(string|"路径不存在")?` here instead. [return-type-mismatch]
+ERROR | CareerPage.lua:340:21 | Cannot assign `Label` to `Panel?`. [assign-type-mismatch]
+ERROR | CareerPage.lua:532:9 | Cannot assign `Panel` to `Label?`. [assign-type-mismatch]
+ERROR | EventPage.lua:88:29 | Cannot assign `Panel` to `Label?`. [assign-type-mismatch]
+ERROR | EventPage.lua:109:25 | Cannot assign `Panel` to `Label?`. [assign-type-mismatch]
+ERROR | GameScreen.lua:151:38 | expected `LabelProps?` but found `{ id = "clanNameLabel", text = never, fontSize = 16, fontColor = (170,130,40,255), ... }`. [param-type-mismatch]
+ERROR | GameScreen.lua:1155:46 | expected `LabelProps?` but found `{ text = never, fontSize = 18, fontColor = (195,155,60,255), ... }`. [param-type-mismatch]
+ERROR | InventoryPage.lua:162:42 | expected `LabelProps?` but found `{ text = never, fontSize = 14, fontColor = (45,38,28,255), ... }`. [param-type-mismatch]
+ERROR | InventoryPage.lua:139:13 | Cannot assign `Label` to `Panel?`. [assign-type-mismatch]
+ERROR | ModalDialogs.lua:2452:30 | expected `LabelProps?` but found `{ text = never, fontSize = 12, fontColor = (130,122,108,255), ... }`. [param-type-mismatch]
+ERROR | ModalDialogs.lua:2576:38 | expected `LabelProps?` but found `{ text = ("冠"|"亚"|"季"|"殿"...), fontSize = 16, fontColor = ((70,85...)|(130,122...)|(195,155...)), ... }`. [param-type-mismatch]
+ERROR | ModalDialogs.lua:2117:9 | Cannot assign `Label` to `Panel?`. [assign-type-mismatch]
+ERROR | ModalDialogs.lua:2228:9 | Cannot assign `Label` to `Panel?`. [assign-type-mismatch]
+ERROR | ModalDialogs.lua:2384:13 | Cannot assign `Label` to `Panel?`. [assign-type-mismatch]
+ERROR | ModalDialogs.lua:2426:9 | Cannot assign `Label` to `Panel?`. [assign-type-mismatch]

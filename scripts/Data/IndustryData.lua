@@ -58,13 +58,13 @@ IndustryData.INDUSTRY_TYPES = {
     { id = "bookshop",    name = "书坊", resource = "fame", baseOutput = 6,   cost = 650,
       desc = "刊印经书，声名远扬兼赚银两",
       resource2 = "silver", baseOutput2 = 5, specialEffect = "study_grow_10" },
-    { id = "salt_field",  name = "盐场", resource = "silver", baseOutput = 20, cost = 1000,
+    { id = "salt_field",  name = "盐场", resource = "silver", baseOutput = 25, cost = 1000,
       desc = "贩盐暴利，但官府稽查严厉", specialEffect = "risk_tax_30" },
 
     -- === 勋贵（6级）===
-    { id = "money_house", name = "钱庄", resource = "silver", baseOutput = 15, cost = 850,
+    { id = "money_house", name = "钱庄", resource = "silver", baseOutput = 20, cost = 850,
       desc = "放贷收息，银两按总资产额外生利", specialEffect = "interest_2pct" },
-    { id = "fleet",       name = "船队", resource = "silver", baseOutput = 25, cost = 1400,
+    { id = "fleet",       name = "船队", resource = "silver", baseOutput = 32, cost = 1400,
       desc = "海上贸易，利润极高但受季风影响", specialEffect = "season_amplify" },
     { id = "estate",      name = "庄园", resource = "grain", baseOutput = 10, cost = 1200,
       desc = "良田美宅，粮银名三收",
@@ -72,36 +72,36 @@ IndustryData.INDUSTRY_TYPES = {
       resource3 = "fame", baseOutput3 = 3 },
 
     -- === 名门（7级）===
-    { id = "pawnshop",    name = "当铺", resource = "silver", baseOutput = 22, cost = 1600,
+    { id = "pawnshop",    name = "当铺", resource = "silver", baseOutput = 26, cost = 1600,
       desc = "典当质押，乱世暴利；每月额外按银两存量+1%收益", specialEffect = "interest_1pct",
       evolvesTo = "piaohao" },
-    { id = "dye_house",   name = "染坊", resource = "cloth", baseOutput = 10, cost = 1300,
+    { id = "dye_house",   name = "染坊", resource = "cloth", baseOutput = 12, cost = 1300,
       desc = "染制锦缎彩绸，布匹兼赚银两",
-      resource2 = "silver", baseOutput2 = 10 },
-    { id = "private_school", name = "私塾", resource = "fame", baseOutput = 8, cost = 1100,
+      resource2 = "silver", baseOutput2 = 12 },
+    { id = "private_school", name = "私塾", resource = "fame", baseOutput = 10, cost = 1100,
       desc = "开馆授徒，声名远播；全族学识成长+10%", specialEffect = "study_grow_10",
-      resource2 = "silver", baseOutput2 = 6 },
-    { id = "canal_wharf", name = "漕运码头", resource = "silver", baseOutput = 28, cost = 1800,
+      resource2 = "silver", baseOutput2 = 8 },
+    { id = "canal_wharf", name = "漕运码头", resource = "silver", baseOutput = 38, cost = 1800,
       desc = "扼守漕运要道，南北货物中转抽成", specialEffect = "trade_hub" },
 
     -- === 豪阀（8级）===
-    { id = "arsenal",     name = "军械坊", resource = "silver", baseOutput = 20, cost = 2200,
+    { id = "arsenal",     name = "军械坊", resource = "silver", baseOutput = 30, cost = 2200,
       desc = "铸造兵器甲胄，供给官军；从军族人战力+25%",
-      resource2 = "fame", baseOutput2 = 6, specialEffect = "military_boost_25" },
-    { id = "weaving_bureau", name = "织造局", resource = "cloth", baseOutput = 16, cost = 2000,
+      resource2 = "fame", baseOutput2 = 8, specialEffect = "military_boost_25" },
+    { id = "weaving_bureau", name = "织造局", resource = "cloth", baseOutput = 20, cost = 2000,
       desc = "承接官府织造，丝绸贡品；布匹银两声望三收",
-      resource2 = "silver", baseOutput2 = 15,
-      resource3 = "fame", baseOutput3 = 4 },
+      resource2 = "silver", baseOutput2 = 22,
+      resource3 = "fame", baseOutput3 = 6 },
 
     -- === 国柱（9级）===
-    { id = "imperial_merchant", name = "皇商行", resource = "silver", baseOutput = 50, cost = 4000,
+    { id = "imperial_merchant", name = "皇商行", resource = "silver", baseOutput = 60, cost = 4000,
       desc = "皇家特许经营，垄断盐铁茶叶；暴利但每月消耗声望3", specialEffect = "consume_fame_3" },
-    { id = "customs_house", name = "海关行", resource = "silver", baseOutput = 40, cost = 3500,
+    { id = "customs_house", name = "海关行", resource = "silver", baseOutput = 50, cost = 3500,
       desc = "把持海关贸易，坐收厘金；银两兼得声望",
-      resource2 = "fame", baseOutput2 = 8 },
-    { id = "grand_farmland", name = "万亩良田", resource = "grain", baseOutput = 40, cost = 3000,
+      resource2 = "fame", baseOutput2 = 10 },
+    { id = "grand_farmland", name = "万亩良田", resource = "grain", baseOutput = 45, cost = 3000,
       desc = "良田万亩，粮仓丰盈；粮食银两双收，不受天灾影响",
-      resource2 = "silver", baseOutput2 = 15, specialEffect = "weather_immune" },
+      resource2 = "silver", baseOutput2 = 20, specialEffect = "weather_immune" },
 }
 
 -- 产业进化表：从低级进化为高级（需产业等级>=3 + 品级达标 + 银两）
@@ -130,15 +130,15 @@ IndustryData.INDUSTRY_EVOLUTION = {
 
 -- 进化后的高级产业（不在建造菜单中出现，只能通过进化获得）
 IndustryData.EVOLVED_INDUSTRY_TYPES = {
-    { id = "fertile_field", name = "良田", resource = "grain", baseOutput = 22, cost = 0,
+    { id = "fertile_field", name = "良田", resource = "grain", baseOutput = 22, cost = 500,
       desc = "精耕良田，产量极高", evolved = true },
-    { id = "trade_house",   name = "商号", resource = "silver", baseOutput = 18, cost = 0,
+    { id = "trade_house",   name = "商号", resource = "silver", baseOutput = 18, cost = 600,
       desc = "连锁商号，日进斗金",
       resource2 = "fame", baseOutput2 = 3, evolved = true },
-    { id = "silk_house",    name = "绸缎庄", resource = "cloth", baseOutput = 12, cost = 0,
+    { id = "silk_house",    name = "绸缎庄", resource = "cloth", baseOutput = 12, cost = 500,
       desc = "丝绸锦缎，布匹兼赚银两",
       resource2 = "silver", baseOutput2 = 5, evolved = true },
-    { id = "piaohao",     name = "票号", resource = "silver", baseOutput = 35, cost = 0,
+    { id = "piaohao",     name = "票号", resource = "silver", baseOutput = 35, cost = 1200,
       desc = "汇通天下，跨省银票兑付；按总资产额外生利2%",
       specialEffect = "interest_2pct", evolved = true },
 }

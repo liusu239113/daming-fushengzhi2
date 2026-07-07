@@ -71,14 +71,15 @@ local function CreateCommodityCard(commodity, pageTitle, gameScreen)
 
     -- 购买按钮组
     local buyButtons = {}
-    local buyAmounts = { 1, 5, 10 }
+    local buyAmounts = { 1, 10, 100, 1000 }
     for _, amt in ipairs(buyAmounts) do
         local cost = MarketSystem.CalcBuyCost(cid, amt)
         local canBuy = s.silver >= cost
+        local label = amt >= 1000 and ("买" .. string.format("%.0f", amt / 1000) .. "k") or ("买" .. amt)
         buyButtons[#buyButtons + 1] = UI.Button {
-            text = "买" .. amt,
-            fontSize = 11,
-            paddingHorizontal = 8, paddingVertical = 4,
+            text = label,
+            fontSize = 12,
+            paddingHorizontal = 6, paddingVertical = 4,
             variant = canBuy and "primary" or "outline",
             disabled = not canBuy,
             onClick = function()
@@ -98,13 +99,14 @@ local function CreateCommodityCard(commodity, pageTitle, gameScreen)
 
     -- 出售按钮组
     local sellButtons = {}
-    local sellAmounts = { 1, 5, 10 }
+    local sellAmounts = { 1, 10, 100, 1000 }
     for _, amt in ipairs(sellAmounts) do
         local canSell = maxSell >= amt
+        local label = amt >= 1000 and ("卖" .. string.format("%.0f", amt / 1000) .. "k") or ("卖" .. amt)
         sellButtons[#sellButtons + 1] = UI.Button {
-            text = "卖" .. amt,
-            fontSize = 11,
-            paddingHorizontal = 8, paddingVertical = 4,
+            text = label,
+            fontSize = 12,
+            paddingHorizontal = 6, paddingVertical = 4,
             variant = canSell and "outline" or "outline",
             disabled = not canSell,
             onClick = function()
@@ -141,14 +143,14 @@ local function CreateCommodityCard(commodity, pageTitle, gameScreen)
                                 backgroundColor = Theme.PRIMARY_LIGHT,
                                 justifyContent = "center", alignItems = "center",
                                 children = {
-                                    UI.Label { text = commodity.icon, fontSize = 16, fontColor = Theme.PRIMARY },
+                                    UI.Label { text = commodity.icon, fontSize = 18, fontColor = Theme.PRIMARY },
                                 },
                             },
                             UI.Panel {
                                 gap = 1,
                                 children = {
-                                    UI.Label { text = commodity.name, fontSize = 14, fontColor = Theme.TEXT_TITLE },
-                                    UI.Label { text = commodity.desc, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = commodity.name, fontSize = 16, fontColor = Theme.TEXT_TITLE },
+                                    UI.Label { text = commodity.desc, fontSize = 11, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
                         },
@@ -160,11 +162,11 @@ local function CreateCommodityCard(commodity, pageTitle, gameScreen)
                             UI.Panel {
                                 flexDirection = "row", alignItems = "center", gap = 3,
                                 children = {
-                                    UI.Label { text = priceText, fontSize = 14, fontColor = Theme.GOLD_DARK },
-                                    UI.Label { text = tc.icon, fontSize = 13, fontColor = tc.color },
+                                    UI.Label { text = priceText, fontSize = 16, fontColor = Theme.GOLD_DARK },
+                                    UI.Label { text = tc.icon, fontSize = 15, fontColor = tc.color },
                                 },
                             },
-                            UI.Label { text = "卖出价: " .. sellPrice .. "两", fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = "卖出价: " .. sellPrice .. "两", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         },
                     },
                 },
@@ -175,8 +177,8 @@ local function CreateCommodityCard(commodity, pageTitle, gameScreen)
                 width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                 paddingHorizontal = 2,
                 children = {
-                    UI.Label { text = "持有: " .. stockDisplay, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = histText, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = "持有: " .. stockDisplay, fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = histText, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                 },
             },
 
@@ -231,12 +233,12 @@ local function CreateStatsPanel()
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = "集", fontSize = 16, fontColor = Theme.GOLD },
+                            UI.Label { text = "集", fontSize = 18, fontColor = Theme.GOLD },
                             UI.Panel {
                                 gap = 1,
                                 children = {
-                                    UI.Label { text = (MONTH_NAMES[month] or "") .. "集市", fontSize = 14, fontColor = Theme.TEXT_TITLE },
-                                    UI.Label { text = seasonName .. " · 价格随季节波动", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = (MONTH_NAMES[month] or "") .. "集市", fontSize = 16, fontColor = Theme.TEXT_TITLE },
+                                    UI.Label { text = seasonName .. " · 价格随季节波动", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
                         },
@@ -244,8 +246,8 @@ local function CreateStatsPanel()
                     UI.Panel {
                         alignItems = "flex-end", gap = 1,
                         children = {
-                            UI.Label { text = "银两: " .. s.silver, fontSize = 12, fontColor = Theme.SILVER_COLOR },
-                            UI.Label { text = "交易" .. stats.tradeCount .. "次", fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = "银两: " .. s.silver, fontSize = 14, fontColor = Theme.SILVER_COLOR },
+                            UI.Label { text = "交易" .. stats.tradeCount .. "次", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         },
                     },
                 },
@@ -281,7 +283,7 @@ function MarketPage.Create(pageTitle, gameScreen)
             width = "100%", padding = 10, borderRadius = 8,
             backgroundGradient = { direction = "horizontal", from = {218, 165, 32, 255}, to = {255, 200, 50, 255} },
             flexDirection = "row", justifyContent = "space-between", alignItems = "center",
-            onClick = function(self)
+            onTap = function(self)
                 -- 以本月已消费总额的20%作为返还基础
                 local spent = (GameData.state.market and GameData.state.market.monthlySpent) or 0
                 if spent <= 0 then
@@ -307,17 +309,17 @@ function MarketPage.Create(pageTitle, gameScreen)
                 UI.Panel {
                     flexDirection = "row", gap = 6, alignItems = "center",
                     children = {
-                        UI.Label { text = "▶", fontSize = 14, fontColor = {80, 40, 0, 255} },
+                        UI.Label { text = "▶", fontSize = 16, fontColor = {80, 40, 0, 255} },
                         UI.Panel {
                             gap = 1,
                             children = {
-                                UI.Label { text = "看广告领交易返利", fontSize = 13, fontColor = {80, 40, 0, 255} },
-                                UI.Label { text = "购物后观看广告返还20%银两", fontSize = 9, fontColor = {120, 80, 20, 255} },
+                                UI.Label { text = "看广告领交易返利", fontSize = 15, fontColor = {80, 40, 0, 255} },
+                                UI.Label { text = "购物后观看广告返还20%银两", fontSize = 11, fontColor = {120, 80, 20, 255} },
                             },
                         },
                     },
                 },
-                UI.Label { text = "剩" .. discountRemain .. "次", fontSize = 11, fontColor = {120, 80, 20, 255} },
+                UI.Label { text = "剩" .. discountRemain .. "次", fontSize = 13, fontColor = {120, 80, 20, 255} },
             },
         }
     end
@@ -333,7 +335,7 @@ function MarketPage.Create(pageTitle, gameScreen)
         children = {
             UI.Label {
                 text = "提示: 卖出价为买入价的八折。善于观察价格趋势，低买高卖可获厚利。",
-                fontSize = 10, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal",
+                fontSize = 12, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal",
             },
         },
     }

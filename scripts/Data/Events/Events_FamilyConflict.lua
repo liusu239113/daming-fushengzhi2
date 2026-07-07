@@ -13,8 +13,8 @@ local events = {}
 -- 辅助函数
 -- ============================================================================
 
---- 获取可用战士（用于内斗战斗）
-local function GetFighters(count)
+--- 获取所有可用战士（用于内斗战斗）
+local function GetAllFighters()
     local candidates = {}
     for _, m in ipairs(GameData.GetAliveMembers()) do
         if m.gender == "male" and m.age >= 16 and m.age <= 55
@@ -23,11 +23,16 @@ local function GetFighters(count)
         end
     end
     table.sort(candidates, function(a, b) return (a.martial or 0) > (b.martial or 0) end)
-    local result = {}
-    for i = 1, math.min(count, #candidates) do
-        result[#result + 1] = candidates[i]
+    return candidates
+end
+
+--- 获取前N个战士的名字列表（用于描述文本）
+local function GetFighterNames(fighters, count)
+    local names = {}
+    for i = 1, math.min(count or 4, #fighters) do
+        names[#names + 1] = fighters[i].name
     end
-    return result
+    return names
 end
 
 --- 根据品级获取内斗强度系数
@@ -136,15 +141,15 @@ events[#events + 1] = {
             return nil -- 无合适叛逆者，不触发
         end
 
-        local fighters = GetFighters(3)
-        local fighterIds = {}
-        local fighterNames = {}
-        for _, f in ipairs(fighters) do
+        local allFighters = GetAllFighters()
+        -- 排除叛逆者后的可战族人（用于人数检查和描述文本）
+        local loyalFighters = {}
+        for _, f in ipairs(allFighters) do
             if f.id ~= rebel.id then
-                fighterIds[#fighterIds + 1] = f.id
-                fighterNames[#fighterNames + 1] = f.name
+                loyalFighters[#loyalFighters + 1] = f
             end
         end
+        local fighterNames = GetFighterNames(loyalFighters, 3)
 
         local rebelMartial = rebel.martial or 30
         local silverBribe = math.floor(50 * scale)
@@ -165,7 +170,7 @@ events[#events + 1] = {
             choices = {
                 -- 选项1：武力镇压（3D战斗）
                 { text = "武力镇压叛逆！（战斗）", effect = function()
-                    if #fighterIds == 0 then
+                    if #loyalFighters == 0 then
                         -- 无人可战，直接惨败
                         local silverLoss = math.floor(80 * scale)
                         local grainLoss = math.floor(40 * scale)
@@ -181,12 +186,13 @@ events[#events + 1] = {
 
                     local rival = GenerateRebelRival(rebel.name, rebelMartial, s.clanRank)
                     local GS = require("UI.GameScreen")
-                    GS.EnterBattle(rival, fighterIds, {
+                    GS.EventBattle(allFighters, rival, {
                         soldierCount = 0,
                         onSettle = function(result, rivalData, deployedIds)
                             if result == "victory" then
                                 GameData.AddResource("fame", fameWin)
                                 GameData.AddLog("镇压叛乱成功！" .. rebel.name .. "被擒获，族权稳固。声望+" .. fameWin)
+
                                 -- 叛逆者被惩罚：禁闭（生病状态模拟）
                                 rebel.health = math.max(1, rebel.health - 30)
                                 if rebel.state ~= "生病" then rebel.prevState = rebel.state end
@@ -241,7 +247,7 @@ events[#events + 1] = {
                                 end
                             end
                         end,
-                    })
+                    }, { excludeIds = { rebel.id } })
                 end },
                 -- 选项2：金钱安抚
                 { text = "重金安抚、分给" .. rebel.name .. "产业（-" .. silverBribe .. "银两）",
@@ -395,13 +401,11 @@ events[#events + 1] = {
         local rebel = PickRebel(nil)
         if not rebel then return nil end
 
-        local fighters = GetFighters(3)
-        local fighterIds = {}
-        local fighterNames = {}
-        for _, f in ipairs(fighters) do
+        local allFighters = GetAllFighters()
+        local loyalFighters = {}
+        for _, f in ipairs(allFighters) do
             if f.id ~= rebel.id then
-                fighterIds[#fighterIds + 1] = f.id
-                fighterNames[#fighterNames + 1] = f.name
+                loyalFighters[#loyalFighters + 1] = f
             end
         end
 
@@ -427,7 +431,7 @@ events[#events + 1] = {
                 { text = "坚决不允！祖宗规矩不可违（可能引发武斗）", effect = function()
                     -- 50%概率叛逆者武力抗争
                     if math.random(100) <= 50 then
-                        if #fighterIds == 0 then
+                        if #loyalFighters == 0 then
                             -- 无人可战
                             GameData.AddResource("silver", -silverSplit)
                             GameData.AddResource("fame", -fameLoss)
@@ -439,7 +443,7 @@ events[#events + 1] = {
                         -- 触发战斗
                         local rival = GenerateRebelRival(rebel.name, rebel.martial or 35, s.clanRank)
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = 0,
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -480,7 +484,7 @@ events[#events + 1] = {
                                     end
                                 end
                             end,
-                        })
+                        }, { excludeIds = { rebel.id } })
                     else
                         -- 叛逆者屈服
                         GameData.AddResource("fame", math.floor(fameLoss * 0.3))
@@ -764,14 +768,8 @@ events[#events + 1] = {
                         -- heir1发动武力反抗
                         local rival = GenerateRebelRival(heir1.name, heir1.martial or 40, s.clanRank)
                         local GS = require("UI.GameScreen")
-                        -- 玩家方由heir2和其他族人出战
-                        local defenderIds = { heir2.id }
-                        for _, f in ipairs(GetFighters(2)) do
-                            if f.id ~= heir1.id and f.id ~= heir2.id then
-                                defenderIds[#defenderIds + 1] = f.id
-                            end
-                        end
-                        GS.EnterBattle(rival, defenderIds, {
+                        local allFighters = GetAllFighters()
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = 0,
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -799,7 +797,7 @@ events[#events + 1] = {
                                     end
                                 end
                             end,
-                        })
+                        }, { excludeIds = { heir1.id }, preSelectedIds = { heir2.id } })
                     else
                         heir1.alive = false
                         heir1.deathCause = "出走"

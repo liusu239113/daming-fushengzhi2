@@ -22,8 +22,8 @@ local function GetMissionScale(rank)
     return scales[rank] or 1.0
 end
 
---- 获取族中最强的N个战斗力族人信息
-local function GetTopFighters(count)
+--- 获取所有可用战士（按武艺降序）
+local function GetAllFighters()
     local candidates = {}
     for _, m in ipairs(GameData.GetAliveMembers()) do
         if m.gender == "male" and m.age >= 16 and m.age <= 55
@@ -32,11 +32,16 @@ local function GetTopFighters(count)
         end
     end
     table.sort(candidates, function(a, b) return (a.martial or 0) > (b.martial or 0) end)
-    local result = {}
-    for i = 1, math.min(count, #candidates) do
-        result[#result + 1] = candidates[i]
+    return candidates
+end
+
+--- 获取前N个战士的名字列表（用于描述文本）
+local function GetFighterNames(fighters, count)
+    local names = {}
+    for i = 1, math.min(count or 4, #fighters) do
+        names[#names + 1] = fighters[i].name
     end
-    return result
+    return names
 end
 
 --- 获取族中官员（知县/知府/布政使）
@@ -74,18 +79,13 @@ events[#events + 1] = {
     isDisaster = false,
     isChainEvent = false,
     check = function(s)
-        local fighters = GetTopFighters(1)
+        local fighters = GetAllFighters()
         return #fighters > 0
     end,
     execute = function(s, report)
         local scale = GetMissionScale(s.clanRank)
-        local fighters = GetTopFighters(3)
-        local fighterNames = {}
-        local fighterIds = {}
-        for _, f in ipairs(fighters) do
-            fighterNames[#fighterNames + 1] = f.name
-            fighterIds[#fighterIds + 1] = f.id
-        end
+        local allFighters = GetAllFighters()
+        local fighterNames = GetFighterNames(allFighters, 3)
         local nameStr = table.concat(fighterNames, "、")
 
         local bribeCost = math.floor(40 * scale)
@@ -103,11 +103,11 @@ events[#events + 1] = {
             title = "剿匪征令",
             desc = "兵部行文至本族：" .. banditName .. "盘踞山林，劫掠商旅，为祸一方。"
                 .. "朝廷责令地方勋贵限期剿灭，违令者以通匪论处。\n\n"
-                .. "族中可战之人：" .. nameStr .. "（武艺最高者" .. (fighters[1] and fighters[1].martial or 0) .. "）",
+                .. "族中可战之人：" .. nameStr .. "（武艺最高者" .. (allFighters[1] and allFighters[1].martial or 0) .. "）",
             choices = {
                 -- 选项1：亲自出兵剿匪（3D战斗）
                 { text = "派族人亲率兵丁剿匪（战斗）", effect = function()
-                    if #fighterIds == 0 then
+                    if #allFighters == 0 then
                         s.pendingEvents[#s.pendingEvents + 1] = {
                             title = "无人可战",
                             desc = "族中无人能战，只得花银子雇佣镖师代为剿匪，耗费巨大。",
@@ -165,7 +165,7 @@ events[#events + 1] = {
                     }
                     local victoryBonus = { fame = fameReward }
                     local GS = require("UI.GameScreen")
-                    GS.EnterBattle(rival, fighterIds, {
+                    GS.EventBattle(allFighters, rival, {
                         soldierCount = 0,
                         onSettle = function(result, rivalData, deployedIds)
                             -- 自定义结算
@@ -325,18 +325,13 @@ events[#events + 1] = {
     isDisaster = false,
     isChainEvent = false,
     check = function(s)
-        local fighters = GetTopFighters(1)
+        local fighters = GetAllFighters()
         return #fighters > 0 and s.year >= 1400
     end,
     execute = function(s, report)
         local scale = GetMissionScale(s.clanRank)
-        local fighters = GetTopFighters(4)
-        local fighterNames = {}
-        local fighterIds = {}
-        for _, f in ipairs(fighters) do
-            fighterNames[#fighterNames + 1] = f.name
-            fighterIds[#fighterIds + 1] = f.id
-        end
+        local allFighters = GetAllFighters()
+        local fighterNames = GetFighterNames(allFighters, 4)
         local nameStr = table.concat(fighterNames, "、")
 
         local silverCost = math.floor(80 * scale)
@@ -359,7 +354,7 @@ events[#events + 1] = {
             choices = {
                 -- 选项1：倾力勤王（触发高难度战斗）
                 { text = "倾力勤王、以命报国（战斗，高难度）", effect = function()
-                    if #fighterIds == 0 then
+                    if #allFighters == 0 then
                         GameData.AddResource("fame", -fameLoss)
                         GameData.AddLog("族中无人可战，勤王令未能奉行，朝廷记过。")
                         return
@@ -408,7 +403,7 @@ events[#events + 1] = {
                         fame = fameLoss * 2,
                     }
                     local GS = require("UI.GameScreen")
-                    GS.EnterBattle(rival, fighterIds, {
+                    GS.EventBattle(allFighters, rival, {
                         soldierCount = 0,
                         onSettle = function(result, rivalData, deployedIds)
                             if result == "victory" then
@@ -916,18 +911,13 @@ events[#events + 1] = {
     isDisaster = false,
     isChainEvent = false,
     check = function(s)
-        local fighters = GetTopFighters(1)
+        local fighters = GetAllFighters()
         return #fighters > 0
     end,
     execute = function(s, report)
         local scale = GetMissionScale(s.clanRank)
-        local fighters = GetTopFighters(3)
-        local fighterNames = {}
-        local fighterIds = {}
-        for _, f in ipairs(fighters) do
-            fighterNames[#fighterNames + 1] = f.name
-            fighterIds[#fighterIds + 1] = f.id
-        end
+        local allFighters = GetAllFighters()
+        local fighterNames = GetFighterNames(allFighters, 3)
 
         local clothCost = math.floor(25 * scale)
         local silverCost = math.floor(30 * scale)
@@ -949,7 +939,7 @@ events[#events + 1] = {
                 { text = "族人亲自领队护送", effect = function()
                     -- 40%概率遭遇劫匪
                     if math.random(100) <= 40 then
-                        if #fighterIds == 0 then
+                        if #allFighters == 0 then
                             GameData.AddResource("cloth", -clothCost)
                             GameData.AddResource("silver", -silverCost)
                             GameData.AddResource("fame", -math.floor(fameReward * 0.8))
@@ -990,7 +980,7 @@ events[#events + 1] = {
                             unitStyle = "bandit",
                         }
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = 0,
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then

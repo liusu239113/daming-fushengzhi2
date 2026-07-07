@@ -36,7 +36,7 @@ local function CreateMemberCard(member, screen)
         width = "100%", padding = 10, borderRadius = 8,
         backgroundColor = Theme.BG_WHITE,
         borderWidth = 1, borderColor = Theme.BORDER, gap = 4,
-        onClick = function(self) AudioManager.Click() screen.ShowMemberDetail(member) end,
+        onTap = function() AudioManager.Click() screen.ShowMemberDetail(member) end,
         children = {
             UI.Panel {
                 flexDirection = "row", justifyContent = "space-between", alignItems = "center",
@@ -44,31 +44,31 @@ local function CreateMemberCard(member, screen)
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 4,
                         children = {
-                            UI.Label { text = member.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
-                            UI.Label { text = genderIcon, fontSize = 12, fontColor = genderColor },
+                            UI.Label { text = member.name, fontSize = 16, fontColor = Theme.TEXT_PRIMARY },
+                            UI.Label { text = genderIcon, fontSize = 14, fontColor = genderColor },
                         },
                     },
                     UI.Panel {
                         paddingHorizontal = 6, paddingVertical = 2, borderRadius = 4,
                         backgroundColor = { stateColor[1], stateColor[2], stateColor[3], 30 },
-                        children = { UI.Label { text = member.state, fontSize = 10, fontColor = stateColor } },
+                        children = { UI.Label { text = member.state, fontSize = 12, fontColor = stateColor } },
                     },
                 },
             },
             UI.Panel {
                 flexDirection = "row", gap = 8,
                 children = {
-                    UI.Label { text = member.age .. "岁", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = member.identity, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = member.talent and member.talent.name or "", fontSize = 11, fontColor = Theme.GOLD_DARK },
+                    UI.Label { text = member.age .. "岁", fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = member.identity, fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = member.talent and member.talent.name or "", fontSize = 13, fontColor = Theme.GOLD_DARK },
                 },
             },
             UI.Panel {
                 flexDirection = "row", gap = 6,
                 children = {
-                    UI.Label { text = "健" .. member.health, fontSize = 10, fontColor = member.health > 50 and Theme.GREEN or Theme.RED },
-                    UI.Label { text = "学" .. member.study, fontSize = 10, fontColor = Theme.BLUE },
-                    UI.Label { text = "武" .. member.martial, fontSize = 10, fontColor = Theme.RED },
+                    UI.Label { text = "健" .. member.health, fontSize = 12, fontColor = member.health > 50 and Theme.GREEN or Theme.RED },
+                    UI.Label { text = "学" .. member.study, fontSize = 12, fontColor = Theme.BLUE },
+                    UI.Label { text = "武" .. member.martial, fontSize = 12, fontColor = Theme.RED },
                 },
             },
         },
@@ -117,7 +117,7 @@ function MemberPage.Create(PageTitle, screen)
                 memberFilter_ = opt
                 screen.RefreshContent()
             end,
-            children = { UI.Label { text = opt, fontSize = 11, fontColor = active and Theme.TEXT_WHITE or Theme.TEXT_SECONDARY } },
+            children = { UI.Label { text = opt, fontSize = 13, fontColor = active and Theme.TEXT_WHITE or Theme.TEXT_SECONDARY } },
         }
     end
 
@@ -139,7 +139,7 @@ function MemberPage.Create(PageTitle, screen)
             end,
             children = { UI.Label {
                 text = active and ("▼" .. opt.label) or opt.label,
-                fontSize = 11, fontColor = active and Theme.GREEN or Theme.TEXT_MUTED,
+                fontSize = 13, fontColor = active and Theme.GREEN or Theme.TEXT_MUTED,
             }},
         }
     end
@@ -152,7 +152,7 @@ function MemberPage.Create(PageTitle, screen)
     if #memberCards == 0 then
         memberCards[#memberCards + 1] = UI.Label {
             text = memberSearch_ ~= "" and "未找到匹配的族人" or "宗族无人存活……",
-            fontSize = 14, fontColor = Theme.TEXT_MUTED, textAlign = "center", marginTop = 20,
+            fontSize = 16, fontColor = Theme.TEXT_MUTED, textAlign = "center", marginTop = 20,
         }
     end
 
@@ -170,7 +170,7 @@ function MemberPage.Create(PageTitle, screen)
                         width = "100%",
                         placeholder = "搜索族人姓名…",
                         value = memberSearch_,
-                        fontSize = 13,
+                        fontSize = 15,
                         onChange = function(self, text)
                             memberSearch_ = text
                             screen.RefreshContent()
@@ -191,14 +191,14 @@ function MemberPage.Create(PageTitle, screen)
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
                             UI.Panel { flexDirection = "row", gap = 4, alignItems = "center", children = {
-                                UI.Label { text = "排序:", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = "排序:", fontSize = 13, fontColor = Theme.TEXT_MUTED },
                                 table.unpack(sortBtns),
                             }},
                             UI.Panel {
                                 paddingHorizontal = 12, paddingVertical = 6, borderRadius = 6,
                                 backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.GOLD_DARK,
                                 onClick = function(self) AudioManager.Click() screen.ShowBatchAssign() end,
-                                children = { UI.Label { text = "批量安排", fontSize = 12, fontColor = Theme.GOLD } },
+                                children = { UI.Label { text = "批量安排", fontSize = 14, fontColor = Theme.GOLD } },
                             },
                         },
                     },

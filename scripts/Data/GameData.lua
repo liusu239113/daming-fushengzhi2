@@ -522,6 +522,7 @@ GameData.TAB_UNLOCK = {
 GameData.SUB_TAB_UNLOCK = {
     clan_main      = 1,  -- 寒门：宗祠
     clan_rules     = 2,  -- 农户：族规
+    clan_chronicle = 1,  -- 寒门：家族志
     ind_main       = 1,  -- 寒门：产业
     ind_market     = 3,  -- 乡绅：集市
     ind_store      = 4,  -- 望族：库房
@@ -1093,8 +1094,10 @@ function GameData.SellIndustry(industryId)
     local indType = GameData.GetIndustryType(ind.typeId)
     if not indType then return false, "产业类型未知" end
 
-    -- 回收价 = 建造成本 50%
-    local refund = math.floor(indType.cost * 0.5)
+    -- 回收价 = (建造成本 + 累计升级费) * 50%
+    local totalInvest = indType.cost
+    for lv = 1, ind.level - 1 do totalInvest = totalInvest + indType.cost * lv end
+    local refund = math.floor(totalInvest * 0.5)
 
     -- 寨堡计数
     if ind.typeId == "fort" then
@@ -1346,6 +1349,13 @@ function GameData.NotifyDeath(member, cause, detail)
         choices = {
             { text = "节哀顺变", effect = function() end },
         },
+    }
+    -- 紧接着推送葬礼事件（让玩家在讣告后选择是否举办葬礼）
+    s.pendingEvents[#s.pendingEvents + 1] = {
+        title  = "葬礼",
+        desc   = "",
+        type   = "funeral",
+        member = member,  -- 保存逝者引用
     }
 end
 

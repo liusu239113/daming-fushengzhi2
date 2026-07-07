@@ -161,17 +161,17 @@ local function CreateAreaCard(area)
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = area.id .. ".", fontSize = 11, fontColor = labelColor },
-                            UI.Label { text = area.name, fontSize = 14, fontColor = labelColor, fontWeight = "bold" },
-                            isConquered and UI.Label { text = "V", fontSize = 11, fontColor = { 100, 200, 100, 255 } } or nil,
+                            UI.Label { text = area.id .. ".", fontSize = 13, fontColor = labelColor },
+                            UI.Label { text = area.name, fontSize = 16, fontColor = labelColor, fontWeight = "bold" },
+                            isConquered and UI.Label { text = "V", fontSize = 13, fontColor = { 100, 200, 100, 255 } } or nil,
                         },
                     },
-                    UI.Label { text = area.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = area.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                     UI.Panel {
                         flexDirection = "row", gap = 8,
                         children = {
-                            UI.Label { text = "敌兵" .. FormatNumber(minSoldier) .. "~" .. FormatNumber(maxSoldier), fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = total .. "关", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "敌兵" .. FormatNumber(minSoldier) .. "~" .. FormatNumber(maxSoldier), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = total .. "关", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                         },
                     },
                 },
@@ -181,7 +181,7 @@ local function CreateAreaCard(area)
                 paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
                 backgroundColor = isConquered and { 100, 200, 100, 30 } or (isUnlocked and { 200, 160, 50, 30 } or { 120, 120, 120, 20 }),
                 children = {
-                    UI.Label { text = statusText, fontSize = 11, fontColor = labelColor, fontWeight = "bold" },
+                    UI.Label { text = statusText, fontSize = 13, fontColor = labelColor, fontWeight = "bold" },
                 },
             },
         },
@@ -223,11 +223,11 @@ local function CreateAreaSelectView()
                             UI.Panel {
                                 flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                                 children = {
-                                    UI.Label { text = "征伐天下", fontSize = 18, fontColor = Theme.GOLD, letterSpacing = 2 },
-                                    UI.Label { text = totalConquered .. "/" .. totalStages .. " 关", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = "征伐天下", fontSize = 20, fontColor = Theme.GOLD, letterSpacing = 2 },
+                                    UI.Label { text = totalConquered .. "/" .. totalStages .. " 关", fontSize = 14, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
-                            UI.Label { text = "选择区域，逐步征服天下", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
+                            UI.Label { text = "选择区域，逐步征服天下", fontSize = 13, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
                         },
                     },
 
@@ -238,32 +238,32 @@ local function CreateAreaSelectView()
                         borderWidth = 1, borderColor = Theme.PRIMARY,
                         gap = 8,
                         children = {
-                            UI.Label { text = "我军兵力", fontSize = 13, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "我军兵力", fontSize = 15, fontColor = Theme.PRIMARY, fontWeight = "bold" },
                             UI.Panel {
                                 flexDirection = "row", justifyContent = "space-around",
                                 children = {
                                     UI.Panel { alignItems = "center", gap = 2, children = {
-                                        UI.Label { text = "步兵", fontSize = 10, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = FormatNumber(infantry), fontSize = 15, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = "步兵", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = FormatNumber(infantry), fontSize = 17, fontColor = Theme.PRIMARY, fontWeight = "bold" },
                                     }},
                                     UI.Panel { alignItems = "center", gap = 2, children = {
-                                        UI.Label { text = "弓兵", fontSize = 10, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = FormatNumber(archers), fontSize = 15, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = "弓兵", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = FormatNumber(archers), fontSize = 17, fontColor = Theme.PRIMARY, fontWeight = "bold" },
                                     }},
                                     UI.Panel { alignItems = "center", gap = 2, children = {
-                                        UI.Label { text = "总兵力", fontSize = 10, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = FormatNumber(total) .. "/" .. FormatNumber(RivalClans.MAX_ARMY_SIZE), fontSize = 13, fontColor = Theme.TEXT_PRIMARY },
+                                        UI.Label { text = "总兵力", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = FormatNumber(total) .. "/" .. FormatNumber(RivalClans.MAX_ARMY_SIZE), fontSize = 15, fontColor = Theme.TEXT_PRIMARY },
                                     }},
                                     UI.Panel { alignItems = "center", gap = 2, children = {
-                                        UI.Label { text = "训练", fontSize = 10, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = "Lv" .. trainingLevel .. " " .. levelName, fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                        UI.Label { text = "训练", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = "Lv" .. trainingLevel .. " " .. levelName, fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold" },
                                     }},
                                 },
                             },
                             -- 月耗提示
                             total > 0 and UI.Label {
                                 text = "月耗：银两" .. math.ceil(total / 1000 * 1200) .. " 粮食" .. math.ceil(total / 1000 * 1500),
-                                fontSize = 10, fontColor = Theme.TEXT_MUTED,
+                                fontSize = 12, fontColor = Theme.TEXT_MUTED,
                             } or nil,
                         },
                     },
@@ -280,7 +280,7 @@ local function CreateAreaSelectView()
                                     AudioManager.Click()
                                     ShowConscriptModal("infantry")
                                 end,
-                                children = { UI.Label { text = "征步兵", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
+                                children = { UI.Label { text = "征步兵", fontSize = 15, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
                             },
                             UI.Panel {
                                 flexGrow = 1, flexBasis = 0,
@@ -290,7 +290,7 @@ local function CreateAreaSelectView()
                                     AudioManager.Click()
                                     ShowConscriptModal("archers")
                                 end,
-                                children = { UI.Label { text = "征弓兵", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
+                                children = { UI.Label { text = "征弓兵", fontSize = 15, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
                             },
                             UI.Panel {
                                 flexGrow = 1, flexBasis = 0,
@@ -316,7 +316,7 @@ local function CreateAreaSelectView()
                                         text = trainingLevel < RivalClans.MAX_TRAINING_LEVEL
                                             and ("训练 银" .. RivalClans.TRAINING_COST.silver .. " 粮" .. RivalClans.TRAINING_COST.grain)
                                             or "训练已满",
-                                        fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold",
+                                        fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold",
                                     },
                                 },
                             },
@@ -328,8 +328,8 @@ local function CreateAreaSelectView()
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         marginTop = 4,
                         children = {
-                            UI.Label { text = "战役区域", fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                            UI.Label { text = "逐步征服解锁下一区域", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = "战役区域", fontSize = 16, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "逐步征服解锁下一区域", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                         },
                     },
 
@@ -402,17 +402,17 @@ local function CreateStageCard(stage)
                             stage.isBoss and UI.Panel {
                                 paddingHorizontal = 4, paddingVertical = 1, borderRadius = 3,
                                 backgroundColor = { 220, 80, 60, 40 },
-                                children = { UI.Label { text = "BOSS", fontSize = 9, fontColor = { 220, 80, 60, 255 }, fontWeight = "bold" } },
+                                children = { UI.Label { text = "BOSS", fontSize = 11, fontColor = { 220, 80, 60, 255 }, fontWeight = "bold" } },
                             } or nil,
-                            UI.Label { text = stage.name, fontSize = 14, fontColor = labelColor, fontWeight = "bold" },
+                            UI.Label { text = stage.name, fontSize = 16, fontColor = labelColor, fontWeight = "bold" },
                         },
                     },
-                    UI.Label { text = stage.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = stage.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                     UI.Panel {
                         flexDirection = "row", gap = 8,
                         children = {
-                            UI.Label { text = "敌兵" .. FormatNumber(stage.soldierRange[1]) .. "~" .. FormatNumber(stage.soldierRange[2]), fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = "敌将" .. stage.memberRange[1] .. "~" .. stage.memberRange[2] .. "人", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "敌兵" .. FormatNumber(stage.soldierRange[1]) .. "~" .. FormatNumber(stage.soldierRange[2]), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "敌将" .. stage.memberRange[1] .. "~" .. stage.memberRange[2] .. "人", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                         },
                     },
                 },
@@ -422,7 +422,7 @@ local function CreateStageCard(stage)
                 paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
                 backgroundColor = isConquered and { 100, 200, 100, 30 } or (isUnlocked and { 200, 160, 50, 30 } or { 120, 120, 120, 20 }),
                 children = {
-                    UI.Label { text = statusText, fontSize = 11, fontColor = labelColor, fontWeight = "bold" },
+                    UI.Label { text = statusText, fontSize = 13, fontColor = labelColor, fontWeight = "bold" },
                 },
             },
         },
@@ -462,13 +462,13 @@ local function CreateStageSelectView()
                                     selectedArea_ = nil
                                     BattlePrepPage.Refresh()
                                 end,
-                                children = { UI.Label { text = "< 返回", fontSize = 12, fontColor = Theme.TEXT_SECONDARY } },
+                                children = { UI.Label { text = "< 返回", fontSize = 14, fontColor = Theme.TEXT_SECONDARY } },
                             },
                             UI.Panel {
                                 gap = 1, flexShrink = 1,
                                 children = {
-                                    UI.Label { text = area.name, fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
-                                    UI.Label { text = area.desc .. "  进度 " .. conquered .. "/" .. total, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = area.name, fontSize = 18, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                    UI.Label { text = area.desc .. "  进度 " .. conquered .. "/" .. total, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
                         },
@@ -516,21 +516,21 @@ local function CreateDeployMemberCard(member)
                     UI.Panel {
                         flexDirection = "row", gap = 4, alignItems = "center",
                         children = {
-                            UI.Label { text = member.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY },
-                            UI.Label { text = member.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = member.name, fontSize = 15, fontColor = Theme.TEXT_PRIMARY },
+                            UI.Label { text = member.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                             member.militaryRank and UI.Panel {
                                 paddingHorizontal = 4, paddingVertical = 1, borderRadius = 3,
                                 backgroundColor = { 66, 133, 244, 25 },
-                                children = { UI.Label { text = member.militaryRank, fontSize = 9, fontColor = Theme.BLUE } },
+                                children = { UI.Label { text = member.militaryRank, fontSize = 11, fontColor = Theme.BLUE } },
                             } or nil,
                         },
                     },
                     UI.Panel {
                         flexDirection = "row", gap = 8,
                         children = {
-                            UI.Label { text = "武" .. member.martial, fontSize = 11, fontColor = Theme.RED },
-                            UI.Label { text = "健" .. member.health, fontSize = 11, fontColor = Theme.GREEN },
-                            member.talent and UI.Label { text = member.talent.name, fontSize = 10, fontColor = Theme.GOLD_DARK } or nil,
+                            UI.Label { text = "武" .. member.martial, fontSize = 13, fontColor = Theme.RED },
+                            UI.Label { text = "健" .. member.health, fontSize = 13, fontColor = Theme.GREEN },
+                            member.talent and UI.Label { text = member.talent.name, fontSize = 12, fontColor = Theme.GOLD_DARK } or nil,
                         },
                     },
                 },
@@ -542,7 +542,7 @@ local function CreateDeployMemberCard(member)
                 borderWidth = 1, borderColor = isSelected and Theme.PRIMARY or Theme.BORDER,
                 justifyContent = "center", alignItems = "center",
                 children = {
-                    isSelected and UI.Label { text = "V", fontSize = 12, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } or nil,
+                    isSelected and UI.Label { text = "V", fontSize = 14, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } or nil,
                 },
             },
         },
@@ -564,8 +564,8 @@ local function CreateMemberSelectView()
         memberCards[#memberCards + 1] = UI.Panel {
             width = "100%", padding = 20, alignItems = "center",
             children = {
-                UI.Label { text = "没有可出战的族人", fontSize = 14, fontColor = Theme.TEXT_MUTED },
-                UI.Label { text = "需要从军状态的男性族人、武艺>0、健康>30", fontSize = 10, fontColor = Theme.TEXT_MUTED, marginTop = 4 },
+                UI.Label { text = "没有可出战的族人", fontSize = 16, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "需要从军状态的男性族人、武艺>0、健康>30", fontSize = 12, fontColor = Theme.TEXT_MUTED, marginTop = 4 },
             },
         }
     end
@@ -594,13 +594,13 @@ local function CreateMemberSelectView()
                                     selectedMembers_ = {}
                                     BattlePrepPage.Refresh()
                                 end,
-                                children = { UI.Label { text = "< 返回", fontSize = 12, fontColor = Theme.TEXT_SECONDARY } },
+                                children = { UI.Label { text = "< 返回", fontSize = 14, fontColor = Theme.TEXT_SECONDARY } },
                             },
                             UI.Panel {
                                 gap = 1,
                                 children = {
-                                    UI.Label { text = "征伐 " .. (stage and stage.name or ""), fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
-                                    UI.Label { text = "选择出战将领（最多" .. MAX_DEPLOY .. "人）", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = "征伐 " .. (stage and stage.name or ""), fontSize = 18, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                    UI.Label { text = "选择出战将领（最多" .. MAX_DEPLOY .. "人）", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
                         },
@@ -614,16 +614,16 @@ local function CreateMemberSelectView()
                         flexDirection = "row", justifyContent = "space-around",
                         children = {
                             UI.Panel { alignItems = "center", children = {
-                                UI.Label { text = "敌军", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-                                UI.Label { text = rival.name, fontSize = 13, fontColor = Theme.RED, fontWeight = "bold" },
+                                UI.Label { text = "敌军", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = rival.name, fontSize = 15, fontColor = Theme.RED, fontWeight = "bold" },
                             }},
                             UI.Panel { alignItems = "center", children = {
-                                UI.Label { text = "敌将", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-                                UI.Label { text = #rival.members .. "人", fontSize = 13, fontColor = Theme.RED, fontWeight = "bold" },
+                                UI.Label { text = "敌将", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = #rival.members .. "人", fontSize = 15, fontColor = Theme.RED, fontWeight = "bold" },
                             }},
                             UI.Panel { alignItems = "center", children = {
-                                UI.Label { text = "敌兵", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-                                UI.Label { text = FormatNumber(rival.soldiers), fontSize = 13, fontColor = Theme.RED, fontWeight = "bold" },
+                                UI.Label { text = "敌兵", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = FormatNumber(rival.soldiers), fontSize = 15, fontColor = Theme.RED, fontWeight = "bold" },
                             }},
                         },
                     } or nil,
@@ -632,8 +632,8 @@ local function CreateMemberSelectView()
                     UI.Panel {
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
-                            UI.Label { text = "可出战将领", fontSize = 13, fontColor = Theme.TEXT_PRIMARY },
-                            UI.Label { text = "已选 " .. selectedCount .. "/" .. MAX_DEPLOY, fontSize = 12, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "可出战将领", fontSize = 15, fontColor = Theme.TEXT_PRIMARY },
+                            UI.Label { text = "已选 " .. selectedCount .. "/" .. MAX_DEPLOY, fontSize = 14, fontColor = Theme.PRIMARY, fontWeight = "bold" },
                         },
                     },
 
@@ -659,8 +659,8 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
             UI.Panel {
                 flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                 children = {
-                    UI.Label { text = label, fontSize = 13, fontColor = Theme.TEXT_PRIMARY },
-                    UI.Label { text = FormatNumber(value) .. " / " .. FormatNumber(maxValue), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = label, fontSize = 15, fontColor = Theme.TEXT_PRIMARY },
+                    UI.Label { text = FormatNumber(value) .. " / " .. FormatNumber(maxValue), fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
                 },
             },
             -- 按钮 + 进度条
@@ -678,7 +678,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                                 onDecrease()
                             end
                         end,
-                        children = { UI.Label { text = "-", fontSize = 18, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
+                        children = { UI.Label { text = "-", fontSize = 20, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
                     },
                     -- 进度条
                     UI.Panel {
@@ -710,7 +710,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                                 onIncrease()
                             end
                         end,
-                        children = { UI.Label { text = "+", fontSize = 18, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
+                        children = { UI.Label { text = "+", fontSize = 20, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
                     },
                 },
             },
@@ -725,7 +725,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                             AudioManager.Click()
                             onIncrease(0)
                         end,
-                        children = { UI.Label { text = "清零", fontSize = 10, fontColor = Theme.TEXT_MUTED } },
+                        children = { UI.Label { text = "清零", fontSize = 12, fontColor = Theme.TEXT_MUTED } },
                     },
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
@@ -735,7 +735,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                             local half = math.floor(maxValue / 200) * 100
                             onIncrease(half)
                         end,
-                        children = { UI.Label { text = "半数", fontSize = 10, fontColor = Theme.TEXT_MUTED } },
+                        children = { UI.Label { text = "半数", fontSize = 12, fontColor = Theme.TEXT_MUTED } },
                     },
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
@@ -744,7 +744,7 @@ local function CreateAdjustRow(label, value, maxValue, onDecrease, onIncrease)
                             AudioManager.Click()
                             onIncrease(maxValue)
                         end,
-                        children = { UI.Label { text = "全部", fontSize = 10, fontColor = Theme.TEXT_MUTED } },
+                        children = { UI.Label { text = "全部", fontSize = 12, fontColor = Theme.TEXT_MUTED } },
                     },
                 },
             },
@@ -794,13 +794,13 @@ local function CreateTroopAssignView()
                                     phase_ = "member_select"
                                     BattlePrepPage.Refresh()
                                 end,
-                                children = { UI.Label { text = "< 返回", fontSize = 12, fontColor = Theme.TEXT_SECONDARY } },
+                                children = { UI.Label { text = "< 返回", fontSize = 14, fontColor = Theme.TEXT_SECONDARY } },
                             },
                             UI.Panel {
                                 gap = 1,
                                 children = {
-                                    UI.Label { text = "兵力部署", fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
-                                    UI.Label { text = "分配步兵和弓兵出战", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = "兵力部署", fontSize = 18, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                    UI.Label { text = "分配步兵和弓兵出战", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
                         },
@@ -813,36 +813,36 @@ local function CreateTroopAssignView()
                         borderWidth = 1, borderColor = Theme.BORDER,
                         gap = 6,
                         children = {
-                            UI.Label { text = "征伐 " .. (stage and stage.name or ""), fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
+                            UI.Label { text = "征伐 " .. (stage and stage.name or ""), fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
                             UI.Panel {
                                 flexDirection = "row", justifyContent = "space-around", flexWrap = "wrap", gap = 4,
                                 children = {
                                     UI.Panel { alignItems = "center", children = {
-                                        UI.Label { text = "我将", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = selectedCount .. "人", fontSize = 14, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = "我将", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = selectedCount .. "人", fontSize = 16, fontColor = Theme.PRIMARY, fontWeight = "bold" },
                                     }},
                                     UI.Panel { alignItems = "center", children = {
-                                        UI.Label { text = "出征兵力", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = FormatNumber(totalDeploy) .. "(" .. totalDeployUnits .. "营)", fontSize = 14, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = "出征兵力", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = FormatNumber(totalDeploy) .. "(" .. totalDeployUnits .. "营)", fontSize = 16, fontColor = Theme.PRIMARY, fontWeight = "bold" },
                                     }},
                                     UI.Panel { alignItems = "center", children = {
-                                        UI.Label { text = "训练", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = levelName, fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                        UI.Label { text = "训练", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = levelName, fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
                                     }},
                                     UI.Panel { alignItems = "center", children = {
-                                        UI.Label { text = "寨防", fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = "寨防", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                                         UI.Label {
                                             text = (GameData.state.fortCount or 0) > 0
                                                 and ("+" .. math.min(GameData.state.fortCount, 5) * 2 .. "防")
                                                 or "无",
-                                            fontSize = 14,
+                                            fontSize = 16,
                                             fontColor = (GameData.state.fortCount or 0) > 0 and Theme.GREEN or Theme.TEXT_MUTED,
                                             fontWeight = "bold",
                                         },
                                     }},
                                     UI.Panel { alignItems = "center", children = {
-                                        UI.Label { text = "敌兵", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-                                        UI.Label { text = enemyUnits .. "营", fontSize = 14, fontColor = Theme.RED, fontWeight = "bold" },
+                                        UI.Label { text = "敌兵", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = enemyUnits .. "营", fontSize = 16, fontColor = Theme.RED, fontWeight = "bold" },
                                     }},
                                 },
                             },
@@ -894,8 +894,8 @@ local function CreateTroopAssignView()
                                 borderWidth = 1, borderColor = Theme.PRIMARY,
                                 flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 6,
                                 children = {
-                                    UI.Label { text = "战力加持已激活", fontSize = 12, fontColor = Theme.PRIMARY, fontWeight = "bold" },
-                                    UI.Label { text = "从军族人属性+10%", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                                    UI.Label { text = "战力加持已激活", fontSize = 14, fontColor = Theme.PRIMARY, fontWeight = "bold" },
+                                    UI.Label { text = "从军族人属性+10%", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                                 },
                             }
                         elseif AdSystem.IsAvailable("battle_boost") then
@@ -914,8 +914,8 @@ local function CreateTroopAssignView()
                                     end)
                                 end,
                                 children = {
-                                    UI.Label { text = "▶ 看广告·战力加持+10%", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
-                                    UI.Label { text = "(" .. adRemain .. "次)", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                                    UI.Label { text = "▶ 看广告·战力加持+10%", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                    UI.Label { text = "(" .. adRemain .. "次)", fontSize = 11, fontColor = { 255, 255, 255, 160 } },
                                 },
                             }
                         end
@@ -931,10 +931,10 @@ local function CreateTroopAssignView()
                             UI.Panel {
                                 flexDirection = "row", gap = 10,
                                 children = {
-                                    UI.Label { text = "胜利奖励:", fontSize = 11, fontColor = Theme.TEXT_MUTED },
-                                    UI.Label { text = "银" .. rival.rewards.silver, fontSize = 11, fontColor = Theme.SILVER_COLOR },
-                                    UI.Label { text = "粮" .. rival.rewards.grain, fontSize = 11, fontColor = Theme.GRAIN_COLOR },
-                                    UI.Label { text = "望" .. rival.rewards.fame, fontSize = 11, fontColor = Theme.FAME_COLOR },
+                                    UI.Label { text = "胜利奖励:", fontSize = 13, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = "银" .. rival.rewards.silver, fontSize = 13, fontColor = Theme.SILVER_COLOR },
+                                    UI.Label { text = "粮" .. rival.rewards.grain, fontSize = 13, fontColor = Theme.GRAIN_COLOR },
+                                    UI.Label { text = "望" .. rival.rewards.fame, fontSize = 13, fontColor = Theme.FAME_COLOR },
                                 },
                             },
                         },
@@ -981,7 +981,7 @@ local function CreateBottomButton()
                     children = {
                         UI.Label {
                             text = canProceed and "下一步 - 分配兵力" or "请选择出战人员",
-                            fontSize = 15, fontColor = canProceed and Theme.TEXT_WHITE or Theme.TEXT_MUTED, fontWeight = "bold",
+                            fontSize = 17, fontColor = canProceed and Theme.TEXT_WHITE or Theme.TEXT_MUTED, fontWeight = "bold",
                         },
                     },
                 },
@@ -1044,7 +1044,7 @@ local function CreateBottomButton()
                             text = canFight
                                 and ("出征讨伐 " .. (selectedRival_ and selectedRival_.name or "") .. "（" .. FormatNumber(totalDeploy) .. "兵）")
                                 or "请分配兵力",
-                            fontSize = 14, fontColor = canFight and Theme.TEXT_WHITE or Theme.TEXT_MUTED, fontWeight = "bold",
+                            fontSize = 16, fontColor = canFight and Theme.TEXT_WHITE or Theme.TEXT_MUTED, fontWeight = "bold",
                         },
                     },
                 },

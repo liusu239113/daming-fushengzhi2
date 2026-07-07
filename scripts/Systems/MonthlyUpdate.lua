@@ -418,7 +418,7 @@ function MonthlyUpdate.ProcessIndustries(report, ruleEffects)
     for _, ind in ipairs(s.industries) do
         local indType = GameData.GetIndustryType(ind.typeId)
         if indType and indType.resource ~= "none" then
-            local fee = math.floor(indType.cost * 0.018 * ind.level)
+            local fee = math.floor(math.sqrt(indType.cost) * 0.3 * (1 + math.log(ind.level) * 0.5))
             totalMaintenance = totalMaintenance + fee
         end
     end
@@ -1532,26 +1532,26 @@ function MonthlyUpdate.ProcessClinicDoctor(report)
     -- 每季度执行一次（3/6/9/12月）
     if s.month % 3 ~= 0 then return end
 
-    local doctorId = s.clinicDoctorId
-    if not doctorId then return end
-
-    local doctor = GameData.GetMember(doctorId)
-    -- 验证郎中仍然有效
-    if not doctor or not doctor.alive or doctor.gender ~= "female" or (doctor.study or 0) < 60 then
-        s.clinicDoctorId = nil
-        return
-    end
+    -- 获取所有活跃医生（正式 + 临时），共享年度上限
+    local AdSystem = require("Systems.AdSystem")
+    local activeDoctors = AdSystem.GetAllActiveDoctors()
+    if #activeDoctors == 0 then return end
 
     -- 检查年度上限（看广告可提升至6次）
-    local AdSystem = require("Systems.AdSystem")
     local yearlyLimit = AdSystem.GetClinicYearlyLimit()
     local healsThisYear = s._clinicHealsThisYear or 0
     if healsThisYear >= yearlyLimit then return end
 
-    -- 找到健康<30的族人（排除郎中本人）
+    -- 收集所有医生的 ID（排除他们自己不被治疗）
+    local doctorIdSet = {}
+    for _, d in ipairs(activeDoctors) do
+        doctorIdSet[d.memberId] = true
+    end
+
+    -- 找到健康<30的族人（排除所有医生）
     local patients = {}
     for _, m in ipairs(GameData.GetAliveMembers()) do
-        if m.id ~= doctorId and m.health < 30 then
+        if not doctorIdSet[m.id] and m.health < 30 then
             patients[#patients + 1] = m
         end
     end
@@ -1561,27 +1561,40 @@ function MonthlyUpdate.ProcessClinicDoctor(report)
     -- 按健康值升序排列，优先治疗最虚弱的
     table.sort(patients, function(a, b) return a.health < b.health end)
 
-    -- 本次最多治疗1人（每季度1人，年上限3人）
-    local patient = patients[1]
-    local healAmount = math.random(20, 35)
-    -- 郎中学识越高治疗效果越好
-    if doctor.study >= 80 then healAmount = healAmount + math.random(5, 10) end
+    -- 每位医生治疗1人，共享年度上限
+    local patientIdx = 1
+    for _, docInfo in ipairs(activeDoctors) do
+        if healsThisYear >= yearlyLimit then break end
+        if patientIdx > #patients then break end
 
-    local oldHealth = patient.health
-    patient.health = math.min(100, patient.health + healAmount)
-    local actualHeal = patient.health - oldHealth
+        local doctor = GameData.GetMember(docInfo.memberId)
+        if doctor and doctor.alive then
+            local patient = patients[patientIdx]
+            local healAmount = math.random(20, 35)
+            -- 郎中学识越高治疗效果越好
+            if (doctor.study or 0) >= 80 then healAmount = healAmount + math.random(5, 10) end
 
-    -- 如果治好了，解除生病状态
-    if patient.state == "生病" and patient.health >= 60 then
-        patient.state = patient.prevState or "在家"
-        patient.prevState = nil
+            local oldHealth = patient.health
+            patient.health = math.min(100, patient.health + healAmount)
+            local actualHeal = patient.health - oldHealth
+
+            -- 如果治好了，解除生病状态
+            if patient.state == "生病" and patient.health >= 60 then
+                patient.state = patient.prevState or "在家"
+                patient.prevState = nil
+            end
+
+            healsThisYear = healsThisYear + 1
+            patientIdx = patientIdx + 1
+
+            local prefix = docInfo.isTemp and "临时郎中" or "坐堂郎中"
+            local logMsg = prefix .. doctor.name .. "为" .. patient.name .. "把脉施药，健康恢复+" .. actualHeal
+            GameData.AddLog(logMsg)
+            report.events[#report.events + 1] = logMsg
+        end
     end
 
-    s._clinicHealsThisYear = healsThisYear + 1
-
-    local logMsg = "坐堂郎中" .. doctor.name .. "为" .. patient.name .. "把脉施药，健康恢复+" .. actualHeal
-    GameData.AddLog(logMsg)
-    report.events[#report.events + 1] = logMsg
+    s._clinicHealsThisYear = healsThisYear
 end
 
 return MonthlyUpdate

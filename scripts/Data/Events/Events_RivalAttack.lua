@@ -11,8 +11,8 @@ local RivalClans = require("Data.RivalClans")
 -- 辅助函数
 -- ============================================================================
 
---- 获取出战将领
-local function GetFighters(count)
+--- 获取所有符合出战条件的族人（按武艺排序）
+local function GetAllFighters()
     local candidates = {}
     for _, m in ipairs(GameData.GetAliveMembers()) do
         if m.gender == "male" and m.age >= 16 and m.age <= 55
@@ -20,14 +20,17 @@ local function GetFighters(count)
             candidates[#candidates + 1] = m
         end
     end
-    table.sort(candidates, function(a, b) return a.martial > b.martial end)
-    local ids = {}
+    table.sort(candidates, function(a, b) return (a.martial or 0) > (b.martial or 0) end)
+    return candidates
+end
+
+--- 从候选列表取前N个的名字（用于事件描述文本）
+local function GetFighterNames(fighters, count)
     local names = {}
-    for i = 1, math.min(count, #candidates) do
-        ids[#ids + 1] = candidates[i].id
-        names[#names + 1] = candidates[i].name
+    for i = 1, math.min(count or 4, #fighters) do
+        names[#names + 1] = fighters[i].name
     end
-    return ids, names
+    return names
 end
 
 --- 获取军队总兵力
@@ -169,6 +172,8 @@ local function CreateDefenseSettlement(defeatPenalty, victoryBonus)
                         member.deathYear = s.year
                         member.deathCause = "战死"
                         GameData.AddLog(member.name .. "在防御战中壮烈牺牲。")
+                        GameData.CheckPatriarchDeath(member)
+                        GameData.NotifyDeath(member, "战死")
                     elseif math.random(100) <= 30 then
                         member.health = math.max(10, member.health - math.random(15, 30))
                         GameData.AddLog(member.name .. "在防御战中负伤。")
@@ -208,7 +213,7 @@ events[#events + 1] = {
         local silverLoss = math.floor(30 * scale)
         local grainLoss = math.floor(25 * scale)
         local def = GetDefenseRating()
-        local fighterIds, fighterNames = GetFighters(4)
+        local allFighters = GetAllFighters()
         local armySize = GetArmySize()
         local armyHint = armySize > 0
             and ("当前兵力：" .. armySize .. "人 | 最强武将：武艺" .. def.topMartial)
@@ -226,7 +231,7 @@ events[#events + 1] = {
                         and "亲率族人迎战！（3D战斗·中等难度）"
                         or "率族人拼死抵抗！（3D战斗·无兵·高风险）",
                     effect = function()
-                        if #fighterIds < 2 then
+                        if #allFighters < 2 then
                             GameData.AddResource("silver", -silverLoss)
                             GameData.AddResource("grain", -grainLoss)
                             GameData.AddLog("无人可战，被山匪洗劫！损失银两" .. silverLoss .. "、粮食" .. grainLoss)
@@ -238,7 +243,7 @@ events[#events + 1] = {
                             rival.soldiers = math.max(50, math.floor(rival.soldiers * 0.3))
                         end
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = math.min(armySize, 300),
                             onSettle = CreateDefenseSettlement(
                                 { silver = silverLoss, grain = grainLoss, fame = 5 },
@@ -294,7 +299,7 @@ events[#events + 1] = {
     end,
     execute = function(s, report)
         local scale = GetAttackScale(s.clanRank)
-        local fighterIds, fighterNames = GetFighters(5)
+        local allFighters = GetAllFighters()
         local armySize = GetArmySize()
 
         return {
@@ -302,19 +307,19 @@ events[#events + 1] = {
             desc = "海疆急报！一支倭寇船队在附近登岸，约" ..
                    math.floor(400 * scale) .. "人，正向内陆劫掠。\n\n" ..
                    "官府征调各方乡勇协防，" .. s.surname .. "家作为当地望族责无旁贷。\n\n" ..
-                   "可调用兵力：" .. armySize .. "人 | 将领" .. #fighterIds .. "员",
+                   "可调用兵力：" .. armySize .. "人 | 将领" .. #allFighters .. "员",
             choices = {
                 {
                     text = "主动出击截杀倭寇！（3D战斗·较高难度·高回报）",
                     effect = function()
-                        if #fighterIds < 2 then
+                        if #allFighters < 2 then
                             GameData.AddResource("fame", -10)
                             GameData.AddLog("无将可用，未能出战抗倭，声望大损。")
                             return
                         end
                         local rival = GenerateAttacker("倭寇先锋", s.clanRank + 1, s.year)
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = math.min(armySize, 500),
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -356,6 +361,8 @@ events[#events + 1] = {
                                             m.deathYear = s.year
                                             m.deathCause = "战死"
                                             GameData.AddLog(m.name .. "在抗倭战斗中壮烈殉国。")
+                                            GameData.CheckPatriarchDeath(m)
+                                            GameData.NotifyDeath(m, "战死")
                                         end
                                     end
                                 end
@@ -411,7 +418,7 @@ events[#events + 1] = {
     end,
     execute = function(s, report)
         local scale = GetAttackScale(s.clanRank)
-        local fighterIds, fighterNames = GetFighters(6)
+        local allFighters = GetAllFighters()
         local armySize = GetArmySize()
 
         local leaderNames = {"闯王", "八大王", "过天星", "混天王", "扫地王"}
@@ -422,13 +429,13 @@ events[#events + 1] = {
             desc = "天下大乱！自号'" .. leaderName .. "'的流寇首领率众" ..
                    math.floor(800 * scale) .. "余人围困城池！\n\n" ..
                    "城内粮草仅够支撑数日，必须速做决断。\n\n" ..
-                   "城防兵力：" .. armySize .. "人 | 将领" .. #fighterIds .. "员\n" ..
+                   "城防兵力：" .. armySize .. "人 | 将领" .. #allFighters .. "员\n" ..
                    "银两：" .. (s.silver or 0) .. " | 粮食：" .. (s.grain or 0),
             choices = {
                 {
                     text = "死守城池，与城共存亡！（3D战斗·高难度·高回报）",
                     effect = function()
-                        if #fighterIds < 3 then
+                        if #allFighters < 3 then
                             -- 将领不足直接城破
                             local sL = math.floor(100 * scale)
                             local gL = math.floor(80 * scale)
@@ -442,7 +449,7 @@ events[#events + 1] = {
                         -- 流寇兵力更多
                         rival.soldiers = math.floor(rival.soldiers * 1.5)
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = math.min(armySize, 800),
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -496,6 +503,8 @@ events[#events + 1] = {
                                             m.deathYear = s.year
                                             m.deathCause = "战死"
                                             GameData.AddLog(m.name .. "在守城战中壮烈牺牲。")
+                                            GameData.CheckPatriarchDeath(m)
+                                            GameData.NotifyDeath(m, "战死")
                                         end
                                     end
                                 end
@@ -563,7 +572,7 @@ events[#events + 1] = {
     end,
     execute = function(s, report)
         local scale = GetAttackScale(s.clanRank)
-        local fighterIds, fighterNames = GetFighters(4)
+        local allFighters = GetAllFighters()
         local armySize = GetArmySize()
 
         local rivalSurnameList = {"马", "孙", "韩", "徐", "曹", "魏"}
@@ -577,8 +586,8 @@ events[#events + 1] = {
         local industryName = targetIndustry.name or "产业"
 
         local armyLine = armySize > 0
-            and ("\n\n可调兵力：" .. armySize .. "人 | 将领" .. #fighterIds .. "员")
-            or ("\n\n可调兵力：无 | 将领" .. #fighterIds .. "员\n(!) 无兵可用，对方有护卫家丁，慎重应战！")
+            and ("\n\n可调兵力：" .. armySize .. "人 | 将领" .. #allFighters .. "员")
+            or ("\n\n可调兵力：无 | 将领" .. #allFighters .. "员\n(!) 无兵可用，对方有护卫家丁，慎重应战！")
 
         return {
             title = "地方豪强挑衅",
@@ -592,7 +601,7 @@ events[#events + 1] = {
                         and "应战！在战场上让他服气（3D战斗·中等难度）"
                         or "率族人应战！（3D战斗·无兵·风险较高）",
                     effect = function()
-                        if #fighterIds < 2 then
+                        if #allFighters < 2 then
                             GameData.AddResource("fame", -8)
                             GameData.AddLog("无将可战，" .. rivalSn .. "家趁势霸占部分商路，声望-8。")
                             return
@@ -603,7 +612,7 @@ events[#events + 1] = {
                             rival.soldiers = math.max(50, math.floor(rival.soldiers * 0.3))
                         end
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = math.min(armySize, 400),
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -690,7 +699,7 @@ events[#events + 1] = {
     end,
     execute = function(s, report)
         local scale = GetAttackScale(s.clanRank)
-        local fighterIds, fighterNames = GetFighters(3)
+        local allFighters = GetAllFighters()
         local armySize = GetArmySize()
 
         -- 选一个被绑架的族人（年轻人）
@@ -717,7 +726,7 @@ events[#events + 1] = {
                 {
                     text = "亲率精锐营救！（3D战斗·中低难度·有风险）",
                     effect = function()
-                        if #fighterIds < 2 then
+                        if #allFighters < 2 then
                             -- 无人可派，只能交赎金
                             GameData.AddResource("silver", -ransom)
                             GameData.AddLog("无人可派营救，被迫交赎金" .. ransom .. "两赎回" .. victim.name .. "。")
@@ -725,7 +734,7 @@ events[#events + 1] = {
                         end
                         local rival = GenerateAttacker("绑匪巢穴", s.clanRank - 1, s.year, "bandit")
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = math.min(GetArmySize(), 200),
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -802,7 +811,8 @@ events[#events + 1] = {
     end,
     execute = function(s, report)
         local scale = GetAttackScale(s.clanRank)
-        local fighterIds, fighterNames = GetFighters(6)
+        local allFighters = GetAllFighters()
+        local fighterNames = GetFighterNames(allFighters, 6)
         local armySize = GetArmySize()
 
         local enemySurnameList = {"马", "孙", "韩", "徐", "曹"}
@@ -821,7 +831,7 @@ events[#events + 1] = {
                 {
                     text = "全力迎战！不让世仇踏入家门半步（3D战斗·高难度）",
                     effect = function()
-                        if #fighterIds < 3 then
+                        if #allFighters < 3 then
                             GameData.AddResource("silver", -math.floor(80 * scale))
                             GameData.AddResource("fame", -15)
                             GameData.AddLog("将少兵弱，被" .. enemySn .. "家长驱直入，遭受重创。")
@@ -830,7 +840,7 @@ events[#events + 1] = {
                         local rival = GenerateAttacker(enemySn .. "家复仇军", s.clanRank, s.year)
                         rival.soldiers = math.floor(rival.soldiers * 1.3)
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = math.min(armySize, 600),
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -882,6 +892,8 @@ events[#events + 1] = {
                                             m.deathYear = s.year
                                             m.deathCause = "战死"
                                             GameData.AddLog(m.name .. "在宗族仇战中阵亡。")
+                                            GameData.CheckPatriarchDeath(m)
+                                            GameData.NotifyDeath(m, "战死")
                                         end
                                     end
                                 end
@@ -946,7 +958,7 @@ events[#events + 1] = {
     end,
     execute = function(s, report)
         local scale = GetAttackScale(s.clanRank)
-        local fighterIds, fighterNames = GetFighters(6)
+        local allFighters = GetAllFighters()
         local armySize = GetArmySize()
 
         return {
@@ -960,7 +972,7 @@ events[#events + 1] = {
                 {
                     text = "率军出城野战！以骑制骑（3D战斗·极高难度·极高回报）",
                     effect = function()
-                        if #fighterIds < 4 then
+                        if #allFighters < 4 then
                             GameData.AddResource("fame", -10)
                             GameData.AddLog("将领不足，无力出城野战。龟缩城中等骑兵退去。")
                             return
@@ -968,7 +980,7 @@ events[#events + 1] = {
                         local rival = GenerateAttacker("蒙古骑兵", s.clanRank + 1, s.year)
                         rival.soldiers = math.floor(rival.soldiers * 1.4)
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, fighterIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = math.min(armySize, 800),
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -1012,6 +1024,8 @@ events[#events + 1] = {
                                             m.deathYear = s.year
                                             m.deathCause = "战死"
                                             GameData.AddLog(m.name .. "在对蒙古骑兵的野战中阵亡。")
+                                            GameData.CheckPatriarchDeath(m)
+                                            GameData.NotifyDeath(m, "战死")
                                         end
                                     end
                                 end
@@ -1078,7 +1092,7 @@ events[#events + 1] = {
     end,
     execute = function(s, report)
         local scale = GetAttackScale(s.clanRank)
-        local fighterIds, fighterNames = GetFighters(3)
+        local allFighters = GetAllFighters()
 
         -- 找到武艺最高的族人作为目标
         local targetMember = nil
@@ -1114,15 +1128,8 @@ events[#events + 1] = {
                         for _, rm in ipairs(rival.members) do
                             rm.martial = math.min(100, rm.martial + 10)
                         end
-                        local combatIds = { targetMember.id }
-                        -- 加入其他族人助战
-                        for _, fid in ipairs(fighterIds) do
-                            if fid ~= targetMember.id and #combatIds < 3 then
-                                combatIds[#combatIds + 1] = fid
-                            end
-                        end
                         local GS = require("UI.GameScreen")
-                        GS.EnterBattle(rival, combatIds, {
+                        GS.EventBattle(allFighters, rival, {
                             soldierCount = 0,  -- 纯将领对决
                             onSettle = function(result, rivalData, deployedIds)
                                 if result == "victory" then
@@ -1145,7 +1152,7 @@ events[#events + 1] = {
                                     end
                                 end
                             end,
-                        })
+                        }, { preSelectedIds = { targetMember.id }, maxDeploy = 3, title = "选择助战族人" })
                     end,
                 },
                 {

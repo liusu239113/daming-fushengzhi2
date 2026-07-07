@@ -22,6 +22,47 @@ local ModalDialogs = {}
 -- 通用属性条组件（供多个弹窗复用）
 -- ============================================================================
 
+-- 创建左侧关闭按钮的标题行（替代 Modal 内置的右侧关闭按钮）
+local function CreateLeftCloseHeader(modal, title)
+    return UI.Panel {
+        width = "100%",
+        flexDirection = "row",
+        alignItems = "center",
+        paddingBottom = 8,
+        marginBottom = 4,
+        borderBottomWidth = 1,
+        borderColor = Theme.BORDER,
+        children = {
+            -- 左侧关闭按钮
+            UI.Panel {
+                width = 30, height = 30,
+                borderRadius = 15,
+                justifyContent = "center",
+                alignItems = "center",
+                backgroundColor = { 0, 0, 0, 0 },
+                onClick = function(self)
+                    AudioManager.Click()
+                    modal:Close()
+                end,
+                children = {
+                    UI.Label { text = "X", fontSize = 16, fontColor = Theme.TEXT_SECONDARY, fontWeight = "bold" },
+                },
+            },
+            -- 标题居中
+            UI.Label {
+                text = title,
+                fontSize = 16,
+                fontColor = Theme.TEXT_PRIMARY,
+                fontWeight = "bold",
+                flexGrow = 1,
+                textAlign = "center",
+            },
+            -- 右侧占位（保持标题居中）
+            UI.Panel { width = 30, height = 30 },
+        },
+    }
+end
+
 local function statColor(val)
     if val >= 60 then return Theme.GREEN
     elseif val >= 30 then return Theme.GOLD
@@ -32,7 +73,7 @@ local function StatBar(label, val, maxVal, aptitudeInfo)
     maxVal = maxVal or 100
     local pct = math.min(1.0, val / maxVal)
     local barChildren = {
-        UI.Label { text = label, fontSize = 10, fontColor = Theme.TEXT_SECONDARY, width = 28 },
+        UI.Label { text = label, fontSize = 12, fontColor = Theme.TEXT_SECONDARY, width = 28 },
         UI.Panel {
             flex = 1, height = 6, borderRadius = 3, backgroundColor = { 230, 225, 218, 180 },
             children = {
@@ -42,14 +83,14 @@ local function StatBar(label, val, maxVal, aptitudeInfo)
                 },
             },
         },
-        UI.Label { text = tostring(val), fontSize = 10, fontColor = statColor(val), width = 22, textAlign = "right" },
+        UI.Label { text = tostring(val), fontSize = 12, fontColor = statColor(val), width = 22, textAlign = "right" },
     }
     -- 资质星级显示（紧跟数值后面）
     if aptitudeInfo then
         local starsColor = MemberData.GetStarsColor(aptitudeInfo.stars)
         barChildren[#barChildren + 1] = UI.Label {
             text = MemberData.GetStarsLabel(aptitudeInfo.stars),
-            fontSize = 8, fontColor = starsColor, width = 38, textAlign = "right",
+            fontSize = 10, fontColor = starsColor, width = 38, textAlign = "right",
         }
     end
     return UI.Panel {
@@ -96,19 +137,19 @@ function GameScreen.ShowMemberDetail(member)
             backgroundColor = { 60, 55, 50, 30 }, borderWidth = 1, borderColor = { 150, 140, 130, 80 },
             alignItems = "center", gap = 4,
             children = {
-                UI.Label { text = causeInfo.icon, fontSize = 28 },
-                UI.Label { text = causeInfo.desc, fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                UI.Label { text = causeInfo.detail, fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = causeInfo.icon, fontSize = 30 },
+                UI.Label { text = causeInfo.desc, fontSize = 17, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                UI.Label { text = causeInfo.detail, fontSize = 13, fontColor = Theme.TEXT_MUTED },
                 UI.Panel { width = "60%", height = 1, backgroundColor = { 150, 140, 130, 60 }, marginVertical = 2 },
                 UI.Label {
                     text = (member.gender == "male" and "男" or "女") .. " · 享年" .. member.age .. "岁",
-                    fontSize = 12, fontColor = Theme.TEXT_SECONDARY,
+                    fontSize = 14, fontColor = Theme.TEXT_SECONDARY,
                 },
             },
         }
         -- 生前属性
         local apt = member.aptitude
-        detailChildren[#detailChildren + 1] = UI.Label { text = "— 生平 —", fontSize = 11, fontColor = Theme.TEXT_MUTED, textAlign = "center", width = "100%", marginTop = 2 }
+        detailChildren[#detailChildren + 1] = UI.Label { text = "— 生平 —", fontSize = 13, fontColor = Theme.TEXT_MUTED, textAlign = "center", width = "100%", marginTop = 2 }
         detailChildren[#detailChildren + 1] = UI.Panel {
             width = "100%", gap = 3,
             children = {
@@ -119,8 +160,8 @@ function GameScreen.ShowMemberDetail(member)
     else
         -- 存活成员：原有信息
         local apt = member.aptitude
-        detailChildren[#detailChildren + 1] = UI.Label { text = (member.gender == "male" and "男" or "女") .. " · " .. member.age .. "岁 · " .. GameData.GetAgeStage(member.age), fontSize = 13, fontColor = Theme.TEXT_PRIMARY }
-        detailChildren[#detailChildren + 1] = UI.Label { text = "状态：" .. member.state, fontSize = 12, fontColor = Theme.TEXT_SECONDARY }
+        detailChildren[#detailChildren + 1] = UI.Label { text = (member.gender == "male" and "男" or "女") .. " · " .. member.age .. "岁 · " .. GameData.GetAgeStage(member.age), fontSize = 15, fontColor = Theme.TEXT_PRIMARY }
+        detailChildren[#detailChildren + 1] = UI.Label { text = "状态：" .. member.state, fontSize = 14, fontColor = Theme.TEXT_SECONDARY }
         detailChildren[#detailChildren + 1] = UI.Panel {
             width = "100%", gap = 3,
             children = {
@@ -137,7 +178,7 @@ function GameScreen.ShowMemberDetail(member)
                 width = "100%", height = 32, borderRadius = 6, marginTop = 4,
                 backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
                 flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                onClick = function(self)
+                onTap = function(self)
                     AdSystem.HealthCure(member.id, function(success, msg)
                         modal:Close()
                         GameScreen.ShowResultPopup(success and "妙手回春" or "诊治失败", msg or "")
@@ -145,15 +186,15 @@ function GameScreen.ShowMemberDetail(member)
                     end)
                 end,
                 children = {
-                    UI.Label { text = "▶ 看广告·神医诊治", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
-                    UI.Label { text = "(" .. cureRemain .. "次)", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                    UI.Label { text = "▶ 看广告·神医诊治", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                    UI.Label { text = "(" .. cureRemain .. "次)", fontSize = 11, fontColor = { 255, 255, 255, 160 } },
                 },
             }
         end
     end
 
     if member.talent then
-        detailChildren[#detailChildren + 1] = UI.Label { text = "天赋：" .. member.talent.name .. "（" .. member.talent.effect .. "）", fontSize = 12, fontColor = Theme.GOLD_DARK }
+        detailChildren[#detailChildren + 1] = UI.Label { text = "天赋：" .. member.talent.name .. "（" .. member.talent.effect .. "）", fontSize = 14, fontColor = Theme.GOLD_DARK }
     end
 
     -- 身份效果说明（功名/军衔带来的月收益）
@@ -174,12 +215,12 @@ function GameScreen.ShowMemberDetail(member)
             backgroundColor = { idEffect.color[1], idEffect.color[2], idEffect.color[3], 20 },
             borderWidth = 1, borderColor = { idEffect.color[1], idEffect.color[2], idEffect.color[3], 60 },
             children = {
-                UI.Label { text = idEffect.icon, fontSize = 14, fontColor = idEffect.color, fontWeight = "bold" },
+                UI.Label { text = idEffect.icon, fontSize = 16, fontColor = idEffect.color, fontWeight = "bold" },
                 UI.Panel {
                     flexShrink = 1, gap = 1,
                     children = {
-                        UI.Label { text = member.identity, fontSize = 12, fontColor = idEffect.color, fontWeight = "bold" },
-                        UI.Label { text = idEffect.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                        UI.Label { text = member.identity, fontSize = 14, fontColor = idEffect.color, fontWeight = "bold" },
+                        UI.Label { text = idEffect.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                     },
                 },
             },
@@ -187,7 +228,7 @@ function GameScreen.ShowMemberDetail(member)
     end
 
     if spouse then
-        detailChildren[#detailChildren + 1] = UI.Label { text = "配偶：" .. spouse.name .. (spouse.alive and "" or "（已故）"), fontSize = 12, fontColor = Theme.TEXT_SECONDARY }
+        detailChildren[#detailChildren + 1] = UI.Label { text = "配偶：" .. spouse.name .. (spouse.alive and "" or "（已故）"), fontSize = 14, fontColor = Theme.TEXT_SECONDARY }
     end
 
     -- ===== 培养系统区域 =====
@@ -198,7 +239,7 @@ function GameScreen.ShowMemberDetail(member)
         detailChildren[#detailChildren + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 6 }
 
         -- === 培养训练 (品级>=2) ===
-        detailChildren[#detailChildren + 1] = UI.Label { text = "— 培养 —", fontSize = 12, fontColor = Theme.GOLD, textAlign = "center", width = "100%", marginTop = 2 }
+        detailChildren[#detailChildren + 1] = UI.Label { text = "— 培养 —", fontSize = 14, fontColor = Theme.GOLD, textAlign = "center", width = "100%", marginTop = 2 }
         local trainBtns = {}
         for _, t in ipairs(GameData.TRAINING_OPTIONS) do
             local costText = ""
@@ -219,9 +260,9 @@ function GameScreen.ShowMemberDetail(member)
                     GameScreen.RefreshAll()
                 end,
                 children = {
-                    UI.Label { text = t.icon, fontSize = 16, fontColor = canAfford and Theme.PRIMARY or Theme.TEXT_MUTED },
-                    UI.Label { text = t.name, fontSize = 10, fontColor = Theme.TEXT_PRIMARY },
-                    UI.Label { text = costText, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = t.icon, fontSize = 18, fontColor = canAfford and Theme.PRIMARY or Theme.TEXT_MUTED },
+                    UI.Label { text = t.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
+                    UI.Label { text = costText, fontSize = 11, fontColor = Theme.TEXT_MUTED },
                 },
             }
         end
@@ -236,7 +277,7 @@ function GameScreen.ShowMemberDetail(member)
                 width = "100%", height = 30, borderRadius = 6,
                 backgroundGradient = { direction = "to-right", from = { 218, 165, 32, 255 }, to = { 200, 140, 20, 255 } },
                 flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                onClick = function(self)
+                onTap = function(self)
                     -- 默认选第一个训练项
                     local defaultTraining = GameData.TRAINING_OPTIONS[1]
                     if not defaultTraining then return end
@@ -247,8 +288,8 @@ function GameScreen.ShowMemberDetail(member)
                     end)
                 end,
                 children = {
-                    UI.Label { text = "看广告免费培养", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
-                    UI.Label { text = "(" .. adRemain .. "次)", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                    UI.Label { text = "看广告免费培养", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                    UI.Label { text = "(" .. adRemain .. "次)", fontSize = 11, fontColor = { 255, 255, 255, 160 } },
                 },
             }
         end
@@ -259,16 +300,16 @@ function GameScreen.ShowMemberDetail(member)
             detailChildren[#detailChildren + 1] = UI.Panel {
                 width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                 children = {
-                    UI.Label { text = "— 装备 —", fontSize = 12, fontColor = Theme.GOLD },
+                    UI.Label { text = "— 装备 —", fontSize = 14, fontColor = Theme.GOLD },
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
                         backgroundColor = Theme.PRIMARY_LIGHT, borderWidth = 1, borderColor = Theme.PRIMARY,
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             modal:Close()
                             GameScreen.ShowEquipShop(member)
                         end,
-                        children = { UI.Label { text = "购买装备", fontSize = 10, fontColor = Theme.PRIMARY_DARK } },
+                        children = { UI.Label { text = "购买装备", fontSize = 12, fontColor = Theme.PRIMARY_DARK } },
                     },
                 },
             }
@@ -299,17 +340,17 @@ function GameScreen.ShowMemberDetail(member)
                         end
                     end,
                     children = {
-                        UI.Label { text = slotName, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                        UI.Label { text = slotName, fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         UI.Label {
                             text = equipped and equipped.name or "空",
-                            fontSize = 11, fontColor = nameColor,
+                            fontSize = 13, fontColor = nameColor,
                         },
                         equipped and UI.Label {
                             text = (equipped.martial > 0 and ("武+" .. equipped.martial) or "") ..
                                    (equipped.study > 0 and (" 文+" .. equipped.study) or "") ..
                                    (equipped.health > 0 and (" 体+" .. equipped.health) or ""),
-                            fontSize = 8, fontColor = Theme.TEXT_MUTED,
-                        } or UI.Label { text = "点击装备", fontSize = 8, fontColor = Theme.TEXT_MUTED },
+                            fontSize = 10, fontColor = Theme.TEXT_MUTED,
+                        } or UI.Label { text = "点击装备", fontSize = 10, fontColor = Theme.TEXT_MUTED },
                     },
                 }
             end
@@ -324,13 +365,13 @@ function GameScreen.ShowMemberDetail(member)
                 if bonus.martial > 0 then bonusText = bonusText .. "武+" .. bonus.martial .. " " end
                 if bonus.study > 0 then bonusText = bonusText .. "文+" .. bonus.study .. " " end
                 if bonus.health > 0 then bonusText = bonusText .. "体+" .. bonus.health end
-                detailChildren[#detailChildren + 1] = UI.Label { text = bonusText, fontSize = 10, fontColor = Theme.GREEN, textAlign = "center", width = "100%" }
+                detailChildren[#detailChildren + 1] = UI.Label { text = bonusText, fontSize = 12, fontColor = Theme.GREEN, textAlign = "center", width = "100%" }
             end
 
             -- === 技能专精 (品级>=3, 年龄>=18) ===
             if member.age >= 18 then
                 detailChildren[#detailChildren + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 4 }
-                detailChildren[#detailChildren + 1] = UI.Label { text = "— 专精 —", fontSize = 12, fontColor = Theme.GOLD, textAlign = "center", width = "100%", marginTop = 2 }
+                detailChildren[#detailChildren + 1] = UI.Label { text = "— 专精 —", fontSize = 14, fontColor = Theme.GOLD, textAlign = "center", width = "100%", marginTop = 2 }
                 local activePath = GameData.GetActiveSkillPath(member)
                 if activePath then
                     -- 已有专精：显示路径和效果
@@ -339,8 +380,8 @@ function GameScreen.ShowMemberDetail(member)
                         backgroundGradient = { direction = "to-bottom", from = { 200, 165, 60, 30 }, to = { 200, 165, 60, 10 } },
                         borderWidth = 1, borderColor = Theme.GOLD_DARK, alignItems = "center", gap = 3,
                         children = {
-                            UI.Label { text = activePath.icon .. " " .. activePath.name, fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
-                            UI.Label { text = activePath.desc, fontSize = 10, fontColor = Theme.TEXT_SECONDARY, whiteSpace = "normal", textAlign = "center" },
+                            UI.Label { text = activePath.icon .. " " .. activePath.name, fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
+                            UI.Label { text = activePath.desc, fontSize = 12, fontColor = Theme.TEXT_SECONDARY, whiteSpace = "normal", textAlign = "center" },
                         },
                     }
                 else
@@ -367,9 +408,9 @@ function GameScreen.ShowMemberDetail(member)
                                 end)
                             end,
                             children = {
-                                UI.Label { text = path.icon, fontSize = 16, fontColor = canUnlock and Theme.GOLD or Theme.TEXT_MUTED },
-                                UI.Label { text = path.name, fontSize = 11, fontColor = Theme.TEXT_PRIMARY },
-                                UI.Label { text = path.reqAttr .. "≥" .. path.reqValue, fontSize = 8, fontColor = canUnlock and Theme.GREEN or Theme.RED },
+                                UI.Label { text = path.icon, fontSize = 18, fontColor = canUnlock and Theme.GOLD or Theme.TEXT_MUTED },
+                                UI.Label { text = path.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY },
+                                UI.Label { text = path.reqAttr .. "≥" .. path.reqValue, fontSize = 10, fontColor = canUnlock and Theme.GREEN or Theme.RED },
                             },
                         }
                     end
@@ -395,7 +436,7 @@ function GameScreen.ShowMemberDetail(member)
                 backgroundGradient = { direction = "horizontal", from = {218, 165, 32, 255}, to = {255, 200, 50, 255} },
                 justifyContent = "center", alignItems = "center",
                 flexDirection = "row", gap = 6,
-                onClick = function(self, event)
+                onTap = function(self, event)
                     if actionDone then return end
                     AudioManager.Click()
                     actionDone = true
@@ -411,19 +452,19 @@ function GameScreen.ShowMemberDetail(member)
                     end)
                 end,
                 children = {
-                    UI.Label { text = "▶ 看广告复活族人", fontSize = 13, fontColor = {80, 40, 0, 255} },
-                    UI.Label { text = "(今日" .. reviveRemain .. "次)", fontSize = 10, fontColor = {120, 80, 20, 255} },
+                    UI.Label { text = "▶ 看广告复活族人", fontSize = 15, fontColor = {80, 40, 0, 255} },
+                    UI.Label { text = "(今日" .. reviveRemain .. "次)", fontSize = 12, fontColor = {120, 80, 20, 255} },
                 },
             }
         end
     elseif member.state == "在家" and member.age >= 15 then
         detailChildren[#detailChildren + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 8 }
-        detailChildren[#detailChildren + 1] = UI.Label { text = "指派工作", fontSize = 13, fontColor = Theme.GOLD, marginTop = 2 }
+        detailChildren[#detailChildren + 1] = UI.Label { text = "指派工作", fontSize = 15, fontColor = Theme.GOLD, marginTop = 2 }
         if member.age >= 6 then
             detailChildren[#detailChildren + 1] = UI.Panel {
                 width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden",
                 backgroundImage = Theme.IMG.BTN_STUDY, backgroundFit = "cover",
-                onClick = function(self, event)
+                onTap = function(self, event)
                     if actionDone then return end
                     AudioManager.Click()
                     actionDone = true
@@ -437,7 +478,7 @@ function GameScreen.ShowMemberDetail(member)
             width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden",
             backgroundImage = Theme.IMG.BTN_TRADE, backgroundFit = "cover",
             opacity = tradeUnlocked and 1.0 or 0.4,
-            onClick = function(self, event)
+            onTap = function(self, event)
                 if actionDone then return end
                 AudioManager.Click()
                 if not tradeUnlocked then
@@ -455,7 +496,7 @@ function GameScreen.ShowMemberDetail(member)
                 width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden",
                 backgroundImage = Theme.IMG.BTN_MILITARY, backgroundFit = "cover",
                 opacity = militaryUnlocked and 1.0 or 0.4,
-                onClick = function(self, event)
+                onTap = function(self, event)
                     if actionDone then return end
                     AudioManager.Click()
                     if not militaryUnlocked then
@@ -471,7 +512,7 @@ function GameScreen.ShowMemberDetail(member)
         detailChildren[#detailChildren + 1] = UI.Panel {
             width = 180, height = 75, alignSelf = "center", borderRadius = 6, overflow = "hidden", marginTop = 4,
             backgroundImage = Theme.IMG.BTN_RECALL, backgroundFit = "cover",
-            onClick = function(self, event)
+            onTap = function(self, event)
                 if actionDone then return end
                 AudioManager.Click()
                 actionDone = true
@@ -517,7 +558,7 @@ function GameScreen.ShowAssignMember(industry)
             AudioManager.Click()
             industry.assignedMemberId = nil; modal:Close(); GameScreen.RefreshAll()
         end,
-        children = { UI.Label { text = "无人管理", fontSize = 12, fontColor = Theme.TEXT_MUTED } },
+        children = { UI.Label { text = "无人管理", fontSize = 14, fontColor = Theme.TEXT_MUTED } },
     }
     -- 状态标签颜色
     local stateColors = {
@@ -539,16 +580,16 @@ function GameScreen.ShowAssignMember(industry)
                 UI.Panel {
                     flexDirection = "row", alignItems = "center", gap = 4,
                     children = {
-                        UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-                        stateLabel ~= "" and UI.Label { text = stateLabel, fontSize = 9, fontColor = stateColors[m.state] or Theme.TEXT_MUTED } or nil,
+                        UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+                        stateLabel ~= "" and UI.Label { text = stateLabel, fontSize = 11, fontColor = stateColors[m.state] or Theme.TEXT_MUTED } or nil,
                     },
                 },
-                UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
             },
         }
     end
     if #candidates == 0 then
-        items[#items + 1] = UI.Label { text = "无可分配族人", fontSize = 12, fontColor = Theme.TEXT_MUTED, textAlign = "center", marginTop = 8 }
+        items[#items + 1] = UI.Label { text = "无可分配族人", fontSize = 14, fontColor = Theme.TEXT_MUTED, textAlign = "center", marginTop = 8 }
     end
     modal:AddContent(UI.ScrollView {
         width = "100%", maxHeight = 400, scrollY = true, bounces = true, showScrollbar = true,
@@ -565,7 +606,7 @@ function GameScreen.ShowResultPopup(title, desc)
     local modal = UI.Modal { title = title, size = "sm", showCloseButton = true, closeOnOverlay = true }
     modal:AddContent(UI.Panel {
         width = "100%", alignItems = "center", gap = 12, padding = 8,
-        children = { UI.Label { text = desc, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, textAlign = "center", whiteSpace = "normal" } },
+        children = { UI.Label { text = desc, fontSize = 16, fontColor = Theme.TEXT_PRIMARY, textAlign = "center", whiteSpace = "normal" } },
     })
     modal:SetFooter(UI.Panel {
         flexDirection = "row", justifyContent = "center",
@@ -575,7 +616,7 @@ function GameScreen.ShowResultPopup(title, desc)
                 backgroundGradient = Theme.GRADIENT_PRIMARY,
                 justifyContent = "center", alignItems = "center",
                 onClick = function(self) AudioManager.Click() modal:Close() end,
-                children = { UI.Label { text = "知道了", fontSize = 13, fontColor = Theme.TEXT_WHITE } },
+                children = { UI.Label { text = "知道了", fontSize = 15, fontColor = Theme.TEXT_WHITE } },
             },
         },
     })
@@ -593,8 +634,8 @@ function GameScreen.ShowConfirm(title, desc, confirmText, onConfirm, onCancel)
     modal:AddContent(UI.Panel {
         width = "100%", alignItems = "center", gap = 8, padding = 8,
         children = {
-            UI.Label { text = "警", fontSize = 28, fontColor = Theme.GOLD },
-            UI.Label { text = desc, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, textAlign = "center", whiteSpace = "normal" },
+            UI.Label { text = "警", fontSize = 30, fontColor = Theme.GOLD },
+            UI.Label { text = desc, fontSize = 15, fontColor = Theme.TEXT_PRIMARY, textAlign = "center", whiteSpace = "normal" },
         },
     })
     modal:SetFooter(UI.Panel {
@@ -611,7 +652,7 @@ function GameScreen.ShowConfirm(title, desc, confirmText, onConfirm, onCancel)
                     modal:Close()
                     if onCancel then onCancel() end
                 end,
-                children = { UI.Label { text = "取消", fontSize = 13, fontColor = Theme.TEXT_MUTED } },
+                children = { UI.Label { text = "取消", fontSize = 15, fontColor = Theme.TEXT_MUTED } },
             },
             -- 确认按钮
             UI.Panel {
@@ -623,7 +664,7 @@ function GameScreen.ShowConfirm(title, desc, confirmText, onConfirm, onCancel)
                     modal:Close()
                     if onConfirm then onConfirm() end
                 end,
-                children = { UI.Label { text = confirmText or "确认", fontSize = 13, fontColor = Theme.TEXT_WHITE } },
+                children = { UI.Label { text = confirmText or "确认", fontSize = 15, fontColor = Theme.TEXT_WHITE } },
             },
         },
     })
@@ -644,9 +685,9 @@ function GameScreen.ShowMonthlyReport(report)
     local summary = "银两" .. (netSilver >= 0 and "+" or "") .. netSilver .. "  粮食" .. (netGrain >= 0 and "+" or "") .. netGrain
 
     local contentChildren = {
-        UI.Label { text = summary, fontSize = 13, fontColor = Theme.GOLD },
+        UI.Label { text = summary, fontSize = 15, fontColor = Theme.GOLD },
         UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
-        UI.Label { text = desc, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
+        UI.Label { text = desc, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
     }
 
     -- 品级提升解锁通知
@@ -660,11 +701,11 @@ function GameScreen.ShowMonthlyReport(report)
             gap = 6,
             children = (function()
                 local items = {
-                    UI.Label { text = "品级提升为【" .. ru.newRank .. "】！", fontSize = 15, fontColor = Theme.GOLD, textAlign = "center" },
-                    UI.Label { text = "解锁新功能：", fontSize = 12, fontColor = Theme.TEXT_TITLE },
+                    UI.Label { text = "品级提升为【" .. ru.newRank .. "】！", fontSize = 17, fontColor = Theme.GOLD, textAlign = "center" },
+                    UI.Label { text = "解锁新功能：", fontSize = 14, fontColor = Theme.TEXT_TITLE },
                 }
                 for _, unlockDesc in ipairs(ru.unlocks) do
-                    items[#items + 1] = UI.Label { text = "  · " .. unlockDesc, fontSize = 11, fontColor = Theme.GREEN, whiteSpace = "normal" }
+                    items[#items + 1] = UI.Label { text = "  · " .. unlockDesc, fontSize = 13, fontColor = Theme.GREEN, whiteSpace = "normal" }
                 end
                 return items
             end)(),
@@ -700,8 +741,8 @@ function GameScreen.ShowMonthlyReport(report)
                 end)
             end,
             children = {
-                UI.Label { text = "看广告双倍", fontSize = 12, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
-                UI.Label { text = "(" .. remaining .. ")", fontSize = 10, fontColor = { 255, 255, 255, 180 } },
+                UI.Label { text = "看广告双倍", fontSize = 14, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                UI.Label { text = "(" .. remaining .. ")", fontSize = 12, fontColor = { 255, 255, 255, 180 } },
             },
         }
     end
@@ -714,7 +755,7 @@ function GameScreen.ShowMonthlyReport(report)
                 backgroundGradient = Theme.GRADIENT_PRIMARY,
                 justifyContent = "center", alignItems = "center",
                 onClick = function(self) AudioManager.Click() modal:Close() end,
-                children = { UI.Label { text = "朕知道了", fontSize = 13, fontColor = Theme.TEXT_WHITE } },
+                children = { UI.Label { text = "朕知道了", fontSize = 15, fontColor = Theme.TEXT_WHITE } },
             },
             table.unpack(adBtnChildren),
         },
@@ -764,8 +805,8 @@ function GameScreen.ShowYearEndSummary(summary)
             backgroundColor = Theme.BG_INPUT, alignItems = "center", gap = 2,
             children = {
                 ResIcon(img, 22),
-                UI.Label { text = tostring(math.floor(value)), fontSize = 16, fontColor = color or Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                UI.Label { text = label, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = tostring(math.floor(value)), fontSize = 18, fontColor = color or Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                UI.Label { text = label, fontSize = 11, fontColor = Theme.TEXT_MUTED },
             },
         }
     end
@@ -779,12 +820,12 @@ function GameScreen.ShowYearEndSummary(summary)
                     flexDirection = "row", alignItems = "center", gap = 4, width = 60,
                     children = {
                         ResIcon(img, 14),
-                        UI.Label { text = label, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                        UI.Label { text = label, fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
                     },
                 },
-                UI.Label { text = "+" .. math.floor(income), fontSize = 11, fontColor = Theme.GREEN },
-                UI.Label { text = "-" .. math.floor(expense), fontSize = 11, fontColor = Theme.RED },
-                UI.Label { text = SignText(net), fontSize = 12, fontColor = SignColor(net), fontWeight = "bold", textAlign = "right", width = 50 },
+                UI.Label { text = "+" .. math.floor(income), fontSize = 13, fontColor = Theme.GREEN },
+                UI.Label { text = "-" .. math.floor(expense), fontSize = 13, fontColor = Theme.RED },
+                UI.Label { text = SignText(net), fontSize = 14, fontColor = SignColor(net), fontWeight = "bold", textAlign = "right", width = 50 },
             },
         }
     end
@@ -794,7 +835,7 @@ function GameScreen.ShowYearEndSummary(summary)
             width = "100%", paddingVertical = 2, marginTop = 6,
             borderBottomWidth = 1, borderColor = Theme.BORDER,
             children = {
-                UI.Label { text = text, fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold" },
+                UI.Label { text = text, fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold" },
             },
         }
     end
@@ -807,11 +848,11 @@ function GameScreen.ShowYearEndSummary(summary)
                 UI.Panel {
                     flexDirection = "row", alignItems = "center", gap = 4,
                     children = {
-                        UI.Label { text = icon, fontSize = 12 },
-                        UI.Label { text = label, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                        UI.Label { text = icon, fontSize = 14 },
+                        UI.Label { text = label, fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
                     },
                 },
-                UI.Label { text = tostring(value), fontSize = 12, fontColor = color or Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                UI.Label { text = tostring(value), fontSize = 14, fontColor = color or Theme.TEXT_PRIMARY, fontWeight = "bold" },
             },
         }
     end
@@ -826,12 +867,12 @@ function GameScreen.ShowYearEndSummary(summary)
         borderWidth = 1, borderColor = Theme.GOLD_DARK,
         flexDirection = "row", alignItems = "center", justifyContent = "center", gap = 8,
         children = {
-            UI.Label { text = summary.ratingIcon, fontSize = 28 },
+            UI.Label { text = summary.ratingIcon, fontSize = 30 },
             UI.Panel {
                 alignItems = "center", gap = 2,
                 children = {
-                    UI.Label { text = summary.rating, fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
-                    UI.Label { text = summary.clanRank .. " · " .. summary.aliveCount .. "口人", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = summary.rating, fontSize = 18, fontColor = Theme.GOLD, fontWeight = "bold" },
+                    UI.Label { text = summary.clanRank .. " · " .. summary.aliveCount .. "口人", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                 },
             },
         },
@@ -842,10 +883,10 @@ function GameScreen.ShowYearEndSummary(summary)
     contentChildren[#contentChildren + 1] = UI.Panel {
         width = "100%", flexDirection = "row", justifyContent = "space-between", paddingVertical = 3,
         children = {
-            UI.Label { text = "族人 " .. summary.aliveCount .. "人", fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-            UI.Label { text = "生 " .. summary.births, fontSize = 12, fontColor = summary.births > 0 and Theme.GREEN or Theme.TEXT_MUTED },
-            UI.Label { text = "亡 " .. summary.deaths, fontSize = 12, fontColor = summary.deaths > 0 and Theme.RED or Theme.TEXT_MUTED },
-            UI.Label { text = SignText(summary.popChange, "人"), fontSize = 12, fontColor = SignColor(summary.popChange), fontWeight = "bold" },
+            UI.Label { text = "族人 " .. summary.aliveCount .. "人", fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+            UI.Label { text = "生 " .. summary.births, fontSize = 14, fontColor = summary.births > 0 and Theme.GREEN or Theme.TEXT_MUTED },
+            UI.Label { text = "亡 " .. summary.deaths, fontSize = 14, fontColor = summary.deaths > 0 and Theme.RED or Theme.TEXT_MUTED },
+            UI.Label { text = SignText(summary.popChange, "人"), fontSize = 14, fontColor = SignColor(summary.popChange), fontWeight = "bold" },
         },
     }
 
@@ -868,10 +909,10 @@ function GameScreen.ShowYearEndSummary(summary)
         width = "100%", flexDirection = "row", alignItems = "center",
         justifyContent = "space-between", paddingVertical = 1,
         children = {
-            UI.Label { text = "", fontSize = 9, fontColor = Theme.TEXT_MUTED, width = 60 },
-            UI.Label { text = "收入", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-            UI.Label { text = "支出", fontSize = 9, fontColor = Theme.TEXT_MUTED },
-            UI.Label { text = "净值", fontSize = 9, fontColor = Theme.TEXT_MUTED, textAlign = "right", width = 50 },
+            UI.Label { text = "", fontSize = 11, fontColor = Theme.TEXT_MUTED, width = 60 },
+            UI.Label { text = "收入", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+            UI.Label { text = "支出", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+            UI.Label { text = "净值", fontSize = 11, fontColor = Theme.TEXT_MUTED, textAlign = "right", width = 50 },
         },
     }
     contentChildren[#contentChildren + 1] = FinanceRow(Theme.IMG.RES_SILVER, "银两", summary.incomes.silver, summary.expenses.silver, summary.netSilver)
@@ -931,13 +972,13 @@ function GameScreen.ShowYearEndSummary(summary)
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         padding = 12, borderBottomWidth = 1, borderColor = Theme.BORDER,
                         children = {
-                            UI.Label { text = summary.yearLabel .. " · 年终总结", fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = summary.yearLabel .. " · 年终总结", fontSize = 17, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
                             UI.Panel {
                                 width = 28, height = 28, borderRadius = 14,
                                 backgroundColor = Theme.BG_INPUT,
                                 justifyContent = "center", alignItems = "center",
                                 onClick = function(self) closeOverlay() end,
-                                children = { UI.Label { text = "X", fontSize = 14, fontColor = Theme.TEXT_MUTED } },
+                                children = { UI.Label { text = "X", fontSize = 16, fontColor = Theme.TEXT_MUTED } },
                             },
                         },
                     },
@@ -983,7 +1024,7 @@ function GameScreen.ShowYearEndSummary(summary)
                                             end)
                                         end,
                                         children = {
-                                            UI.Label { text = "▶ 看广告·年终奖励翻倍", fontSize = 12, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                            UI.Label { text = "▶ 看广告·年终奖励翻倍", fontSize = 14, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                                         },
                                     }
                                 else
@@ -995,7 +1036,7 @@ function GameScreen.ShowYearEndSummary(summary)
                                 backgroundGradient = Theme.GRADIENT_PRIMARY,
                                 justifyContent = "center", alignItems = "center",
                                 onClick = function(self) closeOverlay() end,
-                                children = { UI.Label { text = "迎接新年", fontSize = 14, fontColor = Theme.TEXT_WHITE } },
+                                children = { UI.Label { text = "迎接新年", fontSize = 16, fontColor = Theme.TEXT_WHITE } },
                             },
                         },
                     },
@@ -1094,6 +1135,7 @@ function GameScreen.ShowMarriageTierSelect(member)
                 local need = "需要银" .. silverCost
                 if clothCost > 0 then need = need .. "、布匹" .. clothCost end
                 need = need .. "作为聘礼。"
+                modal:Close()
                 GameScreen.ShowResultPopup("资源不足", need)
                 return
             end
@@ -1147,11 +1189,11 @@ function GameScreen.ShowMarriageTierSelect(member)
                                 UI.Panel {
                                     flexDirection = "row", alignItems = "center", gap = 2,
                                     children = {
-                                        UI.Label { text = genderIcon, fontSize = 12, fontColor = genderColor },
-                                        UI.Label { text = c.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = genderIcon, fontSize = 14, fontColor = genderColor },
+                                        UI.Label { text = c.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
                                     },
                                 },
-                                UI.Label { text = c.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                                UI.Label { text = c.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                                 -- 看广告换人按钮
                                 UI.Panel {
                                     width = 80, paddingVertical = 5, borderRadius = 6, marginTop = 2,
@@ -1171,11 +1213,11 @@ function GameScreen.ShowMarriageTierSelect(member)
                                     children = {
                                         UI.Label {
                                             text = "▶ 换一位",
-                                            fontSize = 10, fontColor = adRemaining > 0 and Theme.PRIMARY or Theme.TEXT_MUTED,
+                                            fontSize = 12, fontColor = adRemaining > 0 and Theme.PRIMARY or Theme.TEXT_MUTED,
                                         },
                                         UI.Label {
                                             text = "看广告(" .. adRemaining .. "次)",
-                                            fontSize = 8, fontColor = Theme.TEXT_MUTED, marginTop = 1,
+                                            fontSize = 10, fontColor = Theme.TEXT_MUTED, marginTop = 1,
                                         },
                                     },
                                 },
@@ -1193,7 +1235,7 @@ function GameScreen.ShowMarriageTierSelect(member)
                                         borderRadius = 4, backgroundColor = { 255, 200, 50, 40 },
                                         alignSelf = "flex-start",
                                         children = {
-                                            UI.Label { text = "天赋：" .. talentName, fontSize = 10, fontColor = Theme.GOLD_DARK },
+                                            UI.Label { text = "天赋：" .. talentName, fontSize = 12, fontColor = Theme.GOLD_DARK },
                                         },
                                     }
                                 end
@@ -1204,7 +1246,7 @@ function GameScreen.ShowMarriageTierSelect(member)
                                 -- 聘礼提示
                                 items[#items + 1] = UI.Label {
                                     text = "聘礼：银" .. silverCost .. (clothCost > 0 and ("  布" .. clothCost) or ""),
-                                    fontSize = 10, fontColor = Theme.TEXT_MUTED, marginTop = 2,
+                                    fontSize = 12, fontColor = Theme.TEXT_MUTED, marginTop = 2,
                                 }
                                 -- 确定按钮（右下角）
                                 items[#items + 1] = UI.Panel {
@@ -1213,7 +1255,7 @@ function GameScreen.ShowMarriageTierSelect(member)
                                     backgroundGradient = { direction = "to-right", from = { 180, 50, 50, 255 }, to = { 200, 70, 70, 255 } },
                                     onClick = function(self) confirmMarriage() end,
                                     children = {
-                                        UI.Label { text = "确定", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                        UI.Label { text = "确定", fontSize = 15, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                                     },
                                 }
                                 return items
@@ -1260,7 +1302,7 @@ function GameScreen.ShowEquipSelect(member, slot)
                     backgroundColor = Theme.BG_WHITE,
                     borderWidth = 1, borderColor = rarityConf and rarityConf.color or Theme.BORDER,
                     flexDirection = "row", justifyContent = "space-between", alignItems = "center",
-                    onClick = function(self)
+                    onTap = function(self)
                         AudioManager.Click()
                         local ok, msg = EquipmentSystem.Equip(member.id, equip.id)
                         modal:Close()
@@ -1277,16 +1319,16 @@ function GameScreen.ShowEquipSelect(member, slot)
                                 UI.Panel {
                                     flexDirection = "row", gap = 4, alignItems = "center",
                                     children = {
-                                        UI.Label { text = equip.name, fontSize = 13, fontColor = nameColor, fontWeight = "bold" },
-                                        UI.Label { text = "(" .. rarityConf.name .. ")", fontSize = 10, fontColor = nameColor },
-                                        equip.heirloom and UI.Label { text = "传世", fontSize = 9, fontColor = Theme.GOLD } or nil,
+                                        UI.Label { text = equip.name, fontSize = 15, fontColor = nameColor, fontWeight = "bold" },
+                                        UI.Label { text = "(" .. rarityConf.name .. ")", fontSize = 12, fontColor = nameColor },
+                                        equip.heirloom and UI.Label { text = "传世", fontSize = 11, fontColor = Theme.GOLD } or nil,
                                     },
                                 },
-                                UI.Label { text = statsText, fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
-                                UI.Label { text = equip.desc, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = statsText, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                                UI.Label { text = equip.desc, fontSize = 11, fontColor = Theme.TEXT_MUTED },
                             },
                         },
-                        UI.Label { text = "×" .. invItem.count, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                        UI.Label { text = "×" .. invItem.count, fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
                     },
                 }
             end
@@ -1297,16 +1339,16 @@ function GameScreen.ShowEquipSelect(member, slot)
         items[#items + 1] = UI.Panel {
             width = "100%", padding = 16, alignItems = "center", gap = 6,
             children = {
-                UI.Label { text = "库房中没有" .. slotName, fontSize = 13, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "库房中没有" .. slotName, fontSize = 15, fontColor = Theme.TEXT_MUTED },
                 UI.Panel {
                     paddingHorizontal = 12, paddingVertical = 6, borderRadius = 6,
                     backgroundGradient = Theme.GRADIENT_PRIMARY,
-                    onClick = function(self)
+                    onTap = function(self)
                         AudioManager.Click()
                         modal:Close()
                         GameScreen.ShowEquipShop(member)
                     end,
-                    children = { UI.Label { text = "前往购买", fontSize = 12, fontColor = Theme.TEXT_WHITE } },
+                    children = { UI.Label { text = "前往购买", fontSize = 14, fontColor = Theme.TEXT_WHITE } },
                 },
             },
         }
@@ -1331,7 +1373,7 @@ function GameScreen.ShowEquipShop(member)
     local items = {}
     for _, slot in ipairs(GameData.EQUIPMENT_SLOTS) do
         local slotName = GameData.SLOT_NAMES and GameData.SLOT_NAMES[slot] or slot
-        items[#items + 1] = UI.Label { text = slotName, fontSize = 13, fontColor = Theme.GOLD, marginTop = 4 }
+        items[#items + 1] = UI.Label { text = slotName, fontSize = 15, fontColor = Theme.GOLD, marginTop = 4 }
 
         local equipList = GameData.GetEquipmentBySlot(slot)
         for _, equip in ipairs(equipList) do
@@ -1357,18 +1399,18 @@ function GameScreen.ShowEquipShop(member)
                             UI.Panel {
                                 flexDirection = "row", gap = 4, alignItems = "center",
                                 children = {
-                                    UI.Label { text = equip.name, fontSize = 12, fontColor = nameColor },
-                                    UI.Label { text = rarityConf.name, fontSize = 9, fontColor = nameColor },
-                                    inStock > 0 and UI.Label { text = "库存" .. inStock, fontSize = 9, fontColor = Theme.GREEN } or nil,
+                                    UI.Label { text = equip.name, fontSize = 14, fontColor = nameColor },
+                                    UI.Label { text = rarityConf.name, fontSize = 11, fontColor = nameColor },
+                                    inStock > 0 and UI.Label { text = "库存" .. inStock, fontSize = 11, fontColor = Theme.GREEN } or nil,
                                 },
                             },
-                            UI.Label { text = statsText, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = statsText, fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         },
                     },
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 4, borderRadius = 4,
                         backgroundColor = canBuy and Theme.PRIMARY or Theme.BG_INPUT,
-                        onClick = function(self)
+                        onTap = function(self)
                             if not canBuy then return end
                             AudioManager.Click()
                             local ok, msg = EquipmentSystem.BuyEquipment(equip.id)
@@ -1378,7 +1420,7 @@ function GameScreen.ShowEquipShop(member)
                                 GameScreen.ShowEquipShop(member)
                             end
                         end,
-                        children = { UI.Label { text = "银" .. equip.cost, fontSize = 10, fontColor = canBuy and Theme.TEXT_WHITE or Theme.TEXT_MUTED } },
+                        children = { UI.Label { text = "银" .. equip.cost, fontSize = 12, fontColor = canBuy and Theme.TEXT_WHITE or Theme.TEXT_MUTED } },
                     },
                 },
             }
@@ -1392,12 +1434,12 @@ function GameScreen.ShowEquipShop(member)
     modal:SetFooter(UI.Panel {
         flexDirection = "row", justifyContent = "space-between", alignItems = "center", width = "100%",
         children = {
-            UI.Label { text = "当前银两：" .. s.silver, fontSize = 12, fontColor = Theme.SILVER_COLOR },
+            UI.Label { text = "当前银两：" .. s.silver, fontSize = 14, fontColor = Theme.SILVER_COLOR },
             UI.Panel {
                 paddingHorizontal = 12, paddingVertical = 6, borderRadius = 6,
                 backgroundColor = Theme.BG_CARD, borderWidth = 1, borderColor = Theme.BORDER,
                 onClick = function(self) AudioManager.Click() modal:Close(); GameScreen.ShowMemberDetail(member) end,
-                children = { UI.Label { text = "返回详情", fontSize = 12, fontColor = Theme.TEXT_PRIMARY } },
+                children = { UI.Label { text = "返回详情", fontSize = 14, fontColor = Theme.TEXT_PRIMARY } },
             },
         },
     })
@@ -1433,7 +1475,7 @@ function GameScreen.ShowBatchAssign()
             borderWidth = 1, borderColor = Theme.BORDER,
             flexDirection = "row", justifyContent = "space-between", alignItems = "center",
             opacity = isLocked and 0.35 or (#eligible > 0 and 1.0 or 0.4),
-            onClick = function(self)
+            onTap = function(self)
                 AudioManager.Click()
                 if isLocked then
                     GameScreen.ShowResultPopup("功能未解锁", job.label .. job.lockMsg)
@@ -1451,14 +1493,14 @@ function GameScreen.ShowBatchAssign()
                 UI.Panel {
                     flexDirection = "row", gap = 6, alignItems = "center",
                     children = {
-                        UI.Label { text = isLocked and "[锁]" or job.icon, fontSize = 18, fontColor = isLocked and Theme.TEXT_MUTED or job.color },
+                        UI.Label { text = isLocked and "[锁]" or job.icon, fontSize = 20, fontColor = isLocked and Theme.TEXT_MUTED or job.color },
                         UI.Panel { gap = 2, children = {
-                            UI.Label { text = job.label, fontSize = 13, fontColor = isLocked and Theme.TEXT_MUTED or Theme.TEXT_PRIMARY },
-                            UI.Label { text = isLocked and job.lockMsg or ("可安排" .. #eligible .. "人"), fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = job.label, fontSize = 15, fontColor = isLocked and Theme.TEXT_MUTED or Theme.TEXT_PRIMARY },
+                            UI.Label { text = isLocked and job.lockMsg or ("可安排" .. #eligible .. "人"), fontSize = 12, fontColor = Theme.TEXT_MUTED },
                         }},
                     },
                 },
-                UI.Label { text = isLocked and "" or (#eligible .. "人 →"), fontSize = 12, fontColor = job.color },
+                UI.Label { text = isLocked and "" or (#eligible .. "人 →"), fontSize = 14, fontColor = job.color },
             },
         }
     end
@@ -1466,7 +1508,7 @@ function GameScreen.ShowBatchAssign()
     jobBtns[#jobBtns + 1] = UI.Panel {
         width = "100%", padding = 12, borderRadius = 8, backgroundColor = Theme.BG_INPUT,
         borderWidth = 1, borderColor = Theme.BORDER, justifyContent = "center", alignItems = "center",
-        onClick = function(self)
+        onTap = function(self)
             AudioManager.Click()
             local count = 0
             for _, m in ipairs(GameData.GetAliveMembers()) do
@@ -1477,7 +1519,7 @@ function GameScreen.ShowBatchAssign()
             if count > 0 then GameData.AddLog("召回" .. count .. "名族人回家。") end
             modal:Close(); GameScreen.RefreshAll()
         end,
-        children = { UI.Label { text = "全部召回在家", fontSize = 13, fontColor = Theme.TEXT_PRIMARY } },
+        children = { UI.Label { text = "全部召回在家", fontSize = 15, fontColor = Theme.TEXT_PRIMARY } },
     }
     modal:AddContent(UI.ScrollView {
         width = "100%", maxHeight = 400, scrollY = true, bounces = true, showScrollbar = true,
@@ -1542,14 +1584,14 @@ function GameScreen.ShowEndingScreen()
         local color = unlocked and Theme.GOLD or Theme.TEXT_MUTED
         unlockedChildren[#unlockedChildren + 1] = UI.Label {
             text = (unlocked and "[达成] " or "[未知] ") .. label,
-            fontSize = 11, fontColor = color,
+            fontSize = 13, fontColor = color,
         }
     end
 
     local modal = UI.Modal { title = modalTitle, size = "fullscreen", showCloseButton = false, closeOnOverlay = false }
     -- 隐藏结局收集：安全构建children数组（避免table.unpack不在尾部的问题）
     local endingCollectChildren = {
-        UI.Label { text = "隐藏结局收集", fontSize = 14, fontColor = Theme.GOLD },
+        UI.Label { text = "隐藏结局收集", fontSize = 16, fontColor = Theme.GOLD },
     }
     for _, child in ipairs(unlockedChildren) do
         endingCollectChildren[#endingCollectChildren + 1] = child
@@ -1560,26 +1602,26 @@ function GameScreen.ShowEndingScreen()
             UI.Panel {
                 width = "100%", gap = 10, padding = 4,
                 children = {
-                    UI.Label { text = endDesc, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
+                    UI.Label { text = endDesc, fontSize = 15, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
                     UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
                     UI.Panel {
                         width = "100%", alignItems = "center", gap = 4,
                         children = {
-                            UI.Label { text = "宗族评定", fontSize = 16, fontColor = Theme.GOLD },
-                            UI.Label { text = grade, fontSize = 22, fontColor = gradeColor },
-                            UI.Label { text = "总分：" .. score, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+                            UI.Label { text = "宗族评定", fontSize = 18, fontColor = Theme.GOLD },
+                            UI.Label { text = grade, fontSize = 24, fontColor = gradeColor },
+                            UI.Label { text = "总分：" .. score, fontSize = 16, fontColor = Theme.TEXT_PRIMARY },
                         },
                     },
                     UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER },
                     UI.Panel {
                         width = "100%", gap = 4,
                         children = {
-                            UI.Label { text = "传承：" .. s.totalMonths .. "个月", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = "存活族人：" .. aliveCount .. "人（共" .. totalBorn .. "人）", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = "宗族品级：" .. GameData.GetClanRankName(), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = "科举通过：" .. (s.totalExamPasses or 0) .. "次", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = "寨堡：" .. s.fortCount .. "座", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
-                            UI.Label { text = "剩余银两：" .. s.silver, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "传承：" .. s.totalMonths .. "个月", fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "存活族人：" .. aliveCount .. "人（共" .. totalBorn .. "人）", fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "宗族品级：" .. GameData.GetClanRankName(), fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "科举通过：" .. (s.totalExamPasses or 0) .. "次", fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "寨堡：" .. s.fortCount .. "座", fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
+                            UI.Label { text = "剩余银两：" .. s.silver, fontSize = 14, fontColor = Theme.TEXT_SECONDARY },
                         },
                     },
                     -- 隐藏结局收集展示
@@ -1604,7 +1646,7 @@ function GameScreen.ShowEndingScreen()
                     if GameData.state then SaveSystem.AutoSave() end
                     if ShowScreen then ShowScreen("menu") end
                 end,
-                children = { UI.Label { text = "返回主菜单", fontSize = 14, fontColor = Theme.TEXT_WHITE } },
+                children = { UI.Label { text = "返回主菜单", fontSize = 16, fontColor = Theme.TEXT_WHITE } },
             },
         },
     })
@@ -1622,11 +1664,11 @@ function GameScreen.ShowLoanDialog()
     local canBorrow = AdSystem.CanBorrow()
 
     local modal = UI.Modal {
-        title = "钱庄 · 借贷",
         size = "md",
-        showCloseButton = true,
+        showCloseButton = false,
         closeOnOverlay = true,
     }
+    modal:AddContent(CreateLeftCloseHeader(modal, "钱庄 · 借贷"))
 
     local children = {}
 
@@ -1635,26 +1677,26 @@ function GameScreen.ShowLoanDialog()
         width = "100%", padding = 10, borderRadius = 8,
         backgroundColor = Theme.BG_INPUT, gap = 4,
         children = {
-            UI.Label { text = "当前负债", fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+            UI.Label { text = "当前负债", fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
             UI.Panel {
                 width = "100%", flexDirection = "row", justifyContent = "space-between",
                 children = {
-                    UI.Label { text = "贷款笔数", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = #loans .. "/3", fontSize = 11, fontColor = #loans >= 3 and Theme.RED or Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                    UI.Label { text = "贷款笔数", fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = #loans .. "/3", fontSize = 13, fontColor = #loans >= 3 and Theme.RED or Theme.TEXT_PRIMARY, fontWeight = "bold" },
                 },
             },
             UI.Panel {
                 width = "100%", flexDirection = "row", justifyContent = "space-between",
                 children = {
-                    UI.Label { text = "总欠款本金", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = totalDebt .. "两", fontSize = 11, fontColor = totalDebt > 0 and Theme.RED or Theme.TEXT_MUTED, fontWeight = "bold" },
+                    UI.Label { text = "总欠款本金", fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = totalDebt .. "两", fontSize = 13, fontColor = totalDebt > 0 and Theme.RED or Theme.TEXT_MUTED, fontWeight = "bold" },
                 },
             },
             UI.Panel {
                 width = "100%", flexDirection = "row", justifyContent = "space-between",
                 children = {
-                    UI.Label { text = "每月利息支出", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
-                    UI.Label { text = monthlyInterest .. "两/月", fontSize = 11, fontColor = monthlyInterest > 0 and Theme.RED or Theme.TEXT_MUTED, fontWeight = "bold" },
+                    UI.Label { text = "每月利息支出", fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = monthlyInterest .. "两/月", fontSize = 13, fontColor = monthlyInterest > 0 and Theme.RED or Theme.TEXT_MUTED, fontWeight = "bold" },
                 },
             },
         },
@@ -1662,7 +1704,7 @@ function GameScreen.ShowLoanDialog()
 
     -- 当前贷款明细
     if #loans > 0 then
-        children[#children + 1] = UI.Label { text = "在贷明细", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
+        children[#children + 1] = UI.Label { text = "在贷明细", fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
         for idx, loan in ipairs(loans) do
             children[#children + 1] = UI.Panel {
                 width = "100%", padding = 8, borderRadius = 6,
@@ -1672,8 +1714,8 @@ function GameScreen.ShowLoanDialog()
                     UI.Panel {
                         gap = 2,
                         children = {
-                            UI.Label { text = loan.name, fontSize = 11, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                            UI.Label { text = "本金" .. loan.principal .. "两 · 月息" .. loan.interest .. "两 · 剩余" .. loan.monthsLeft .. "月", fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = loan.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "本金" .. loan.principal .. "两 · 月息" .. loan.interest .. "两 · 剩余" .. loan.monthsLeft .. "月", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         },
                     },
                     (function()
@@ -1682,7 +1724,7 @@ function GameScreen.ShowLoanDialog()
                                 width = 60, height = 28, borderRadius = 6,
                                 backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
                                 justifyContent = "center", alignItems = "center",
-                                onClick = function(self)
+                                onTap = function(self)
                                     AudioManager.Click()
                                     AdSystem.RepayLoan(idx, function(success, msg)
                                         modal:Close()
@@ -1690,10 +1732,10 @@ function GameScreen.ShowLoanDialog()
                                         GameScreen.RefreshAll()
                                     end)
                                 end,
-                                children = { UI.Label { text = "还清", fontSize = 10, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
+                                children = { UI.Label { text = "还清", fontSize = 12, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" } },
                             }
                         else
-                            return UI.Label { text = "银两不足", fontSize = 9, fontColor = Theme.RED }
+                            return UI.Label { text = "银两不足", fontSize = 11, fontColor = Theme.RED }
                         end
                     end)(),
                 },
@@ -1706,14 +1748,14 @@ function GameScreen.ShowLoanDialog()
     children[#children + 1] = UI.Panel {
         width = "100%", flexDirection = "row", alignItems = "center", gap = 4, marginTop = 8,
         children = {
-            UI.Label { text = "看广告领银", fontSize = 13, fontColor = { 40, 160, 80, 255 }, fontWeight = "bold" },
-            UI.Label { text = "（白送不用还）", fontSize = 10, fontColor = { 40, 160, 80, 180 } },
+            UI.Label { text = "看广告领银", fontSize = 15, fontColor = { 40, 160, 80, 255 }, fontWeight = "bold" },
+            UI.Label { text = "（白送不用还）", fontSize = 12, fontColor = { 40, 160, 80, 180 } },
         },
     }
     if adGrantRemain <= 0 then
-        children[#children + 1] = UI.Label { text = "本年领取次数已用完，明年再来", fontSize = 11, fontColor = Theme.TEXT_MUTED }
+        children[#children + 1] = UI.Label { text = "本年领取次数已用完，明年再来", fontSize = 13, fontColor = Theme.TEXT_MUTED }
     else
-        children[#children + 1] = UI.Label { text = "今年剩余" .. adGrantRemain .. "次", fontSize = 10, fontColor = Theme.TEXT_MUTED }
+        children[#children + 1] = UI.Label { text = "今年剩余" .. adGrantRemain .. "次", fontSize = 12, fontColor = Theme.TEXT_MUTED }
         for _, opt in ipairs(AdSystem.AD_GRANT_OPTIONS) do
             children[#children + 1] = UI.Panel {
                 width = "100%", padding = 10, borderRadius = 8,
@@ -1723,16 +1765,16 @@ function GameScreen.ShowLoanDialog()
                     UI.Panel {
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
-                            UI.Label { text = opt.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                            UI.Label { text = "领银" .. opt.amount .. "两", fontSize = 12, fontColor = { 40, 160, 80, 255 }, fontWeight = "bold" },
+                            UI.Label { text = opt.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "领银" .. opt.amount .. "两", fontSize = 14, fontColor = { 40, 160, 80, 255 }, fontWeight = "bold" },
                         },
                     },
-                    UI.Label { text = opt.desc .. "（不用还）", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = opt.desc .. "（不用还）", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                     UI.Panel {
                         width = "100%", height = 32, borderRadius = 6, marginTop = 4,
                         backgroundGradient = { direction = "to-right", from = { 60, 180, 100, 255 }, to = { 40, 150, 80, 255 } },
                         flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             AdSystem.TakeAdGrant(opt.id, function(success, msg)
                                 modal:Close()
@@ -1741,7 +1783,7 @@ function GameScreen.ShowLoanDialog()
                             end)
                         end,
                         children = {
-                            UI.Label { text = "▶ 看广告·免费领取", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                            UI.Label { text = "▶ 看广告·免费领取", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                         },
                     },
                 },
@@ -1753,12 +1795,12 @@ function GameScreen.ShowLoanDialog()
     children[#children + 1] = UI.Panel {
         width = "100%", flexDirection = "row", alignItems = "center", gap = 4, marginTop = 10,
         children = {
-            UI.Label { text = "普通借贷", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold" },
-            UI.Label { text = "（有利息，需按月还息到期还本）", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+            UI.Label { text = "普通借贷", fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold" },
+            UI.Label { text = "（有利息，需按月还息到期还本）", fontSize = 12, fontColor = Theme.TEXT_MUTED },
         },
     }
     if not canBorrow then
-        children[#children + 1] = UI.Label { text = "已达最大贷款笔数（3笔），请还清后再借", fontSize = 11, fontColor = Theme.RED }
+        children[#children + 1] = UI.Label { text = "已达最大贷款笔数（3笔），请还清后再借", fontSize = 13, fontColor = Theme.RED }
     else
         for _, opt in ipairs(AdSystem.LOAN_OPTIONS) do
             children[#children + 1] = UI.Panel {
@@ -1769,16 +1811,16 @@ function GameScreen.ShowLoanDialog()
                     UI.Panel {
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
-                            UI.Label { text = opt.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                            UI.Label { text = "借银" .. opt.amount .. "两", fontSize = 12, fontColor = Theme.GOLD, fontWeight = "bold" },
+                            UI.Label { text = opt.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "借银" .. opt.amount .. "两", fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
                         },
                     },
-                    UI.Label { text = opt.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = opt.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                     UI.Panel {
                         width = "100%", height = 32, borderRadius = 6, marginTop = 4,
                         backgroundGradient = { direction = "to-right", from = { 200, 160, 40, 255 }, to = { 180, 120, 20, 255 } },
                         justifyContent = "center", alignItems = "center",
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             AdSystem.TakeLoan(opt.id, function(success, msg)
                                 modal:Close()
@@ -1787,7 +1829,7 @@ function GameScreen.ShowLoanDialog()
                             end)
                         end,
                         children = {
-                            UI.Label { text = "立即借款", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                            UI.Label { text = "立即借款", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                         },
                     },
                 },
@@ -1800,7 +1842,7 @@ function GameScreen.ShowLoanDialog()
         width = "100%", padding = 6, borderRadius = 4, marginTop = 6,
         backgroundColor = { 200, 60, 60, 20 },
         children = {
-            UI.Label { text = "提示：看广告领的银两白送不用还；普通借贷到期未还将扣除声望", fontSize = 9, fontColor = Theme.RED },
+            UI.Label { text = "提示：看广告领的银两白送不用还；普通借贷到期未还将扣除声望", fontSize = 11, fontColor = Theme.RED },
         },
     }
 
@@ -2036,8 +2078,8 @@ function GameScreen.ShowPrayDialog()
                 width = "100%", padding = 8, borderRadius = 6,
                 backgroundGradient = { direction = "to-right", from = { 180, 140, 220, 40 }, to = { 0, 0, 0, 0 } },
                 children = {
-                    UI.Label { text = "第一步：备好祭品，焚香告天", fontSize = 12, fontColor = { 140, 100, 200, 255 }, fontWeight = "bold" },
-                    UI.Label { text = "祭品越丰厚，卦象越灵验", fontSize = 10, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
+                    UI.Label { text = "第一步：备好祭品，焚香告天", fontSize = 14, fontColor = { 140, 100, 200, 255 }, fontWeight = "bold" },
+                    UI.Label { text = "祭品越丰厚，卦象越灵验", fontSize = 12, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
                 },
             },
         }
@@ -2048,7 +2090,7 @@ function GameScreen.ShowPrayDialog()
                 backgroundColor = canAfford and Theme.BG_CARD or { 230, 225, 218, 180 },
                 borderWidth = 1, borderColor = canAfford and Theme.BORDER_GOLD or Theme.BORDER_LIGHT,
                 gap = 4, opacity = canAfford and 1.0 or 0.5,
-                onClick = canAfford and function(self)
+                onTap = canAfford and function(self)
                     AudioManager.Click()
                     GameData.SpendResources(t.silver, t.grain, 0, 0)
                     s.lastPrayMonth = s.totalMonths
@@ -2058,21 +2100,21 @@ function GameScreen.ShowPrayDialog()
                     UI.Panel {
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
-                            UI.Label { text = t.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = t.name, fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
                             UI.Panel {
                                 flexDirection = "row", gap = 6,
                                 children = {
-                                    UI.Label { text = "银" .. t.silver, fontSize = 10, fontColor = Theme.GOLD_DARK },
-                                    UI.Label { text = "粮" .. t.grain, fontSize = 10, fontColor = { 100, 160, 60, 255 } },
+                                    UI.Label { text = "银" .. t.silver, fontSize = 12, fontColor = Theme.GOLD_DARK },
+                                    UI.Label { text = "粮" .. t.grain, fontSize = 12, fontColor = { 100, 160, 60, 255 } },
                                 },
                             },
                         },
                     },
-                    UI.Label { text = t.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = t.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                 },
             }
         end
-        children[#children + 1] = UI.Label { text = "每季（3个月）可祈福一次", fontSize = 9, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
+        children[#children + 1] = UI.Label { text = "每季（3个月）可祈福一次", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
         modal:AddContent(UI.ScrollView {
             width = "100%", maxHeight = 450, scrollY = true, bounces = true, showScrollbar = true,
             children = { UI.Panel { width = "100%", padding = 8, gap = 8, children = children } },
@@ -2081,6 +2123,7 @@ function GameScreen.ShowPrayDialog()
 
     -- ========== Phase 2: 抽卦象（选一张） ==========
     function showPhase2(tier)
+        modal:ClearContent()
         -- 随机抽3个不重复的卦象
         local pool = {}
         for i = 1, #allHexagrams do pool[i] = i end
@@ -2097,8 +2140,8 @@ function GameScreen.ShowPrayDialog()
                 width = "100%", padding = 8, borderRadius = 6,
                 backgroundGradient = { direction = "to-right", from = { 180, 140, 220, 40 }, to = { 0, 0, 0, 0 } },
                 children = {
-                    UI.Label { text = "第二步：天降三卦，择其一而观之", fontSize = 12, fontColor = { 140, 100, 200, 255 }, fontWeight = "bold" },
-                    UI.Label { text = "每卦蕴含不同机缘，慎重抉择", fontSize = 10, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
+                    UI.Label { text = "第二步：天降三卦，择其一而观之", fontSize = 14, fontColor = { 140, 100, 200, 255 }, fontWeight = "bold" },
+                    UI.Label { text = "每卦蕴含不同机缘，慎重抉择", fontSize = 12, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
                 },
             },
         }
@@ -2109,7 +2152,7 @@ function GameScreen.ShowPrayDialog()
                 backgroundColor = Theme.BG_CARD,
                 borderWidth = 2, borderColor = hex.color,
                 gap = 4,
-                onClick = function(self) AudioManager.Click() showPhase3(tier, hex) end,
+                onTap = function(self) AudioManager.Click() showPhase3(tier, hex) end,
                 children = {
                     UI.Panel {
                         width = "100%", flexDirection = "row", alignItems = "center", gap = 8,
@@ -2119,14 +2162,14 @@ function GameScreen.ShowPrayDialog()
                                 backgroundColor = hex.color,
                                 justifyContent = "center", alignItems = "center",
                                 children = {
-                                    UI.Label { text = hex.symbol, fontSize = 18, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" },
+                                    UI.Label { text = hex.symbol, fontSize = 20, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" },
                                 },
                             },
                             UI.Panel {
                                 flexShrink = 1, gap = 2,
                                 children = {
-                                    UI.Label { text = hex.gua .. "卦 · " .. hex.name, fontSize = 14, fontColor = hex.color, fontWeight = "bold" },
-                                    UI.Label { text = "点击翻开此卦", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = hex.gua .. "卦 · " .. hex.name, fontSize = 16, fontColor = hex.color, fontWeight = "bold" },
+                                    UI.Label { text = "点击翻开此卦", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
                         },
@@ -2142,6 +2185,7 @@ function GameScreen.ShowPrayDialog()
 
     -- ========== Phase 3: 情境抉择 ==========
     function showPhase3(tier, hex)
+        modal:ClearContent()
         modal.title = "祭天祈福 · " .. hex.gua .. "卦"
         local children = {
             -- 卦象标题
@@ -2151,8 +2195,8 @@ function GameScreen.ShowPrayDialog()
                 borderWidth = 1, borderColor = hex.color,
                 alignItems = "center", gap = 4,
                 children = {
-                    UI.Label { text = hex.symbol, fontSize = 28, fontColor = hex.color },
-                    UI.Label { text = hex.gua .. "卦 · " .. hex.name, fontSize = 16, fontColor = hex.color, fontWeight = "bold" },
+                    UI.Label { text = hex.symbol, fontSize = 30, fontColor = hex.color },
+                    UI.Label { text = hex.gua .. "卦 · " .. hex.name, fontSize = 18, fontColor = hex.color, fontWeight = "bold" },
                 },
             },
             -- 情境描述
@@ -2160,7 +2204,7 @@ function GameScreen.ShowPrayDialog()
                 width = "100%", padding = 10, borderRadius = 6,
                 backgroundColor = Theme.BG_WHITE,
                 children = {
-                    UI.Label { text = hex.scene, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal", lineHeight = 1.5 },
+                    UI.Label { text = hex.scene, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal", lineHeight = 1.5 },
                 },
             },
         }
@@ -2174,16 +2218,16 @@ function GameScreen.ShowPrayDialog()
                 width = "100%", padding = 10, borderRadius = 8,
                 backgroundColor = btnColors.bg,
                 borderWidth = 1, borderColor = btnColors.border,
-                onClick = function(self) AudioManager.Click() showResult(tier, hex, ch) end,
+                onTap = function(self) AudioManager.Click() showResult(tier, hex, ch) end,
                 children = {
-                    UI.Label { text = ch.text, fontSize = 13, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold", whiteSpace = "normal" },
+                    UI.Label { text = ch.text, fontSize = 15, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold", whiteSpace = "normal" },
                 },
             }
         end
 
         children[#children + 1] = UI.Label {
             text = "祭品：" .. tier.name .. "（灵验加成+" .. (tier.luck * 10) .. "%）",
-            fontSize = 9, fontColor = Theme.TEXT_MUTED, textAlign = "center", width = "100%", marginTop = 2,
+            fontSize = 11, fontColor = Theme.TEXT_MUTED, textAlign = "center", width = "100%", marginTop = 2,
         }
         modal:AddContent(UI.ScrollView {
             width = "100%", maxHeight = 450, scrollY = true, bounces = true, showScrollbar = true,
@@ -2193,6 +2237,7 @@ function GameScreen.ShowPrayDialog()
 
     -- ========== Phase 4: 展示结果 ==========
     function showResult(tier, hex, choice)
+        modal:ClearContent()
         -- 计算成功率：基础概率 + 祭品加成（每级+10%）
         local chance = choice.base + tier.luck * 10
         local success = math.random(1, 100) <= chance
@@ -2211,22 +2256,22 @@ function GameScreen.ShowPrayDialog()
                 borderWidth = 2, borderColor = resultColor,
                 alignItems = "center", gap = 8,
                 children = {
-                    UI.Label { text = resultIcon, fontSize = 36, fontColor = resultColor, fontWeight = "bold" },
-                    UI.Label { text = hex.gua .. "卦 · " .. hex.name, fontSize = 14, fontColor = hex.color },
+                    UI.Label { text = resultIcon, fontSize = 38, fontColor = resultColor, fontWeight = "bold" },
+                    UI.Label { text = hex.gua .. "卦 · " .. hex.name, fontSize = 16, fontColor = hex.color },
                     UI.Panel { width = "80%", height = 1, backgroundColor = { 200, 200, 200, 100 } },
-                    UI.Label { text = outcome.desc, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold", textAlign = "center", whiteSpace = "normal" },
+                    UI.Label { text = outcome.desc, fontSize = 16, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold", textAlign = "center", whiteSpace = "normal" },
                 },
             },
             UI.Panel {
                 width = "100%", height = 36, borderRadius = 8, marginTop = 4,
                 backgroundGradient = { direction = "to-right", from = { 140, 100, 200, 255 }, to = { 100, 60, 180, 255 } },
                 justifyContent = "center", alignItems = "center",
-                onClick = function(self)
+                onTap = function(self)
                     AudioManager.Click()
                     modal:Close()
                     GameScreen.RefreshAll()
                 end,
-                children = { UI.Label { text = "天意已定", fontSize = 13, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
+                children = { UI.Label { text = "天意已定", fontSize = 15, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
             },
         }
         modal:AddContent(UI.ScrollView {
@@ -2320,8 +2365,8 @@ function GameScreen.ShowCourtesanDialog()
                 width = "100%", padding = 8, borderRadius = 6,
                 backgroundGradient = { direction = "to-right", from = { 230, 120, 160, 40 }, to = { 0, 0, 0, 0 } },
                 children = {
-                    UI.Label { text = "教坊司举办花魁大赛，四方佳丽齐聚", fontSize = 12, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold" },
-                    UI.Label { text = "选派族中女子参赛，报名费 银" .. entryFee, fontSize = 10, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
+                    UI.Label { text = "教坊司举办花魁大赛，四方佳丽齐聚", fontSize = 14, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold" },
+                    UI.Label { text = "选派族中女子参赛，报名费 银" .. entryFee, fontSize = 12, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
                 },
             },
         }
@@ -2331,12 +2376,12 @@ function GameScreen.ShowCourtesanDialog()
                 width = "100%", padding = 16, borderRadius = 8,
                 backgroundColor = Theme.BG_WHITE, alignItems = "center", gap = 6,
                 children = {
-                    UI.Label { text = "族中暂无适龄女子参赛", fontSize = 13, fontColor = Theme.TEXT_MUTED },
-                    UI.Label { text = "（需16-35岁、状态为在家的女性族人）", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = "族中暂无适龄女子参赛", fontSize = 15, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = "（需16-35岁、状态为在家的女性族人）", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                 },
             }
         else
-            children[#children + 1] = UI.Label { text = "选择参赛者：", fontSize = 11, fontColor = Theme.TEXT_SECONDARY }
+            children[#children + 1] = UI.Label { text = "选择参赛者：", fontSize = 13, fontColor = Theme.TEXT_SECONDARY }
             for _, c in ipairs(candidates) do
                 local canAfford = s.silver >= entryFee
                 children[#children + 1] = UI.Panel {
@@ -2344,7 +2389,7 @@ function GameScreen.ShowCourtesanDialog()
                     backgroundColor = canAfford and Theme.BG_CARD or { 230, 225, 218, 180 },
                     borderWidth = 1, borderColor = canAfford and { 230, 120, 160, 200 } or Theme.BORDER_LIGHT,
                     opacity = canAfford and 1.0 or 0.5, gap = 4,
-                    onClick = canAfford and function(self)
+                    onTap = canAfford and function(self)
                         AudioManager.Click()
                         GameData.SpendResources(entryFee, 0, 0, 0)
                         s.lastCourtesanMonth = s.totalMonths
@@ -2362,23 +2407,23 @@ function GameScreen.ShowCourtesanDialog()
                         UI.Panel {
                             width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                             children = {
-                                UI.Label { text = c.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                                UI.Label { text = c.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = c.name, fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                UI.Label { text = c.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                             },
                         },
                         UI.Panel {
                             flexDirection = "row", gap = 8,
                             children = {
-                                UI.Label { text = "才学" .. c.study, fontSize = 10, fontColor = { 100, 120, 200, 255 } },
-                                UI.Label { text = "仪态" .. c.health, fontSize = 10, fontColor = { 200, 120, 100, 255 } },
-                                c.talent and UI.Label { text = "天赋:" .. c.talent.name, fontSize = 9, fontColor = Theme.GOLD_DARK } or nil,
+                                UI.Label { text = "才学" .. c.study, fontSize = 12, fontColor = { 100, 120, 200, 255 } },
+                                UI.Label { text = "仪态" .. c.health, fontSize = 12, fontColor = { 200, 120, 100, 255 } },
+                                c.talent and UI.Label { text = "天赋:" .. c.talent.name, fontSize = 11, fontColor = Theme.GOLD_DARK } or nil,
                             },
                         },
                     },
                 }
             end
         end
-        children[#children + 1] = UI.Label { text = "每半年（6个月）可参赛一次", fontSize = 9, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
+        children[#children + 1] = UI.Label { text = "每半年（6个月）可参赛一次", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
         modal:AddContent(UI.ScrollView {
             width = "100%", maxHeight = 380, scrollY = true, showScrollbar = true, bounces = true,
             children = { UI.Panel { width = "100%", padding = 8, gap = 8, children = children } },
@@ -2387,6 +2432,7 @@ function GameScreen.ShowCourtesanDialog()
 
     -- ========== Phase 2: 比赛环节（选策略） ==========
     function showPhase2(player, contestants, roundIdx, allScores)
+        modal:ClearContent()
         if roundIdx > 3 then
             showResult(player, contestants, allScores)
             return
@@ -2402,12 +2448,12 @@ function GameScreen.ShowCourtesanDialog()
                 width = "100%", padding = 8, borderRadius = 6,
                 backgroundGradient = { direction = "to-right", from = { 230, 120, 160, 40 }, to = { 0, 0, 0, 0 } },
                 children = {
-                    UI.Label { text = "第" .. roundIdx .. "轮：" .. round.name, fontSize = 14, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold" },
-                    UI.Label { text = round.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
+                    UI.Label { text = "第" .. roundIdx .. "轮：" .. round.name, fontSize = 16, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold" },
+                    UI.Label { text = round.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED, marginTop = 2 },
                 },
             },
             -- 选手状态
-            UI.Label { text = "参赛选手", fontSize = 11, fontColor = Theme.TEXT_SECONDARY, marginTop = 4 },
+            UI.Label { text = "参赛选手", fontSize = 13, fontColor = Theme.TEXT_SECONDARY, marginTop = 4 },
         }
 
         -- 显示所有选手当前总分
@@ -2426,16 +2472,16 @@ function GameScreen.ShowCourtesanDialog()
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = isPlayer and "我方" or "对手", fontSize = 9,
+                            UI.Label { text = isPlayer and "我方" or "对手", fontSize = 11,
                                 fontColor = isPlayer and { 200, 100, 140, 255 } or Theme.TEXT_MUTED },
-                            UI.Label { text = c.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = isPlayer and "bold" or "normal" },
+                            UI.Label { text = c.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = isPlayer and "bold" or "normal" },
                         },
                     },
                     UI.Panel {
                         flexDirection = "row", gap = 6,
                         children = {
-                            UI.Label { text = round.icon .. c[round.attr], fontSize = 10, fontColor = { 100, 120, 200, 255 } },
-                            roundIdx > 1 and UI.Label { text = "累计" .. totalSoFar, fontSize = 9, fontColor = Theme.GOLD_DARK } or nil,
+                            UI.Label { text = round.icon .. c[round.attr], fontSize = 12, fontColor = { 100, 120, 200, 255 } },
+                            roundIdx > 1 and UI.Label { text = "累计" .. totalSoFar, fontSize = 11, fontColor = Theme.GOLD_DARK } or nil,
                         },
                     },
                 },
@@ -2444,7 +2490,7 @@ function GameScreen.ShowCourtesanDialog()
 
         -- 策略选择（仅玩家选择）
         children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 6 }
-        children[#children + 1] = UI.Label { text = "选择策略：", fontSize = 12, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold", marginTop = 4 }
+        children[#children + 1] = UI.Label { text = "选择策略：", fontSize = 14, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold", marginTop = 4 }
 
         for _, strat in ipairs(round.strategies) do
             children[#children + 1] = UI.Panel {
@@ -2452,7 +2498,7 @@ function GameScreen.ShowCourtesanDialog()
                 backgroundColor = Theme.BG_CARD,
                 borderWidth = 1, borderColor = { 230, 120, 160, 150 },
                 gap = 2,
-                onClick = function(self)
+                onTap = function(self)
                     AudioManager.Click()
                     -- 计算本轮所有人得分
                     for i, c in ipairs(contestants) do
@@ -2470,15 +2516,15 @@ function GameScreen.ShowCourtesanDialog()
                     showRoundResult(player, contestants, roundIdx, allScores)
                 end,
                 children = {
-                    UI.Label { text = strat.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                    UI.Label { text = strat.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = strat.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                    UI.Label { text = strat.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED },
                     UI.Panel {
                         flexDirection = "row", gap = 8,
                         children = (function()
                             local tags = {}
-                            if strat.bonus > 0 then tags[#tags+1] = UI.Label { text = "加成+" .. strat.bonus, fontSize = 9, fontColor = Theme.GREEN } end
-                            if strat.risk > 0 then tags[#tags+1] = UI.Label { text = "风险-" .. strat.risk, fontSize = 9, fontColor = Theme.RED } end
-                            if strat.bonus == 0 and strat.risk == 0 then tags[#tags+1] = UI.Label { text = "稳定发挥", fontSize = 9, fontColor = Theme.TEXT_MUTED } end
+                            if strat.bonus > 0 then tags[#tags+1] = UI.Label { text = "加成+" .. strat.bonus, fontSize = 11, fontColor = Theme.GREEN } end
+                            if strat.risk > 0 then tags[#tags+1] = UI.Label { text = "风险-" .. strat.risk, fontSize = 11, fontColor = Theme.RED } end
+                            if strat.bonus == 0 and strat.risk == 0 then tags[#tags+1] = UI.Label { text = "稳定发挥", fontSize = 11, fontColor = Theme.TEXT_MUTED } end
                             return tags
                         end)(),
                     },
@@ -2493,6 +2539,7 @@ function GameScreen.ShowCourtesanDialog()
 
     -- ========== 单轮结果展示 ==========
     function showRoundResult(player, contestants, roundIdx, allScores)
+        modal:ClearContent()
         local round = rounds[roundIdx]
         modal.title = "花魁大赛 · " .. round.name .. " 结果"
 
@@ -2509,7 +2556,7 @@ function GameScreen.ShowCourtesanDialog()
                 backgroundColor = { 230, 120, 160, 25 },
                 alignItems = "center",
                 children = {
-                    UI.Label { text = round.name .. " · 得分揭晓", fontSize = 14, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold" },
+                    UI.Label { text = round.name .. " · 得分揭晓", fontSize = 16, fontColor = { 200, 100, 140, 255 }, fontWeight = "bold" },
                 },
             },
         }
@@ -2526,14 +2573,14 @@ function GameScreen.ShowCourtesanDialog()
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = rankIcons[rank] or rank, fontSize = 14,
+                            UI.Label { text = rankIcons[rank] or rank, fontSize = 16,
                                 fontColor = rank == 1 and Theme.GOLD or (rank == 2 and Theme.SILVER_COLOR or Theme.TEXT_MUTED),
                                 fontWeight = "bold" },
-                            UI.Label { text = entry.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = isPlayer and "bold" or "normal" },
-                            isPlayer and UI.Label { text = "(我方)", fontSize = 9, fontColor = { 200, 100, 140, 255 } } or nil,
+                            UI.Label { text = entry.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = isPlayer and "bold" or "normal" },
+                            isPlayer and UI.Label { text = "(我方)", fontSize = 11, fontColor = { 200, 100, 140, 255 } } or nil,
                         },
                     },
-                    UI.Label { text = entry.score .. "分", fontSize = 12, fontColor = Theme.GOLD_DARK, fontWeight = "bold" },
+                    UI.Label { text = entry.score .. "分", fontSize = 14, fontColor = Theme.GOLD_DARK, fontWeight = "bold" },
                 },
             }
         end
@@ -2544,11 +2591,11 @@ function GameScreen.ShowCourtesanDialog()
             width = "100%", height = 36, borderRadius = 8, marginTop = 8,
             backgroundGradient = { direction = "to-right", from = { 230, 120, 160, 255 }, to = { 200, 80, 140, 255 } },
             justifyContent = "center", alignItems = "center",
-            onClick = function(self)
+            onTap = function(self)
                 AudioManager.Click()
                 showPhase2(player, contestants, roundIdx + 1, allScores)
             end,
-            children = { UI.Label { text = btnText, fontSize = 13, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
+            children = { UI.Label { text = btnText, fontSize = 15, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
         }
         modal:AddContent(UI.ScrollView {
             width = "100%", maxHeight = 400, scrollY = true, showScrollbar = true, bounces = true,
@@ -2558,6 +2605,7 @@ function GameScreen.ShowCourtesanDialog()
 
     -- ========== 最终结果 ==========
     function showResult(player, contestants, allScores)
+        modal:ClearContent()
         modal.title = "花魁大赛 · 最终结果"
 
         -- 计算总分
@@ -2634,13 +2682,13 @@ function GameScreen.ShowCourtesanDialog()
                 borderWidth = 2, borderColor = reward.color,
                 alignItems = "center", gap = 6,
                 children = {
-                    UI.Label { text = playerRank == 1 and "夺魁" or rankIcons[playerRank], fontSize = 32, fontColor = reward.color, fontWeight = "bold" },
-                    UI.Label { text = player.name .. " · " .. reward.title, fontSize = 16, fontColor = reward.color, fontWeight = "bold" },
+                    UI.Label { text = playerRank == 1 and "夺魁" or rankIcons[playerRank], fontSize = 34, fontColor = reward.color, fontWeight = "bold" },
+                    UI.Label { text = player.name .. " · " .. reward.title, fontSize = 18, fontColor = reward.color, fontWeight = "bold" },
                     UI.Panel { width = "80%", height = 1, backgroundColor = { 200, 200, 200, 100 } },
-                    UI.Label { text = reward.desc, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, textAlign = "center", whiteSpace = "normal" },
+                    UI.Label { text = reward.desc, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, textAlign = "center", whiteSpace = "normal" },
                 },
             },
-            UI.Label { text = "最终排名", fontSize = 12, fontColor = Theme.TEXT_SECONDARY, marginTop = 6 },
+            UI.Label { text = "最终排名", fontSize = 14, fontColor = Theme.TEXT_SECONDARY, marginTop = 6 },
         }
         for rank, entry in ipairs(totals) do
             local isPlayer = not entry.isAI
@@ -2652,12 +2700,12 @@ function GameScreen.ShowCourtesanDialog()
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = rankIcons[rank], fontSize = 13,
+                            UI.Label { text = rankIcons[rank], fontSize = 15,
                                 fontColor = rank == 1 and Theme.GOLD or Theme.TEXT_MUTED, fontWeight = "bold" },
-                            UI.Label { text = entry.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
+                            UI.Label { text = entry.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
                         },
                     },
-                    UI.Label { text = "总分 " .. entry.score, fontSize = 11, fontColor = Theme.GOLD_DARK },
+                    UI.Label { text = "总分 " .. entry.score, fontSize = 13, fontColor = Theme.GOLD_DARK },
                 },
             }
         end
@@ -2665,8 +2713,8 @@ function GameScreen.ShowCourtesanDialog()
             width = "100%", height = 36, borderRadius = 8, marginTop = 8,
             backgroundGradient = { direction = "to-right", from = { 230, 120, 160, 255 }, to = { 200, 80, 140, 255 } },
             justifyContent = "center", alignItems = "center",
-            onClick = function(self) AudioManager.Click() modal:Close(); GameScreen.RefreshAll() end,
-            children = { UI.Label { text = "曲终人散", fontSize = 13, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
+            onTap = function(self) AudioManager.Click() modal:Close(); GameScreen.RefreshAll() end,
+            children = { UI.Label { text = "曲终人散", fontSize = 15, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
         }
         modal:AddContent(UI.ScrollView {
             width = "100%", maxHeight = 420, scrollY = true, showScrollbar = true, bounces = true,
@@ -2863,9 +2911,9 @@ function GameScreen.ShowImperialSealDialog()
                 UI.Panel {
                     width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                     children = {
-                        UI.Label { text = "皇恩值", fontSize = 12, fontColor = Theme.GOLD, fontWeight = "bold" },
+                        UI.Label { text = "皇恩值", fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
                         UI.Label { text = s.imperialFavor .. (nextTier and ("/" .. nextTier.favor) or " (已满)"),
-                            fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold" },
+                            fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold" },
                     },
                 },
                 -- 进度条
@@ -2880,8 +2928,8 @@ function GameScreen.ShowImperialSealDialog()
                         },
                     },
                 },
-                nextTier and UI.Label { text = "下一封赏：" .. nextTier.name .. "（需" .. nextTier.favor .. "）", fontSize = 9, fontColor = Theme.TEXT_MUTED }
-                    or UI.Label { text = "已获最高封赏！", fontSize = 9, fontColor = Theme.GOLD },
+                nextTier and UI.Label { text = "下一封赏：" .. nextTier.name .. "（需" .. nextTier.favor .. "）", fontSize = 11, fontColor = Theme.TEXT_MUTED }
+                    or UI.Label { text = "已获最高封赏！", fontSize = 11, fontColor = Theme.GOLD },
             },
         }
 
@@ -2899,17 +2947,17 @@ function GameScreen.ShowImperialSealDialog()
                         UI.Panel {
                             width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                             children = {
-                                UI.Label { text = "可领取：" .. tier.name, fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold" },
-                                UI.Label { text = "皇恩" .. tier.favor, fontSize = 10, fontColor = Theme.GOLD_DARK },
+                                UI.Label { text = "可领取：" .. tier.name, fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold" },
+                                UI.Label { text = "皇恩" .. tier.favor, fontSize = 12, fontColor = Theme.GOLD_DARK },
                             },
                         },
-                        UI.Label { text = tier.desc, fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
-                        UI.Label { text = "奖励：" .. tier.reward, fontSize = 10, fontColor = { 180, 120, 30, 255 }, fontWeight = "bold" },
+                        UI.Label { text = tier.desc, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                        UI.Label { text = "奖励：" .. tier.reward, fontSize = 12, fontColor = { 180, 120, 30, 255 }, fontWeight = "bold" },
                         UI.Panel {
                             width = "100%", height = 32, borderRadius = 6, marginTop = 2,
                             backgroundGradient = { direction = "to-right", from = { 220, 180, 50, 255 }, to = { 200, 140, 30, 255 } },
                             justifyContent = "center", alignItems = "center",
-                            onClick = function(self)
+                            onTap = function(self)
                                 AudioManager.Click()
                                 tier.apply()
                                 s.claimedSeals[tier.name] = true
@@ -2918,7 +2966,7 @@ function GameScreen.ShowImperialSealDialog()
                                 GameScreen.ShowResultPopup("天子诰封 · " .. tier.name, tier.desc .. "\n\n" .. tier.reward)
                                 GameScreen.RefreshAll()
                             end,
-                            children = { UI.Label { text = "领取封赏", fontSize = 12, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
+                            children = { UI.Label { text = "领取封赏", fontSize = 14, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
                         },
                     },
                 }
@@ -2931,8 +2979,8 @@ function GameScreen.ShowImperialSealDialog()
         children[#children + 1] = UI.Panel {
             width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
             children = {
-                UI.Label { text = "朝廷差事", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold" },
-                UI.Label { text = "完成差事积累皇恩", fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "朝廷差事", fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold" },
+                UI.Label { text = "完成差事积累皇恩", fontSize = 11, fontColor = Theme.TEXT_MUTED },
             },
         }
 
@@ -2947,23 +2995,23 @@ function GameScreen.ShowImperialSealDialog()
                     UI.Panel {
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
-                            UI.Label { text = mission.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                            UI.Label { text = "皇恩+" .. mission.favor, fontSize = 11, fontColor = Theme.GOLD, fontWeight = "bold" },
+                            UI.Label { text = mission.name, fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "皇恩+" .. mission.favor, fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold" },
                         },
                     },
-                    UI.Label { text = mission.desc, fontSize = 10, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal" },
+                    UI.Label { text = mission.desc, fontSize = 12, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal" },
                     UI.Panel {
                         width = "100%", flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
-                            UI.Label { text = "需：" .. mission.require, fontSize = 10, fontColor = canDo and Theme.GREEN or Theme.RED },
-                            UI.Label { text = "得：" .. mission.bonusDesc, fontSize = 9, fontColor = Theme.GOLD_DARK },
+                            UI.Label { text = "需：" .. mission.require, fontSize = 12, fontColor = canDo and Theme.GREEN or Theme.RED },
+                            UI.Label { text = "得：" .. mission.bonusDesc, fontSize = 11, fontColor = Theme.GOLD_DARK },
                         },
                     },
                     canDo and UI.Panel {
                         width = "100%", height = 30, borderRadius = 6, marginTop = 2,
                         backgroundGradient = { direction = "to-right", from = { 180, 140, 40, 255 }, to = { 160, 120, 20, 255 } },
                         justifyContent = "center", alignItems = "center",
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             mission.cost()
                             mission.bonus()
@@ -2975,15 +3023,15 @@ function GameScreen.ShowImperialSealDialog()
                                 "皇恩+" .. mission.favor .. "\n" .. mission.bonusDesc .. "\n\n累计皇恩：" .. s.imperialFavor)
                             GameScreen.RefreshAll()
                         end,
-                        children = { UI.Label { text = "承办差事", fontSize = 12, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
-                    } or UI.Label { text = "条件不足", fontSize = 10, fontColor = Theme.RED, textAlign = "center", width = "100%", marginTop = 2 },
+                        children = { UI.Label { text = "承办差事", fontSize = 14, fontColor = { 255, 255, 255, 255 }, fontWeight = "bold" } },
+                    } or UI.Label { text = "条件不足", fontSize = 12, fontColor = Theme.RED, textAlign = "center", width = "100%", marginTop = 2 },
                 },
             }
         end
 
         -- 封赏进度一览
         children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 4 }
-        children[#children + 1] = UI.Label { text = "封赏阶梯", fontSize = 11, fontColor = Theme.TEXT_SECONDARY }
+        children[#children + 1] = UI.Label { text = "封赏阶梯", fontSize = 13, fontColor = Theme.TEXT_SECONDARY }
         for _, tier in ipairs(sealTiers) do
             local reached = s.imperialFavor >= tier.favor
             children[#children + 1] = UI.Panel {
@@ -2995,17 +3043,17 @@ function GameScreen.ShowImperialSealDialog()
                         flexDirection = "row", gap = 4, alignItems = "center",
                         children = {
                             UI.Label { text = tier.claimed and "已领" or (reached and "可领" or "未达"),
-                                fontSize = 9, fontColor = tier.claimed and Theme.GREEN or (reached and Theme.GOLD or Theme.TEXT_MUTED) },
-                            UI.Label { text = tier.name, fontSize = 11,
+                                fontSize = 11, fontColor = tier.claimed and Theme.GREEN or (reached and Theme.GOLD or Theme.TEXT_MUTED) },
+                            UI.Label { text = tier.name, fontSize = 13,
                                 fontColor = tier.claimed and Theme.TEXT_MUTED or (reached and Theme.GOLD or Theme.TEXT_PRIMARY) },
                         },
                     },
-                    UI.Label { text = "皇恩" .. tier.favor, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = "皇恩" .. tier.favor, fontSize = 11, fontColor = Theme.TEXT_MUTED },
                 },
             }
         end
 
-        children[#children + 1] = UI.Label { text = "每半年（6个月）可承办一次差事", fontSize = 9, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
+        children[#children + 1] = UI.Label { text = "每半年（6个月）可承办一次差事", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
 
         modal:AddContent(UI.ScrollView {
             width = "100%", maxHeight = 440, scrollY = true, showScrollbar = true, bounces = true,
@@ -3049,12 +3097,12 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
         -- 提示文字
         children[#children + 1] = UI.Label {
             text = deadName .. "已故，请选择新任族长。",
-            fontSize = 12, fontColor = Theme.TEXT_PRIMARY, textAlign = "center",
+            fontSize = 14, fontColor = Theme.TEXT_PRIMARY, textAlign = "center",
             whiteSpace = "normal",
         }
         children[#children + 1] = UI.Label {
             text = "年满16岁的族人方可继承族长之位",
-            fontSize = 10, fontColor = Theme.TEXT_MUTED, textAlign = "center",
+            fontSize = 12, fontColor = Theme.TEXT_MUTED, textAlign = "center",
         }
         children[#children + 1] = UI.Panel { width = "80%", height = 1, backgroundColor = Theme.BORDER_GOLD, alignSelf = "center" }
 
@@ -3078,7 +3126,7 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
                 backgroundColor = Theme.BG_INPUT,
                 borderWidth = 1, borderColor = Theme.BORDER_LIGHT,
                 gap = 6,
-                onClick = function(self)
+                onTap = function(self)
                     AudioManager.Select()
                     GameData.SetPatriarch(c.id)
                     modal:Close()
@@ -3093,11 +3141,11 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
                             UI.Panel {
                                 flexDirection = "row", gap = 4, alignItems = "center",
                                 children = {
-                                    UI.Label { text = c.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                    UI.Label { text = c.name, fontSize = 16, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
                                     UI.Label { text = genderText .. " " .. c.age .. "岁",
-                                        fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                                        fontSize = 13, fontColor = Theme.TEXT_MUTED },
                                     UI.Label {
-                                        text = relationTag, fontSize = 9,
+                                        text = relationTag, fontSize = 11,
                                         fontColor = { 255, 255, 255, 255 },
                                         backgroundColor = relationColor,
                                         paddingLeft = 4, paddingRight = 4, paddingTop = 1, paddingBottom = 1,
@@ -3106,7 +3154,7 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
                                 },
                             },
                             UI.Label { text = c.identity .. (talentText ~= "" and " " .. talentText or ""),
-                                fontSize = 10, fontColor = Theme.GOLD },
+                                fontSize = 12, fontColor = Theme.GOLD },
                         },
                     },
                     -- 属性条
@@ -3114,7 +3162,7 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
                     StatBar("武艺", c.martial),
                     StatBar("健康", c.health),
                     -- 提示
-                    UI.Label { text = "点击选择此人为新族长", fontSize = 9, fontColor = Theme.TEXT_MUTED, textAlign = "center" },
+                    UI.Label { text = "点击选择此人为新族长", fontSize = 11, fontColor = Theme.TEXT_MUTED, textAlign = "center" },
                 },
             }
 
@@ -3124,7 +3172,7 @@ function GameScreen.ShowSuccessionDialog(deadPatriarchId)
         if #candidates > showCount then
             children[#children + 1] = UI.Label {
                 text = "（还有" .. (#candidates - showCount) .. "名候选人未显示）",
-                fontSize = 10, fontColor = Theme.TEXT_MUTED, textAlign = "center",
+                fontSize = 12, fontColor = Theme.TEXT_MUTED, textAlign = "center",
             }
         end
 
@@ -3155,11 +3203,11 @@ function GameScreen.ShowClinicDialog()
     local healMin, healMax = 25, 40
 
     local modal = UI.Modal {
-        title = "医馆 · 问诊",
         size = "md",
-        showCloseButton = true,
+        showCloseButton = false,
         closeOnOverlay = true,
     }
+    modal:AddContent(CreateLeftCloseHeader(modal, "医馆 · 问诊"))
 
     local function renderContent()
         local children = {}
@@ -3169,9 +3217,9 @@ function GameScreen.ShowClinicDialog()
             width = "100%", padding = 8, borderRadius = 8,
             backgroundColor = Theme.BG_INPUT, gap = 4,
             children = {
-                UI.Label { text = "延请郎中，诊治族人", fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                UI.Label { text = "诊金 " .. healCost .. " 两/人 · 恢复健康 " .. healMin .. "~" .. healMax, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
-                UI.Label { text = "当前银两：" .. s.silver .. " 两", fontSize = 11, fontColor = s.silver >= healCost and Theme.GOLD_DARK or Theme.RED },
+                UI.Label { text = "延请郎中，诊治族人", fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                UI.Label { text = "诊金 " .. healCost .. " 两/人 · 恢复健康 " .. healMin .. "~" .. healMax, fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
+                UI.Label { text = "当前银两：" .. s.silver .. " 两", fontSize = 13, fontColor = s.silver >= healCost and Theme.GOLD_DARK or Theme.RED },
             },
         }
 
@@ -3189,8 +3237,8 @@ function GameScreen.ShowClinicDialog()
                 width = "100%", paddingTop = 30, paddingBottom = 30,
                 justifyContent = "center", alignItems = "center", gap = 6,
                 children = {
-                    UI.Label { text = "阖族安康", fontSize = 16, fontColor = Theme.GREEN, fontWeight = "bold" },
-                    UI.Label { text = "当前无人需要诊治", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = "阖族安康", fontSize = 18, fontColor = Theme.GREEN, fontWeight = "bold" },
+                    UI.Label { text = "当前无人需要诊治", fontSize = 14, fontColor = Theme.TEXT_MUTED },
                 },
             }
         else
@@ -3205,7 +3253,7 @@ function GameScreen.ShowClinicDialog()
                         or nil,
                     backgroundColor = (not canHealAll) and Theme.BG_INPUT or nil,
                     justifyContent = "center", alignItems = "center",
-                    onClick = canHealAll and function(self)
+                    onTap = canHealAll and function(self)
                         AudioManager.Click()
                         local msgs = {}
                         for _, m in ipairs(sickMembers) do
@@ -3230,7 +3278,7 @@ function GameScreen.ShowClinicDialog()
                             text = canHealAll
                                 and ("全部诊治（" .. #sickMembers .. "人 · " .. totalCost .. "两）")
                                 or ("银两不足（需 " .. totalCost .. " 两）"),
-                            fontSize = 12,
+                            fontSize = 14,
                             fontColor = canHealAll and Theme.TEXT_WHITE or Theme.TEXT_MUTED,
                             fontWeight = "bold",
                         },
@@ -3239,7 +3287,7 @@ function GameScreen.ShowClinicDialog()
             end
 
             -- 逐人列表
-            children[#children + 1] = UI.Label { text = "需诊治族人", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
+            children[#children + 1] = UI.Label { text = "需诊治族人", fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
 
             for _, m in ipairs(sickMembers) do
                 local canHeal = s.silver >= healCost
@@ -3258,9 +3306,9 @@ function GameScreen.ShowClinicDialog()
                                 UI.Panel {
                                     flexDirection = "row", alignItems = "center", gap = 4,
                                     children = {
-                                        UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                                        UI.Label { text = stateDesc, fontSize = 10, fontColor = Theme.RED },
-                                        UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = stateDesc, fontSize = 12, fontColor = Theme.RED },
+                                        UI.Label { text = m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                     },
                                 },
                                 StatBar("健康", m.health),
@@ -3274,7 +3322,7 @@ function GameScreen.ShowClinicDialog()
                                 or nil,
                             backgroundColor = (not canHeal) and Theme.BG_INPUT or nil,
                             justifyContent = "center", alignItems = "center",
-                            onClick = canHeal and function(self)
+                            onTap = canHeal and function(self)
                                 AudioManager.Click()
                                 s.silver = s.silver - healCost
                                 local heal = math.random(healMin, healMax)
@@ -3295,7 +3343,7 @@ function GameScreen.ShowClinicDialog()
                             children = {
                                 UI.Label {
                                     text = canHeal and (healCost .. "两") or "银不足",
-                                    fontSize = 11,
+                                    fontSize = 13,
                                     fontColor = canHeal and Theme.TEXT_WHITE or Theme.TEXT_MUTED,
                                     fontWeight = "bold",
                                 },
@@ -3310,12 +3358,12 @@ function GameScreen.ShowClinicDialog()
         -- 坐堂郎中（女性族人，学识>60，家族限1人）
         -- ========================================
         children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 10 }
-        children[#children + 1] = UI.Label { text = "坐堂郎中", fontSize = 14, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 6 }
+        children[#children + 1] = UI.Label { text = "坐堂郎中", fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 6 }
         local clinicYearlyLimit = AdSystem.GetClinicYearlyLimit()
         local clinicBoosted = AdSystem.IsClinicBoosted()
         children[#children + 1] = UI.Label {
             text = "指派一名女性族人（学识60以上）坐堂行医，每年自动诊治最多" .. clinicYearlyLimit .. "名体弱族人",
-            fontSize = 10, fontColor = Theme.TEXT_SECONDARY,
+            fontSize = 12, fontColor = Theme.TEXT_SECONDARY,
         }
 
         local doctorId = s.clinicDoctorId
@@ -3338,7 +3386,7 @@ function GameScreen.ShowClinicDialog()
                     height = 28, borderRadius = 6, paddingHorizontal = 8,
                     backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
                     flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 3,
-                    onClick = function(self)
+                    onTap = function(self)
                         AdSystem.BoostClinicDoctor(function(success, msg)
                             modal:Close()
                             if success then
@@ -3351,15 +3399,15 @@ function GameScreen.ShowClinicDialog()
                         end)
                     end,
                     children = {
-                        UI.Label { text = "▶广告·加持", fontSize = 10, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
-                        UI.Label { text = "(" .. boostRemain .. ")", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                        UI.Label { text = "▶广告·加持", fontSize = 12, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                        UI.Label { text = "(" .. boostRemain .. ")", fontSize = 11, fontColor = { 255, 255, 255, 160 } },
                     },
                 }
             elseif clinicBoosted then
                 local remainSec = AdSystem.GetClinicBoostRemainingSeconds()
                 local remainH = math.ceil(remainSec / 3600)
                 doctorActionChildren[#doctorActionChildren + 1] = UI.Label {
-                    text = "加持中·" .. remainH .. "h", fontSize = 10, fontColor = Theme.GREEN,
+                    text = "加持中·" .. remainH .. "h", fontSize = 12, fontColor = Theme.GREEN,
                 }
             end
             -- 卸任按钮
@@ -3367,7 +3415,7 @@ function GameScreen.ShowClinicDialog()
                 width = 58, height = 28, borderRadius = 6,
                 backgroundColor = { 180, 80, 60, 255 },
                 justifyContent = "center", alignItems = "center",
-                onClick = function(self)
+                onTap = function(self)
                     AudioManager.Click()
                     s.clinicDoctorId = nil
                     GameData.AddLog(doctor.name .. "卸任坐堂郎中，回到家中。")
@@ -3377,7 +3425,7 @@ function GameScreen.ShowClinicDialog()
                     GameScreen.RefreshAll()
                 end,
                 children = {
-                    UI.Label { text = "卸任", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                    UI.Label { text = "卸任", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                 },
             }
 
@@ -3389,12 +3437,12 @@ function GameScreen.ShowClinicDialog()
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 6,
                         children = {
-                            UI.Label { text = doctor.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                            UI.Label { text = "女 · " .. doctor.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
-                            UI.Label { text = "学识" .. (doctor.study or 0), fontSize = 10, fontColor = Theme.BLUE },
+                            UI.Label { text = doctor.name, fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                            UI.Label { text = "女 · " .. doctor.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = "学识" .. (doctor.study or 0), fontSize = 12, fontColor = Theme.BLUE },
                         },
                     },
-                    UI.Label { text = "今年已诊治 " .. healsThisYear .. "/" .. clinicYearlyLimit .. " 人", fontSize = 11, fontColor = healsThisYear >= clinicYearlyLimit and Theme.RED or Theme.GREEN },
+                    UI.Label { text = "今年已诊治 " .. healsThisYear .. "/" .. clinicYearlyLimit .. " 人", fontSize = 13, fontColor = healsThisYear >= clinicYearlyLimit and Theme.RED or Theme.GREEN },
                     UI.Panel {
                         flexDirection = "row", justifyContent = "flex-end", alignItems = "center", gap = 6, marginTop = 2,
                         children = doctorActionChildren,
@@ -3416,8 +3464,8 @@ function GameScreen.ShowClinicDialog()
                     backgroundColor = Theme.BG_INPUT,
                     justifyContent = "center", alignItems = "center", gap = 4,
                     children = {
-                        UI.Label { text = "暂无合适人选", fontSize = 12, fontColor = Theme.TEXT_MUTED },
-                        UI.Label { text = "需成年女性族人且学识达60以上", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                        UI.Label { text = "暂无合适人选", fontSize = 14, fontColor = Theme.TEXT_MUTED },
+                        UI.Label { text = "需成年女性族人且学识达60以上", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                     },
                 }
             else
@@ -3433,15 +3481,15 @@ function GameScreen.ShowClinicDialog()
                                     UI.Panel {
                                         flexDirection = "row", alignItems = "center", gap = 4,
                                         children = {
-                                            UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                                            UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                            UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                            UI.Label { text = m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                         },
                                     },
                                     UI.Panel {
                                         flexDirection = "row", gap = 6,
                                         children = {
-                                            UI.Label { text = "学识" .. (m.study or 0), fontSize = 10, fontColor = Theme.BLUE },
-                                            UI.Label { text = "健康" .. (m.health or 0), fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                                            UI.Label { text = "学识" .. (m.study or 0), fontSize = 12, fontColor = Theme.BLUE },
+                                            UI.Label { text = "健康" .. (m.health or 0), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                                         },
                                     },
                                 },
@@ -3450,7 +3498,7 @@ function GameScreen.ShowClinicDialog()
                                 width = 56, height = 28, borderRadius = 6,
                                 backgroundGradient = { direction = "to-right", from = { 60, 160, 120, 255 }, to = { 40, 140, 100, 255 } },
                                 justifyContent = "center", alignItems = "center",
-                                onClick = function(self)
+                                onTap = function(self)
                                     AudioManager.Click()
                                     s.clinicDoctorId = m.id
                                     GameData.AddLog(m.name .. "被指派为坐堂郎中，在医馆行医济世。")
@@ -3460,13 +3508,152 @@ function GameScreen.ShowClinicDialog()
                                     GameScreen.RefreshAll()
                                 end,
                                 children = {
-                                    UI.Label { text = "指派", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                    UI.Label { text = "指派", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                                 },
                             },
                         },
                     }
                 end
             end
+        end
+
+        -- ========================================
+        -- 临时郎中（看广告增加，1小时有效，最多3人）
+        -- ========================================
+        children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 10 }
+        children[#children + 1] = UI.Label { text = "临时郎中", fontSize = 16, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 6 }
+        children[#children + 1] = UI.Label {
+            text = "看广告增派临时郎中（1小时有效），最多同时3名",
+            fontSize = 12, fontColor = Theme.TEXT_SECONDARY,
+        }
+
+        local extraDoctors = AdSystem.GetExtraDoctors()
+        local extraCount = #extraDoctors
+
+        -- 显示已有的临时医生
+        if extraCount > 0 then
+            for idx, ed in ipairs(extraDoctors) do
+                local edMember = GameData.GetMember(ed.memberId)
+                if edMember then
+                    local remainSec = math.max(0, ed.expiresAt - os.time())
+                    local remainMin = math.ceil(remainSec / 60)
+                    children[#children + 1] = UI.Panel {
+                        width = "100%", padding = 8, borderRadius = 8, marginTop = 4,
+                        backgroundColor = { 245, 250, 255, 255 }, borderWidth = 1, borderColor = { 100, 160, 220, 255 },
+                        flexDirection = "row", alignItems = "center", gap = 8,
+                        children = {
+                            UI.Panel {
+                                flex = 1, gap = 2,
+                                children = {
+                                    UI.Panel {
+                                        flexDirection = "row", alignItems = "center", gap = 4,
+                                        children = {
+                                            UI.Label { text = edMember.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                            UI.Label { text = "临时", fontSize = 11, fontColor = Theme.BLUE },
+                                            UI.Label { text = edMember.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                        },
+                                    },
+                                    UI.Label { text = "学识" .. (edMember.study or 0) .. " · 剩余" .. remainMin .. "分钟", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                                },
+                            },
+                            UI.Panel {
+                                width = 18, height = 18, borderRadius = 9,
+                                backgroundColor = { 100, 160, 220, 200 },
+                                justifyContent = "center", alignItems = "center",
+                                children = {
+                                    UI.Label { text = tostring(idx), fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                },
+                            },
+                        },
+                    }
+                end
+            end
+        end
+
+        -- 增派临时郎中按钮（未满3人时显示候选列表）
+        if extraCount < 3 then
+            -- 收集可指派为临时郎中的候选人
+            local extraCandidates = {}
+            for _, m in ipairs(GameData.GetAliveMembers()) do
+                -- 需年满16岁，排除正式郎中
+                if m.age >= 16 and m.id ~= s.clinicDoctorId then
+                    -- 排除已在临时坐诊的
+                    local alreadyExtra = false
+                    for _, ed in ipairs(extraDoctors) do
+                        if ed.memberId == m.id then alreadyExtra = true; break end
+                    end
+                    if not alreadyExtra then
+                        extraCandidates[#extraCandidates + 1] = m
+                    end
+                end
+            end
+
+            if #extraCandidates > 0 then
+                children[#children + 1] = UI.Label { text = "可增派（" .. (3 - extraCount) .. "个名额）", fontSize = 13, fontColor = Theme.TEXT_SECONDARY, marginTop = 6 }
+                for _, m in ipairs(extraCandidates) do
+                    children[#children + 1] = UI.Panel {
+                        width = "100%", padding = 8, borderRadius = 8, marginTop = 4,
+                        backgroundColor = Theme.BG_WHITE, borderWidth = 1, borderColor = Theme.BORDER,
+                        flexDirection = "row", alignItems = "center", gap = 8,
+                        children = {
+                            UI.Panel {
+                                flex = 1, gap = 2,
+                                children = {
+                                    UI.Panel {
+                                        flexDirection = "row", alignItems = "center", gap = 4,
+                                        children = {
+                                            UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                            UI.Label { text = m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                                        },
+                                    },
+                                    UI.Panel {
+                                        flexDirection = "row", gap = 6,
+                                        children = {
+                                            UI.Label { text = "学识" .. (m.study or 0), fontSize = 12, fontColor = Theme.BLUE },
+                                            UI.Label { text = "健康" .. (m.health or 0), fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                                        },
+                                    },
+                                },
+                            },
+                            UI.Panel {
+                                height = 28, borderRadius = 6, paddingHorizontal = 8,
+                                backgroundGradient = { direction = "to-right", from = { 60, 140, 200, 255 }, to = { 40, 120, 180, 255 } },
+                                flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 3,
+                                onTap = function(self)
+                                    AudioManager.Click()
+                                    AdSystem.AddExtraDoctor(m.id, function(success, msg)
+                                        modal:Close()
+                                        if success then
+                                            Toast.Success(msg or "已增派")
+                                        else
+                                            GameScreen.ShowResultPopup("增派失败", msg or "")
+                                        end
+                                        GameScreen.ShowClinicDialog()
+                                        GameScreen.RefreshAll()
+                                    end)
+                                end,
+                                children = {
+                                    UI.Label { text = "▶广告·增派", fontSize = 12, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                },
+                            },
+                        },
+                    }
+                end
+            elseif extraCount == 0 then
+                children[#children + 1] = UI.Panel {
+                    width = "100%", padding = 8, borderRadius = 8, marginTop = 4,
+                    backgroundColor = Theme.BG_INPUT,
+                    justifyContent = "center", alignItems = "center",
+                    children = {
+                        UI.Label { text = "暂无可指派族人", fontSize = 13, fontColor = Theme.TEXT_MUTED },
+                    },
+                }
+            end
+        else
+            children[#children + 1] = UI.Label {
+                text = "临时郎中已满（3/3）",
+                fontSize = 13, fontColor = Theme.BLUE, marginTop = 4,
+            }
         end
 
         -- 药铺提示
@@ -3481,7 +3668,7 @@ function GameScreen.ShowClinicDialog()
                 width = "100%", padding = 6, borderRadius = 6, marginTop = 8,
                 backgroundColor = { 255, 248, 220, 255 }, gap = 2,
                 children = {
-                    UI.Label { text = "提示：开设药铺可降低全族生病概率15%", fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
+                    UI.Label { text = "提示：开设药铺可降低全族生病概率15%", fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
                 },
             }
         end
@@ -3507,11 +3694,11 @@ function GameScreen.ShowLaborDialog()
     local clanRank = s.clanRank or 1
 
     local modal = UI.Modal {
-        title = "打工 · 外出做工",
         size = "md",
-        showCloseButton = true,
+        showCloseButton = false,
         closeOnOverlay = true,
     }
+    modal:AddContent(CreateLeftCloseHeader(modal, "打工 · 外出做工"))
 
     local function renderContent()
         local children = {}
@@ -3524,15 +3711,15 @@ function GameScreen.ShowLaborDialog()
             width = "100%", padding = 8, borderRadius = 8,
             backgroundColor = Theme.BG_INPUT, gap = 4,
             children = {
-                UI.Label { text = "派遣族人外出做工", fontSize = 13, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                UI.Label { text = "打工族人无法读书、经商、从军或管理产业", fontSize = 10, fontColor = Theme.RED },
-                UI.Label { text = "当前打工：" .. #laborers .. " 人", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                UI.Label { text = "派遣族人外出做工", fontSize = 15, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                UI.Label { text = "打工族人无法读书、经商、从军或管理产业", fontSize = 12, fontColor = Theme.RED },
+                UI.Label { text = "当前打工：" .. #laborers .. " 人", fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
             },
         }
 
         -- 已在打工的族人列表
         if #laborers > 0 then
-            children[#children + 1] = UI.Label { text = "打工中", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
+            children[#children + 1] = UI.Label { text = "打工中", fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 8 }
             for _, m in ipairs(laborers) do
                 local job = MemberData.GetLaborJob(m.laborJob)
                 local jobName = job and job.name or "杂工"
@@ -3548,12 +3735,12 @@ function GameScreen.ShowLaborDialog()
                                 UI.Panel {
                                     flexDirection = "row", alignItems = "center", gap = 4,
                                     children = {
-                                        UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                                        UI.Label { text = jobName, fontSize = 10, fontColor = {180, 140, 60, 255} },
-                                        UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                        UI.Label { text = jobName, fontSize = 12, fontColor = {180, 140, 60, 255} },
+                                        UI.Label { text = m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                     },
                                 },
-                                UI.Label { text = "月入 " .. jobWage .. " 银两", fontSize = 10, fontColor = Theme.GREEN },
+                                UI.Label { text = "月入 " .. jobWage .. " 银两", fontSize = 12, fontColor = Theme.GREEN },
                             },
                         },
                         -- 召回按钮
@@ -3561,7 +3748,7 @@ function GameScreen.ShowLaborDialog()
                             width = 56, height = 28, borderRadius = 6,
                             backgroundColor = {180, 80, 60, 255},
                             justifyContent = "center", alignItems = "center",
-                            onClick = function(self)
+                            onTap = function(self)
                                 AudioManager.Click()
                                 m.state = "在家"
                                 m.laborJob = nil
@@ -3571,7 +3758,7 @@ function GameScreen.ShowLaborDialog()
                                 GameScreen.RefreshAll()
                             end,
                             children = {
-                                UI.Label { text = "召回", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                UI.Label { text = "召回", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                             },
                         },
                     },
@@ -3581,7 +3768,7 @@ function GameScreen.ShowLaborDialog()
 
         -- 可用工种列表
         local availableJobs = MemberData.GetAvailableLaborJobs(clanRank)
-        children[#children + 1] = UI.Label { text = "可用工种", fontSize = 13, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 10 }
+        children[#children + 1] = UI.Label { text = "可用工种", fontSize = 15, fontColor = Theme.GOLD, fontWeight = "bold", marginTop = 10 }
 
         -- 所有工种（包括未解锁的，灰显）
         for _, job in ipairs(MemberData.LABOR_JOBS) do
@@ -3602,12 +3789,12 @@ function GameScreen.ShowLaborDialog()
                             UI.Panel {
                                 flexDirection = "row", alignItems = "center", gap = 4,
                                 children = {
-                                    UI.Label { text = job.name, fontSize = 12, fontColor = unlocked and Theme.TEXT_PRIMARY or Theme.TEXT_MUTED, fontWeight = "bold" },
-                                    UI.Label { text = "月薪 " .. job.wage .. " 两", fontSize = 10, fontColor = unlocked and Theme.GREEN or Theme.TEXT_MUTED },
+                                    UI.Label { text = job.name, fontSize = 14, fontColor = unlocked and Theme.TEXT_PRIMARY or Theme.TEXT_MUTED, fontWeight = "bold" },
+                                    UI.Label { text = "月薪 " .. job.wage .. " 两", fontSize = 12, fontColor = unlocked and Theme.GREEN or Theme.TEXT_MUTED },
                                 },
                             },
-                            UI.Label { text = job.desc, fontSize = 10, fontColor = Theme.TEXT_SECONDARY },
-                            (not unlocked) and UI.Label { text = "需品级【" .. rankName .. "】解锁", fontSize = 9, fontColor = Theme.RED } or nil,
+                            UI.Label { text = job.desc, fontSize = 12, fontColor = Theme.TEXT_SECONDARY },
+                            (not unlocked) and UI.Label { text = "需品级【" .. rankName .. "】解锁", fontSize = 11, fontColor = Theme.RED } or nil,
                         },
                     },
                     -- 派遣按钮
@@ -3615,14 +3802,14 @@ function GameScreen.ShowLaborDialog()
                         width = 56, height = 28, borderRadius = 6,
                         backgroundGradient = { direction = "to-right", from = {180, 140, 60, 255}, to = {160, 120, 40, 255} },
                         justifyContent = "center", alignItems = "center",
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             -- 弹出选人界面
                             modal:Close()
                             GameScreen.ShowLaborAssign(job)
                         end,
                         children = {
-                            UI.Label { text = "派遣", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                            UI.Label { text = "派遣", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                         },
                     } or nil,
                 },
@@ -3667,9 +3854,9 @@ function GameScreen.ShowLaborAssign(job)
         width = "100%", padding = 8, borderRadius = 8,
         backgroundColor = Theme.BG_INPUT, gap = 4,
         children = {
-            UI.Label { text = job.name .. " · " .. job.desc, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-            UI.Label { text = "月薪 " .. job.wage .. " 银两", fontSize = 11, fontColor = Theme.GREEN },
-            UI.Label { text = "选择一名族人外出打工", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+            UI.Label { text = job.name .. " · " .. job.desc, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+            UI.Label { text = "月薪 " .. job.wage .. " 银两", fontSize = 13, fontColor = Theme.GREEN },
+            UI.Label { text = "选择一名族人外出打工", fontSize = 12, fontColor = Theme.TEXT_MUTED },
         },
     }
 
@@ -3678,8 +3865,8 @@ function GameScreen.ShowLaborAssign(job)
             width = "100%", paddingTop = 30, paddingBottom = 30,
             justifyContent = "center", alignItems = "center", gap = 6,
             children = {
-                UI.Label { text = "无人可用", fontSize = 14, fontColor = Theme.TEXT_MUTED, fontWeight = "bold" },
-                UI.Label { text = "没有闲在家中的成年族人", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                UI.Label { text = "无人可用", fontSize = 16, fontColor = Theme.TEXT_MUTED, fontWeight = "bold" },
+                UI.Label { text = "没有闲在家中的成年族人", fontSize = 13, fontColor = Theme.TEXT_MUTED },
             },
         }
     else
@@ -3695,16 +3882,16 @@ function GameScreen.ShowLaborAssign(job)
                             UI.Panel {
                                 flexDirection = "row", alignItems = "center", gap = 4,
                                 children = {
-                                    UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
-                                    UI.Label { text = (m.gender == "male" and "男" or "女") .. " " .. m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
+                                    UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, fontWeight = "bold" },
+                                    UI.Label { text = (m.gender == "male" and "男" or "女") .. " " .. m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
                                 },
                             },
                             UI.Panel {
                                 flexDirection = "row", gap = 6,
                                 children = {
-                                    UI.Label { text = "学" .. (m.study or 0), fontSize = 9, fontColor = Theme.TEXT_SECONDARY },
-                                    UI.Label { text = "武" .. (m.martial or 0), fontSize = 9, fontColor = Theme.TEXT_SECONDARY },
-                                    UI.Label { text = "健" .. (m.health or 0), fontSize = 9, fontColor = Theme.TEXT_SECONDARY },
+                                    UI.Label { text = "学" .. (m.study or 0), fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                                    UI.Label { text = "武" .. (m.martial or 0), fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                                    UI.Label { text = "健" .. (m.health or 0), fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
                                 },
                             },
                         },
@@ -3713,7 +3900,7 @@ function GameScreen.ShowLaborAssign(job)
                         width = 56, height = 28, borderRadius = 6,
                         backgroundGradient = { direction = "to-right", from = {180, 140, 60, 255}, to = {160, 120, 40, 255} },
                         justifyContent = "center", alignItems = "center",
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             m.state = "打工"
                             m.laborJob = job.id
@@ -3723,7 +3910,7 @@ function GameScreen.ShowLaborAssign(job)
                             Toast.Success(m.name .. "开始打工")
                         end,
                         children = {
-                            UI.Label { text = "派遣", fontSize = 11, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                            UI.Label { text = "派遣", fontSize = 13, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
                         },
                     },
                 },
@@ -3736,13 +3923,13 @@ function GameScreen.ShowLaborAssign(job)
         width = "100%", height = 32, borderRadius = 6, marginTop = 8,
         backgroundColor = Theme.BG_INPUT,
         justifyContent = "center", alignItems = "center",
-        onClick = function(self)
+        onTap = function(self)
             AudioManager.Click()
             modal:Close()
             GameScreen.ShowLaborDialog()  -- 返回打工主界面
         end,
         children = {
-            UI.Label { text = "← 返回打工列表", fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+            UI.Label { text = "← 返回打工列表", fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
         },
     }
 

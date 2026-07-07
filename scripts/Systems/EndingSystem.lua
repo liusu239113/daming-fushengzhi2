@@ -1,8 +1,8 @@
 -- ============================================================================
--- 大明浮生志2 - 隐藏结局系统（v2 重构版）
+-- 大明浮生志2 - 隐藏结局系统（v3 重构版）
 -- 设计原则：
 --   1. 只有灭族（extinction）和满门抄斩（executed）是真正的 Game Over
---   2. 所有正面结局都要求勋贵（clanRank >= 6），确保玩家体验完整内容
+--   2. 所有正面结局都要求国柱（clanRank >= 9），确保玩家体验完整9级内容
 --   3. 破产不再是结局，改为挫折事件（降级 + 惩罚，在 MonthlyUpdate 处理）
 --   4. 正面结局默认选项为"继续游戏"，不强制终止
 --   5. 新增"问鼎天下"结局：征服全部58个战役关卡
@@ -60,14 +60,14 @@ EndingSystem.HIDDEN_ENDINGS = {
 
     -- ============================
     -- 满门抄斩（声望极低）—— 真正的 Game Over
-    -- 提高门槛：声望 <= -50，年份 >= 1450，品级 >= 世家(5)
+    -- 门槛：声望 <= -100，年份 >= 1450，品级 >= 名门(7)
     -- ============================
     {
         id = "executed",
         title = "满门抄斩",
         priority = 90,
         check = function(s)
-            return s.fame <= -50 and s.year >= 1450 and s.clanRank >= 5
+            return s.fame <= -100 and s.year >= 1450 and s.clanRank >= 7
         end,
         trigger = function(s)
             s.gameEnded = true
@@ -89,25 +89,25 @@ EndingSystem.HIDDEN_ENDINGS = {
 
     -- ============================
     -- 问鼎天下（征服全部58个战役关卡）—— 正面结局
-    -- 要求：勋贵 + 全部区域征服
+    -- 要求：国柱(9) + 全部区域征服
     -- ============================
     {
         id = "conquest_complete",
         title = "问鼎天下",
         priority = 60,
         check = function(s)
-            return s.clanRank >= 6 and AllRegionsConquered()
+            return s.clanRank >= 9 and AllRegionsConquered()
         end,
         trigger = function(s)
             s.gameEnded = true
             s.endingChoice = "conquest"
             s.hiddenEnding = "conquest_complete"
-            GameData.AddResource("fame", 150)
+            GameData.AddResource("fame", 500)
             s.pendingEvents[#s.pendingEvents + 1] = {
                 title = "问鼎天下 · 隐藏结局",
                 desc = s.clanName .. "一族南征北战，历经十二场大战，\n" ..
                        "终于扫平群雄，问鼎天下！\n\n" ..
-                       "从寒门崛起到勋贵显赫，从清剿匪寨到一统江山，\n" ..
+                       "从寒门崛起到国柱至尊，从清剿匪寨到一统江山，\n" ..
                        "这是一段波澜壮阔的传奇。\n\n" ..
                        "天下大势，分久必合——" .. s.clanName .. "，\n" ..
                        "便是这乱世的终结者。\n\n" ..
@@ -129,25 +129,25 @@ EndingSystem.HIDDEN_ENDINGS = {
 
     -- ============================
     -- 科举巅峰（书香门第）—— 正面结局
-    -- 要求：勋贵 + 科举通过 >= 150人
+    -- 要求：国柱(9) + 科举通过 >= 300人
     -- ============================
     {
         id = "scholar_dynasty",
         title = "书香门第",
         priority = 50,
         check = function(s)
-            return s.clanRank >= 6 and (s.totalExamPasses or 0) >= 150
+            return s.clanRank >= 9 and (s.totalExamPasses or 0) >= 300
         end,
         trigger = function(s)
             s.gameEnded = true
             s.endingChoice = "scholar"
             s.hiddenEnding = "scholar_dynasty"
-            GameData.AddResource("fame", 100)
+            GameData.AddResource("fame", 300)
             s.pendingEvents[#s.pendingEvents + 1] = {
                 title = "书香门第 · 隐藏结局",
-                desc = "百五十人登科！" .. s.clanName .. "一门桃李天下，声名远播。\n" ..
+                desc = "三百人登科！" .. s.clanName .. "一门桃李天下，声名远播。\n" ..
                        "朝廷赐匾'书香世家'，御笔亲题'文脉绵长'。\n\n" ..
-                       "从勋贵门第到科举名门，文武兼备，\n" ..
+                       "从寒门崛起到国柱至尊，科举名门冠绝天下，\n" ..
                        "即便大厦将倾，文化传承永不磨灭。\n\n" ..
                        "（提示：游戏中仍有更多内容等待探索，可选择继续游戏）",
                 choices = {
@@ -167,23 +167,23 @@ EndingSystem.HIDDEN_ENDINGS = {
 
     -- ============================
     -- 将门世家（军功卓著）—— 正面结局
-    -- 要求：勋贵 + 军功 >= 250 + 寨堡 >= 80
+    -- 要求：国柱(9) + 军功 >= 500 + 寨堡 >= 150
     -- ============================
     {
         id = "warlord",
         title = "将门世家",
         priority = 50,
         check = function(s)
-            return s.clanRank >= 6 and (s.totalMilitaryMerits or 0) >= 250 and s.fortCount >= 80
+            return s.clanRank >= 9 and (s.totalMilitaryMerits or 0) >= 500 and s.fortCount >= 150
         end,
         trigger = function(s)
             s.gameEnded = true
             s.endingChoice = "warlord"
             s.hiddenEnding = "warlord"
-            GameData.AddResource("fame", 80)
+            GameData.AddResource("fame", 250)
             s.pendingEvents[#s.pendingEvents + 1] = {
                 title = "将门世家 · 隐藏结局",
-                desc = s.clanName .. "一族战功赫赫，寨堡连营八十座，麾下精兵如云。\n" ..
+                desc = s.clanName .. "一族战功赫赫，寨堡连营百五十座，麾下精兵如云。\n" ..
                        "朝廷忌惮其势力，却也不得不倚重。\n\n" ..
                        "乱世将至，手握重兵的" .. s.clanName .. "一族，\n" ..
                        "将书写一段属于自己的传奇。\n\n" ..
@@ -205,26 +205,26 @@ EndingSystem.HIDDEN_ENDINGS = {
 
     -- ============================
     -- 商业帝国（巨富）—— 正面结局
-    -- 要求：勋贵 + 银两 >= 50000 + 产业 >= 150
+    -- 要求：国柱(9) + 银两 >= 500000 + 产业 >= 35
     -- ============================
     {
         id = "merchant_empire",
         title = "富甲天下",
         priority = 50,
         check = function(s)
-            return s.clanRank >= 6 and s.silver >= 50000 and #s.industries >= 150
+            return s.clanRank >= 9 and s.silver >= 500000 and #s.industries >= 35
         end,
         trigger = function(s)
             s.gameEnded = true
             s.endingChoice = "merchant"
             s.hiddenEnding = "merchant_empire"
-            GameData.AddResource("fame", 60)
+            GameData.AddResource("fame", 200)
             s.pendingEvents[#s.pendingEvents + 1] = {
                 title = "富甲天下 · 隐藏结局",
                 desc = "银两堆积如山，商铺遍布四方。\n" ..
                        s.clanName .. "一族富可敌国，堪称大明首富。\n\n" ..
                        "民间传言：'天下银子，十之有三流入" .. s.clanName .. "家。'\n" ..
-                       "从勋贵门第到商业帝国，朝廷既羡且惧……\n\n" ..
+                       "从寒门崛起到国柱至尊，商业帝国冠绝天下，朝廷既羡且惧……\n\n" ..
                        "（提示：游戏中仍有更多内容等待探索，可选择继续游戏）",
                 choices = {
                     { text = "继续游戏（内容尚未体验完毕）", effect = function()
@@ -243,17 +243,17 @@ EndingSystem.HIDDEN_ENDINGS = {
 
     -- ============================
     -- 桃花源（隐居避世）—— 正面结局
-    -- 要求：勋贵 + 200人以上 + 声望>=800 + 平均健康>=80 + 年份>=1580
+    -- 要求：国柱(9) + 300人以上 + 声望>=5000 + 平均健康>=80 + 年份>=1580
     -- ============================
     {
         id = "utopia",
         title = "桃源隐世",
         priority = 40,
         check = function(s)
-            if s.clanRank < 6 then return false end
+            if s.clanRank < 9 then return false end
             local alive = GameData.GetAliveMembers()
-            if #alive < 200 then return false end
-            if s.fame < 800 then return false end
+            if #alive < 300 then return false end
+            if s.fame < 5000 then return false end
             local totalHealth = 0
             for _, m in ipairs(alive) do
                 totalHealth = totalHealth + m.health
@@ -264,7 +264,7 @@ EndingSystem.HIDDEN_ENDINGS = {
             s.gameEnded = true
             s.endingChoice = "utopia"
             s.hiddenEnding = "utopia"
-            GameData.AddResource("fame", 30)
+            GameData.AddResource("fame", 100)
             s.pendingEvents[#s.pendingEvents + 1] = {
                 title = "桃源隐世 · 隐藏结局",
                 desc = "族人安居乐业，耕读传家，与世无争。\n" ..

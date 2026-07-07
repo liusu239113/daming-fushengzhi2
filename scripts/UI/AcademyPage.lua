@@ -46,13 +46,13 @@ function AcademyPage.Create(pageTitle, gameScreen)
                                     width = 36, height = 36, borderRadius = 18,
                                     backgroundGradient = Theme.GRADIENT_GOLD,
                                     justifyContent = "center", alignItems = "center",
-                                    children = { UI.Label { text = aType.icon, fontSize = 18 } },
+                                    children = { UI.Label { text = aType.icon, fontSize = 20 } },
                                 },
                                 UI.Panel {
                                     gap = 2,
                                     children = {
-                                        UI.Label { text = aType.name .. " Lv." .. academy.level, fontSize = 15, fontColor = Theme.TEXT_TITLE },
-                                        UI.Label { text = "席位 " .. #academy.memberIds .. "/" .. maxSlots, fontSize = 11, fontColor = Theme.TEXT_SECONDARY },
+                                        UI.Label { text = aType.name .. " Lv." .. academy.level, fontSize = 17, fontColor = Theme.TEXT_TITLE },
+                                        UI.Label { text = "席位 " .. #academy.memberIds .. "/" .. maxSlots, fontSize = 13, fontColor = Theme.TEXT_SECONDARY },
                                     },
                                 },
                             },
@@ -62,7 +62,7 @@ function AcademyPage.Create(pageTitle, gameScreen)
                             backgroundGradient = canUpgrade and Theme.GRADIENT_PRIMARY or nil,
                             backgroundColor = canUpgrade and nil or Theme.BG_INPUT,
                             opacity = canUpgrade and 1.0 or 0.5,
-                            onClick = function(self)
+                            onTap = function(self)
                                 if not canUpgrade then return end
                                 AudioManager.Click()
                                 if GameData.SpendResources(upgradeCost, 0, 0, 0) then
@@ -74,7 +74,7 @@ function AcademyPage.Create(pageTitle, gameScreen)
                             children = {
                                 UI.Label {
                                     text = "升级(-" .. upgradeCost .. "银)",
-                                    fontSize = 11,
+                                    fontSize = 13,
                                     fontColor = canUpgrade and Theme.TEXT_WHITE or Theme.TEXT_MUTED,
                                 },
                             },
@@ -84,7 +84,7 @@ function AcademyPage.Create(pageTitle, gameScreen)
 
                 -- 描述
                 UI.Label { text = aType.desc .. "（每级" .. aType.baseSlotsPerLevel .. "席位，额外" .. math.floor(aType.baseBonus * 100) .. "%" .. (aType.attribute == "study" and "学识" or "武艺") .. "成长/等级）",
-                    fontSize = 10, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal" },
+                    fontSize = 12, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal" },
 
                 -- 已分配成员列表
                 AcademyPage.BuildMemberList(academy, aType, gameScreen),
@@ -99,7 +99,7 @@ function AcademyPage.Create(pageTitle, gameScreen)
 
     -- 新建设施按钮
     children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 8 }
-    children[#children + 1] = UI.Label { text = "新建设施", fontSize = 15, fontColor = Theme.GOLD, marginTop = 4 }
+    children[#children + 1] = UI.Label { text = "新建设施", fontSize = 17, fontColor = Theme.GOLD, marginTop = 4 }
 
     for _, aType in ipairs(GameData.ACADEMY_TYPES) do
         local existing = GameData.GetAcademy(aType.id)
@@ -117,14 +117,14 @@ function AcademyPage.Create(pageTitle, gameScreen)
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = unlocked and aType.icon or "[锁]", fontSize = 16 },
+                            UI.Label { text = unlocked and aType.icon or "[锁]", fontSize = 18 },
                             UI.Panel {
                                 gap = 2,
                                 children = {
-                                    UI.Label { text = aType.name, fontSize = 13, fontColor = unlocked and Theme.TEXT_PRIMARY or Theme.TEXT_MUTED },
+                                    UI.Label { text = aType.name, fontSize = 15, fontColor = unlocked and Theme.TEXT_PRIMARY or Theme.TEXT_MUTED },
                                     UI.Label {
                                         text = unlocked and aType.desc or ("需品级【" .. GameData.GetUnlockRankName(reqRank) .. "】解锁"),
-                                        fontSize = 10, fontColor = unlocked and Theme.TEXT_SECONDARY or Theme.TEXT_MUTED,
+                                        fontSize = 12, fontColor = unlocked and Theme.TEXT_SECONDARY or Theme.TEXT_MUTED,
                                     },
                                 },
                             },
@@ -134,7 +134,7 @@ function AcademyPage.Create(pageTitle, gameScreen)
                         paddingHorizontal = 10, paddingVertical = 5, borderRadius = 6,
                         backgroundGradient = canBuild and Theme.GRADIENT_PRIMARY or nil,
                         backgroundColor = canBuild and nil or Theme.BG_INPUT,
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             if not unlocked then
                                 gameScreen.ShowResultPopup("尚未解锁", "提升品级至【" .. GameData.GetUnlockRankName(reqRank) .. "】后可建造" .. aType.name .. "。")
@@ -150,7 +150,7 @@ function AcademyPage.Create(pageTitle, gameScreen)
                         children = {
                             UI.Label {
                                 text = unlocked and ("建造(-" .. buildCost .. "银)") or "[锁] 未解锁",
-                                fontSize = 11,
+                                fontSize = 13,
                                 fontColor = canBuild and Theme.TEXT_WHITE or Theme.TEXT_MUTED,
                             },
                         },
@@ -187,22 +187,22 @@ function AcademyPage.BuildMemberList(academy, aType, gameScreen)
                     UI.Panel {
                         flexDirection = "row", gap = 6, alignItems = "center",
                         children = {
-                            UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-                            UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
-                            UI.Label { text = (aType.attribute == "study" and "学" or "武") .. attrVal, fontSize = 10, fontColor = Theme.BLUE },
-                            m.talent and UI.Label { text = m.talent.name, fontSize = 9, fontColor = Theme.GOLD } or nil,
+                            UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+                            UI.Label { text = m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                            UI.Label { text = (aType.attribute == "study" and "学" or "武") .. attrVal, fontSize = 12, fontColor = Theme.BLUE },
+                            m.talent and UI.Label { text = m.talent.name, fontSize = 11, fontColor = Theme.GOLD } or nil,
                         },
                     },
                     UI.Panel {
                         paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
                         backgroundColor = { 180, 60, 45, 40 }, borderWidth = 1, borderColor = Theme.RED_DARK,
-                        onClick = function(self)
+                        onTap = function(self)
                             AudioManager.Click()
                             GameData.RemoveFromAcademy(academy.typeId, mid)
                             GameData.AddLog(m.name .. "离开" .. aType.name .. "。")
                             gameScreen.RefreshAll()
                         end,
-                        children = { UI.Label { text = "撤回", fontSize = 10, fontColor = Theme.RED } },
+                        children = { UI.Label { text = "撤回", fontSize = 12, fontColor = Theme.RED } },
                     },
                 },
             }
@@ -210,7 +210,7 @@ function AcademyPage.BuildMemberList(academy, aType, gameScreen)
     end
 
     if #items == 0 then
-        return UI.Label { text = "暂无族人在此学习", fontSize = 11, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
+        return UI.Label { text = "暂无族人在此学习", fontSize = 13, fontColor = Theme.TEXT_MUTED, marginTop = 4 }
     end
 
     return UI.Panel { width = "100%", gap = 4, children = items }
@@ -219,7 +219,7 @@ end
 --- 构建分配新成员区域
 function AcademyPage.BuildAssignSection(academy, aType, maxSlots, gameScreen)
     if #academy.memberIds >= maxSlots then
-        return UI.Label { text = "席位已满，请升级设施", fontSize = 10, fontColor = Theme.TEXT_MUTED }
+        return UI.Label { text = "席位已满，请升级设施", fontSize = 12, fontColor = Theme.TEXT_MUTED }
     end
 
     -- 筛选可分配的族人（在家、年龄合适、不在其他书院）
@@ -231,11 +231,11 @@ function AcademyPage.BuildAssignSection(academy, aType, maxSlots, gameScreen)
     end
 
     if #candidates == 0 then
-        return UI.Label { text = "无可分配族人", fontSize = 10, fontColor = Theme.TEXT_MUTED }
+        return UI.Label { text = "无可分配族人", fontSize = 12, fontColor = Theme.TEXT_MUTED }
     end
 
     local items = {}
-    items[#items + 1] = UI.Label { text = "── 可分配 ──", fontSize = 10, fontColor = Theme.TEXT_MUTED, textAlign = "center" }
+    items[#items + 1] = UI.Label { text = "── 可分配 ──", fontSize = 12, fontColor = Theme.TEXT_MUTED, textAlign = "center" }
 
     for _, m in ipairs(candidates) do
         local attrVal = m[aType.attribute] or 0
@@ -247,22 +247,22 @@ function AcademyPage.BuildAssignSection(academy, aType, maxSlots, gameScreen)
                 UI.Panel {
                     flexDirection = "row", gap = 6, alignItems = "center",
                     children = {
-                        UI.Label { text = m.name, fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-                        UI.Label { text = m.age .. "岁", fontSize = 10, fontColor = Theme.TEXT_MUTED },
-                        UI.Label { text = (aType.attribute == "study" and "学" or "武") .. attrVal, fontSize = 10, fontColor = Theme.BLUE },
+                        UI.Label { text = m.name, fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+                        UI.Label { text = m.age .. "岁", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                        UI.Label { text = (aType.attribute == "study" and "学" or "武") .. attrVal, fontSize = 12, fontColor = Theme.BLUE },
                     },
                 },
                 UI.Panel {
                     paddingHorizontal = 8, paddingVertical = 3, borderRadius = 4,
                     backgroundColor = { 66, 133, 244, 35 }, borderWidth = 1, borderColor = Theme.BLUE,
-                    onClick = function(self)
+                    onTap = function(self)
                         AudioManager.Click()
                         if GameData.AssignToAcademy(academy.typeId, m.id) then
                             GameData.AddLog(m.name .. "进入" .. aType.name .. "学习。")
                             gameScreen.RefreshAll()
                         end
                     end,
-                    children = { UI.Label { text = "分配", fontSize = 10, fontColor = Theme.BLUE } },
+                    children = { UI.Label { text = "分配", fontSize = 12, fontColor = Theme.BLUE } },
                 },
             },
         }

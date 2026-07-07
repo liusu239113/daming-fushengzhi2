@@ -16,6 +16,7 @@ local BGM = {
     PEACEFUL = "audio/music_1778466591795.ogg",      -- 太平年代 BGM（古筝田园风）
     CRISIS   = "audio/music_1778466712651.ogg",      -- 危机年代 BGM（二胡悲壮战鼓）
     BATTLE   = "audio/music_1778523134060.ogg",      -- 战斗 BGM（激昂战鼓+二胡琵琶史诗战斗）
+    FUNERAL  = "audio/funeral_bgm.ogg",              -- 葬礼 BGM（凄惨哀乐）
 }
 
 local SFX = {
@@ -49,6 +50,7 @@ local bgmSource_ = nil
 ---@type Node
 local sfxNode_ = nil
 local currentBgmPath_ = ""
+local currentBgmKey_  = ""
 local bgmVolume_ = 0.5
 local sfxVolume_ = 0.7
 local initialized_ = false
@@ -109,6 +111,7 @@ function AudioManager.PlayBGM(bgmKey)
     bgmSource_:Play(sound)
     bgmSource_.gain = bgmVolume_
     currentBgmPath_ = path
+    currentBgmKey_  = bgmKey
     print("[AudioManager] 播放 BGM: " .. bgmKey)
 end
 
@@ -116,7 +119,30 @@ function AudioManager.StopBGM()
     if bgmSource_ then
         bgmSource_:Stop()
         currentBgmPath_ = ""
+        currentBgmKey_  = ""
     end
+end
+
+--- 返回当前正在播放的 BGM key（如 "PEACEFUL"），未播放时返回 ""
+function AudioManager.GetCurrentBGMKey()
+    return currentBgmKey_
+end
+
+--- 播放任意音频文件（一次性，不循环），用于配音/特殊音效
+---@param filePath string  资源路径，如 "audio/voice/funeral_cry_child_voice.ogg"
+function AudioManager.PlayFile(filePath)
+    if not initialized_ then AudioManager.Init() end
+    local sound = cache:GetResource("Sound", filePath)
+    if not sound then
+        print("[AudioManager] 无法加载音频文件: " .. tostring(filePath))
+        return
+    end
+    sound.looped = false
+    local source = sfxNode_:CreateComponent("SoundSource")
+    source.soundType = "Effect"
+    source.gain = sfxVolume_
+    source.autoRemoveMode = REMOVE_COMPONENT
+    source:Play(sound)
 end
 
 --- 根据游戏年份自动选择 BGM（根据年代分期切换）

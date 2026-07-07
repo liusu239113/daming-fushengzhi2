@@ -128,8 +128,8 @@ local function CreateIndustryCard(industry, PageTitle, screen)
         UI.Panel {
             flexDirection = "row", alignItems = "center", gap = 4, flexShrink = 1,
             children = {
-                UI.Label { text = indType.name .. "（Lv." .. industry.level .. "）", fontSize = 14, fontColor = indType.evolved and Theme.GOLD or Theme.TEXT_PRIMARY },
-                effectText and UI.Label { text = effectText, fontSize = 9, fontColor = { 255, 170, 50, 200 },
+                UI.Label { text = indType.name .. "（Lv." .. industry.level .. "）", fontSize = 16, fontColor = indType.evolved and Theme.GOLD or Theme.TEXT_PRIMARY },
+                effectText and UI.Label { text = effectText, fontSize = 11, fontColor = { 255, 170, 50, 200 },
                     paddingHorizontal = 4, paddingVertical = 1, borderRadius = 3,
                     backgroundColor = { 255, 170, 50, 25 } } or nil,
             },
@@ -138,10 +138,10 @@ local function CreateIndustryCard(industry, PageTitle, screen)
         UI.Panel {
             flexDirection = "row", justifyContent = "space-between", alignItems = "center",
             children = {
-                UI.Label { text = outputText, fontSize = 10, fontColor = Theme.GREEN },
+                UI.Label { text = outputText, fontSize = 12, fontColor = Theme.GREEN },
                 indType.resource ~= "none" and UI.Label {
-                    text = "维护 银-" .. math.floor(indType.cost * 0.018 * industry.level),
-                    fontSize = 9, fontColor = Theme.TEXT_MUTED,
+                    text = "维护 银-" .. math.floor(math.sqrt(indType.cost) * 0.3 * (1 + math.log(industry.level) * 0.5)),
+                    fontSize = 11, fontColor = Theme.TEXT_MUTED,
                 } or nil,
             },
         },
@@ -152,10 +152,10 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                 UI.Panel {
                     flexDirection = "row", gap = 4, alignItems = "center", flexShrink = 1,
                     children = {
-                        UI.Label { text = "管理：" .. assigneeName .. stateLabel, fontSize = 11, fontColor = isPartTime and Theme.GOLD_DARK or Theme.TEXT_SECONDARY },
+                        UI.Label { text = "管理：" .. assigneeName .. stateLabel, fontSize = 13, fontColor = isPartTime and Theme.GOLD_DARK or Theme.TEXT_SECONDARY },
                         (assignee and assignee.alive) and UI.Label {
                             text = "x" .. string.format("%.2f", manageMul),
-                            fontSize = 9, fontColor = isPartTime and Theme.GOLD_DARK or Theme.GREEN,
+                            fontSize = 11, fontColor = isPartTime and Theme.GOLD_DARK or Theme.GREEN,
                             paddingHorizontal = 3, paddingVertical = 1, borderRadius = 3,
                             backgroundColor = isPartTime and { 200, 160, 50, 20 } or { 56, 168, 120, 20 },
                         } or nil,
@@ -165,7 +165,7 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                     paddingHorizontal = 10, paddingVertical = 4, borderRadius = 4,
                     backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
                     onTap = function() AudioManager.Click() screen.ShowAssignMember(industry) end,
-                    children = { UI.Label { text = "分配", fontSize = 11, fontColor = Theme.GOLD } },
+                    children = { UI.Label { text = "分配", fontSize = 13, fontColor = Theme.GOLD } },
                 },
             },
         },
@@ -198,11 +198,11 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                         end)
                     end,
                     children = {
-                        UI.Label { text = "进化→" .. (GameData.GetIndustryType(evo.to) and GameData.GetIndustryType(evo.to).name or "?") .. "(" .. evo.cost .. "银)", fontSize = 10, fontColor = Theme.GOLD },
+                        UI.Label { text = "进化→" .. (GameData.GetIndustryType(evo.to) and GameData.GetIndustryType(evo.to).name or "?") .. "(" .. evo.cost .. "银)", fontSize = 12, fontColor = Theme.GOLD },
                     },
                 } or nil,
-                -- 升级按钮
-                UI.Panel {
+                -- 升级按钮（上限Lv5）
+                (industry.level < 5) and UI.Panel {
                     paddingHorizontal = 10, paddingVertical = 4, borderRadius = 4,
                     backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
                     opacity = GameData.CanAfford(indType.cost * industry.level, 0, 0, 0) and 1.0 or 0.5,
@@ -216,16 +216,29 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                         end
                     end,
                     children = {
-                        UI.Label { text = "升级(-" .. (indType.cost * industry.level) .. "银)", fontSize = 10, fontColor = Theme.GOLD },
+                        UI.Label {
+                            text = "升级Lv" .. (industry.level + 1) .. "(-" .. (indType.cost * industry.level) .. "银)",
+                            fontSize = 12, fontColor = Theme.GOLD,
+                        },
                     },
-                },
+                } or (industry.level >= 5) and UI.Panel {
+                    paddingHorizontal = 10, paddingVertical = 4, borderRadius = 4,
+                    backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER,
+                    opacity = 0.4,
+                    children = {
+                        UI.Label { text = "已满级", fontSize = 12, fontColor = Theme.TEXT_MUTED },
+                    },
+                } or nil,
                 -- 变卖按钮
                 UI.Panel {
                     paddingHorizontal = 10, paddingVertical = 4, borderRadius = 4,
                     backgroundColor = { 120, 40, 40, 30 }, borderWidth = 1, borderColor = { 180, 80, 80, 100 },
                     onTap = function()
-                        local refund = math.floor(indType.cost * 0.5)
-                        screen.ShowConfirm("变卖产业", "确定要变卖「" .. indType.name .. "（Lv." .. industry.level .. "）」吗？\n\n可回收银两 " .. refund .. "（建造成本的50%）\n\n变卖后不可恢复！", "变卖", function()
+                        -- 回收价 = (建造成本 + 累计升级费) * 50%
+                        local totalInvest = indType.cost
+                        for lv = 1, industry.level - 1 do totalInvest = totalInvest + indType.cost * lv end
+                        local refund = math.floor(totalInvest * 0.5)
+                        screen.ShowConfirm("变卖产业", "确定要变卖「" .. indType.name .. "（Lv." .. industry.level .. "）」吗？\n\n可回收银两 " .. refund .. "（总投入的50%）\n\n变卖后不可恢复！", "变卖", function()
                             local ok, msg = GameData.SellIndustry(industry.id)
                             if ok then
                                 AudioManager.Click()
@@ -237,7 +250,7 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                         end)
                     end,
                     children = {
-                        UI.Label { text = "变卖(+" .. math.floor(indType.cost * 0.5) .. "银)", fontSize = 10, fontColor = { 200, 80, 80, 255 } },
+                        UI.Label { text = "变卖(+" .. math.floor(indType.cost * 0.5) .. "银)", fontSize = 12, fontColor = { 200, 80, 80, 255 } },
                     },
                 },
             },
@@ -266,7 +279,7 @@ local function CreateIndustryCard(industry, PageTitle, screen)
                 backgroundColor = { 80, 60, 40, 100 },
                 justifyContent = "center", alignItems = "center",
                 children = {
-                    UI.Label { text = indType.name, fontSize = 14, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = indType.name, fontSize = 16, fontColor = Theme.TEXT_MUTED },
                 },
             },
             -- 右侧：信息列
@@ -333,7 +346,7 @@ function IndustryPage.Create(PageTitle, screen)
                             width = 60, height = 60,
                             backgroundColor = { 80, 60, 40, 60 },
                             justifyContent = "center", alignItems = "center",
-                            children = { UI.Label { text = indType.name, fontSize = 11, fontColor = Theme.TEXT_MUTED } },
+                            children = { UI.Label { text = indType.name, fontSize = 13, fontColor = Theme.TEXT_MUTED } },
                         },
                         UI.Panel {
                             flexGrow = 1, flexShrink = 1, padding = 8, gap = 2,
@@ -342,11 +355,11 @@ function IndustryPage.Create(PageTitle, screen)
                                 UI.Panel {
                                     gap = 2, flexShrink = 1,
                                     children = {
-                                        UI.Label { text = "新建" .. indType.name, fontSize = 13, fontColor = Theme.TEXT_PRIMARY },
-                                        UI.Label { text = indType.desc, fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                                        UI.Label { text = "新建" .. indType.name, fontSize = 15, fontColor = Theme.TEXT_PRIMARY },
+                                        UI.Label { text = indType.desc, fontSize = 11, fontColor = Theme.TEXT_MUTED },
                                     },
                                 },
-                                UI.Label { text = indType.cost .. "银", fontSize = 12, fontColor = Theme.GOLD },
+                                UI.Label { text = indType.cost .. "银", fontSize = 14, fontColor = Theme.GOLD },
                             },
                         },
                     },
@@ -370,13 +383,13 @@ function IndustryPage.Create(PageTitle, screen)
                             width = 60, height = 60,
                             backgroundColor = { 80, 60, 40, 60 },
                             justifyContent = "center", alignItems = "center",
-                            children = { UI.Label { text = indType.name, fontSize = 11, fontColor = Theme.TEXT_MUTED } },
+                            children = { UI.Label { text = indType.name, fontSize = 13, fontColor = Theme.TEXT_MUTED } },
                         },
                         UI.Panel {
                             flexGrow = 1, flexShrink = 1, padding = 8, gap = 2,
                             children = {
-                                UI.Label { text = "[锁] " .. indType.name, fontSize = 13, fontColor = Theme.TEXT_MUTED },
-                                UI.Label { text = "品级【" .. GameData.GetUnlockRankName(reqRank) .. "】解锁", fontSize = 9, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = "[锁] " .. indType.name, fontSize = 15, fontColor = Theme.TEXT_MUTED },
+                                UI.Label { text = "品级【" .. GameData.GetUnlockRankName(reqRank) .. "】解锁", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                             },
                         },
                     },
@@ -396,10 +409,10 @@ function IndustryPage.Create(PageTitle, screen)
                     UI.Panel {
                         flexDirection = "row", justifyContent = "space-between", alignItems = "center",
                         children = {
-                            UI.Label { text = "现有产业", fontSize = 15, fontColor = Theme.GOLD },
+                            UI.Label { text = "现有产业", fontSize = 17, fontColor = Theme.GOLD },
                             UI.Label {
                                 text = #s.industries .. "/" .. (GameData.INDUSTRY_LIMIT_BY_RANK[s.clanRank] or 4),
-                                fontSize = 12, fontColor = #s.industries >= (GameData.INDUSTRY_LIMIT_BY_RANK[s.clanRank] or 4) and Theme.RED or Theme.TEXT_SECONDARY,
+                                fontSize = 14, fontColor = #s.industries >= (GameData.INDUSTRY_LIMIT_BY_RANK[s.clanRank] or 4) and Theme.RED or Theme.TEXT_SECONDARY,
                             },
                         },
                     },
@@ -409,7 +422,7 @@ function IndustryPage.Create(PageTitle, screen)
             UI.Panel {
                 width = "100%", gap = 8, padding = 12, paddingBottom = 20,
                 children = {
-                    UI.Label { text = "购置产业", fontSize = 15, fontColor = Theme.GOLD },
+                    UI.Label { text = "购置产业", fontSize = 17, fontColor = Theme.GOLD },
                     table.unpack(buyButtons),
                 },
             },

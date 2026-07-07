@@ -17,7 +17,7 @@ local FamilyTree = {}
 -- 布局常量
 -- ============================================================================
 
-local CARD_W = 90          -- 族人卡片宽度（放大以容纳身份信息）
+local CARD_W = 90          -- 族人卡片宽度（保持原始尺寸）
 local CARD_H = 118         -- 族人卡片高度
 local COUPLE_GAP = 4       -- 夫妻之间间距
 local SIBLING_GAP = 10     -- 兄弟姐妹之间间距
@@ -466,7 +466,6 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
     local treeWithHeader = UI.Panel {
         alignItems = "center",
         padding = TREE_PAD,
-        paddingTop = 10,
         gap = 8,
         children = {
             -- 紧凑图例
@@ -476,29 +475,29 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
                 alignItems = "center",
                 children = {
                     UI.Panel {
-                        flexDirection = "row", gap = 2, alignItems = "center",
+                        flexDirection = "row", gap = 3, alignItems = "center",
                         children = {
-                            UI.Panel { width = 8, height = 8, borderRadius = 4, backgroundColor = { 70, 120, 180, 255 } },
-                            UI.Label { text = "男", fontSize = 8, fontColor = Theme.TEXT_MUTED },
+                            UI.Panel { width = 10, height = 10, borderRadius = 5, backgroundColor = { 70, 120, 180, 255 } },
+                            UI.Label { text = "男", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         },
                     },
                     UI.Panel {
-                        flexDirection = "row", gap = 2, alignItems = "center",
+                        flexDirection = "row", gap = 3, alignItems = "center",
                         children = {
-                            UI.Panel { width = 8, height = 8, borderRadius = 4, backgroundColor = { 180, 70, 90, 255 } },
-                            UI.Label { text = "女", fontSize = 8, fontColor = Theme.TEXT_MUTED },
+                            UI.Panel { width = 10, height = 10, borderRadius = 5, backgroundColor = { 180, 70, 90, 255 } },
+                            UI.Label { text = "女", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         },
                     },
                     UI.Panel {
-                        flexDirection = "row", gap = 2, alignItems = "center",
+                        flexDirection = "row", gap = 3, alignItems = "center",
                         children = {
-                            UI.Panel { width = 8, height = 8, borderRadius = 4, backgroundColor = { 200, 195, 185, 200 }, opacity = 0.55 },
-                            UI.Label { text = "故", fontSize = 8, fontColor = Theme.TEXT_MUTED },
+                            UI.Panel { width = 10, height = 10, borderRadius = 5, backgroundColor = { 200, 195, 185, 200 }, opacity = 0.55 },
+                            UI.Label { text = "故", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                         },
                     },
                     UI.Label {
                         text = "第" .. FamilyTree.GetMaxGeneration() .. "代",
-                        fontSize = 8,
+                        fontSize = 11,
                         fontColor = Theme.TEXT_MUTED,
                     },
                 },
@@ -534,109 +533,86 @@ function FamilyTree.Create(onClickMember, onBattleClick, extraCallbacks)
     -- 浮动侧边按钮（右侧功能入口，按品级依次解锁）
     local floatingButtons = {}
     local cbs = extraCallbacks or {}
-    local btnTop = 10  -- 按钮纵向起始位置（顶栏已有高度，此处相对内容区）
-    local btnSize = 52  -- 按钮尺寸（移动端最小点击目标 48+）
-    local btnGap = 58   -- 按钮间距
+    local btnTopRight = 8  -- 右侧按钮纵向起始位置
+    local btnTopLeft = 8   -- 左侧按钮纵向起始位置
+    local btnSize = 80  -- 图标尺寸（放大至两倍可读性）
+    local btnLabelH = 16 -- 文字标签高度
+    local btnTotalH = btnSize + btnLabelH + 2  -- 图标+文字+间距
+    local btnGap = btnTotalH + 4  -- 按钮间距
+    local btnContainerW = 88  -- 容器宽度（比图标稍大，容纳文字）
+    local sideBtnCount = 0  -- 按钮计数，超过3个排左侧
+    local maxRightSide = 3  -- 右侧最多放3个按钮
+
+    --- 创建带文字标签的侧边按钮
+    local function makeSideBtn(img, label, callback)
+        sideBtnCount = sideBtnCount + 1
+        local isRight = sideBtnCount <= maxRightSide
+        local props = {
+            position = "absolute",
+            width = btnContainerW,
+            alignItems = "center",
+            gap = 1,
+            onClick = function(self) AudioManager.Click() callback() end,
+            children = {
+                UI.Panel {
+                    width = btnSize, height = btnSize,
+                    borderRadius = btnSize / 2,
+                    backgroundImage = img, backgroundFit = "contain",
+                },
+                UI.Label {
+                    text = label,
+                    fontSize = 13,
+                    fontColor = Theme.TEXT_PRIMARY,
+                    textAlign = "center",
+                },
+            },
+        }
+        if isRight then
+            props.right = 4
+            props.top = btnTopRight
+            btnTopRight = btnTopRight + btnGap
+        else
+            props.left = 4
+            props.top = btnTopLeft
+            btnTopLeft = btnTopLeft + btnGap
+        end
+        local btn = UI.Panel(props)
+        floatingButtons[#floatingButtons + 1] = btn
+    end
 
     -- 讨伐入口（世家/品级5解锁）
     if RivalClans.IsUnlocked() and onBattleClick then
-        floatingButtons[#floatingButtons + 1] = UI.Panel {
-            position = "absolute",
-            right = 6, top = btnTop,
-            width = btnSize, height = btnSize,
-            borderRadius = btnSize / 2,
-            backgroundImage = Theme.IMG.NAV_BATTLE, backgroundFit = "contain",
-            justifyContent = "center", alignItems = "center",
-            onClick = function(self)
-                AudioManager.Click()
-                if onBattleClick then onBattleClick() end
-            end,
-        }
-        btnTop = btnTop + btnGap
+        makeSideBtn(Theme.IMG.NAV_BATTLE, "讨伐", onBattleClick)
     end
 
     -- 钱庄·借贷（开局即可用）
     if cbs.onLoan then
-        floatingButtons[#floatingButtons + 1] = UI.Panel {
-            position = "absolute",
-            right = 6, top = btnTop,
-            width = btnSize, height = btnSize,
-            borderRadius = btnSize / 2,
-            backgroundImage = Theme.IMG.NAV_LOAN, backgroundFit = "contain",
-            justifyContent = "center", alignItems = "center",
-            onTap = function() AudioManager.Click() cbs.onLoan() end,
-        }
-        btnTop = btnTop + btnGap
+        makeSideBtn(Theme.IMG.NAV_LOAN, "钱庄", cbs.onLoan)
     end
 
     -- 医馆（开局即可用）
     if cbs.onClinic then
-        floatingButtons[#floatingButtons + 1] = UI.Panel {
-            position = "absolute",
-            right = 6, top = btnTop,
-            width = btnSize, height = btnSize,
-            borderRadius = btnSize / 2,
-            backgroundImage = Theme.IMG.NAV_CLINIC, backgroundFit = "contain",
-            justifyContent = "center", alignItems = "center",
-            onTap = function() AudioManager.Click() cbs.onClinic() end,
-        }
-        btnTop = btnTop + btnGap
+        makeSideBtn(Theme.IMG.NAV_CLINIC, "医馆", cbs.onClinic)
     end
 
     -- 打工（开局即可用，常驻）
     if cbs.onLabor then
-        floatingButtons[#floatingButtons + 1] = UI.Panel {
-            position = "absolute",
-            right = 6, top = btnTop,
-            width = btnSize, height = btnSize,
-            borderRadius = btnSize / 2,
-            backgroundImage = Theme.IMG.NAV_LABOR, backgroundFit = "contain",
-            justifyContent = "center", alignItems = "center",
-            onTap = function() AudioManager.Click() cbs.onLabor() end,
-        }
-        btnTop = btnTop + btnGap
+        makeSideBtn(Theme.IMG.NAV_LABOR, "打工", cbs.onLabor)
     end
 
     -- 祭天祈福（乡绅/品级3解锁）
     if s.clanRank >= 3 and cbs.onPray then
-        floatingButtons[#floatingButtons + 1] = UI.Panel {
-            position = "absolute",
-            right = 6, top = btnTop,
-            width = btnSize, height = btnSize,
-            borderRadius = btnSize / 2,
-            backgroundImage = Theme.IMG.NAV_PRAY, backgroundFit = "contain",
-            justifyContent = "center", alignItems = "center",
-            onTap = function() AudioManager.Click() cbs.onPray() end,
-        }
-        btnTop = btnTop + btnGap
+        makeSideBtn(Theme.IMG.NAV_PRAY, "祈福", cbs.onPray)
     end
 
     -- 教坊司·花魁（世家/品级5解锁）
     if s.clanRank >= 5 and cbs.onCourtesan then
-        floatingButtons[#floatingButtons + 1] = UI.Panel {
-            position = "absolute",
-            right = 6, top = btnTop,
-            width = btnSize, height = btnSize,
-            borderRadius = btnSize / 2,
-            backgroundImage = Theme.IMG.NAV_COURTESAN, backgroundFit = "contain",
-            justifyContent = "center", alignItems = "center",
-            onTap = function() AudioManager.Click() cbs.onCourtesan() end,
-        }
-        btnTop = btnTop + btnGap
+        makeSideBtn(Theme.IMG.NAV_COURTESAN, "花魁", cbs.onCourtesan)
     end
 
     -- 天子诰封（勋贵/品级6解锁）
     if s.clanRank >= 6 and cbs.onImperialSeal then
-        floatingButtons[#floatingButtons + 1] = UI.Panel {
-            position = "absolute",
-            right = 6, top = btnTop,
-            width = btnSize, height = btnSize,
-            borderRadius = btnSize / 2,
-            backgroundImage = Theme.IMG.NAV_SEAL, backgroundFit = "contain",
-            justifyContent = "center", alignItems = "center",
-            onTap = function() AudioManager.Click() cbs.onImperialSeal() end,
-        }
-        btnTop = btnTop + btnGap
+        makeSideBtn(Theme.IMG.NAV_SEAL, "诰封", cbs.onImperialSeal)
     end
 
     -- 左下角宠物面板（绝对定位）

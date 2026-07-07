@@ -608,8 +608,8 @@ local function UpdateUnitAI(unit, dt)
                     -- 步兵：近战直接造成伤害
                     local atk = unit.data.atk or 10
                     local def = unit.target.data.def or 0
-                    local dmg = math.max(1, atk - def)
-                    dmg = math.floor(dmg * (0.8 + math.random() * 0.4))
+                    local dmg = math.floor(atk * (100 / (100 + def * 10)))
+                    dmg = math.max(1, math.floor(dmg * (0.8 + math.random() * 0.4)))
                     unit.target.data.hp = (unit.target.data.hp or 0) - dmg
                 end
                 unit.hasDamaged = true
@@ -719,8 +719,8 @@ function SpawnArrow(shooter, target)
     -- 计算伤害
     local atk = shooter.data.atk or 10
     local def = target.data.def or 0
-    local dmg = math.max(1, atk - def)
-    dmg = math.floor(dmg * (0.8 + math.random() * 0.4))
+    local dmg = math.floor(atk * (100 / (100 + def * 10)))
+    dmg = math.max(1, math.floor(dmg * (0.8 + math.random() * 0.4)))
 
     arrows_[#arrows_ + 1] = {
         node = arrowNode,
@@ -861,6 +861,16 @@ local function SettleBattle(result)
     -- 如果有自定义结算回调（事件战斗），使用它代替默认逻辑
     if onSettleOverride_ then
         local report = onSettleOverride_(result, rivalData_, deployedIds_)
+        -- 防御：如果自定义回调未返回 report，构造一个默认的
+        if not report then
+            report = {
+                result = result,
+                rivalName = rivalData_ and rivalData_.name or "未知",
+                rewards = { silver = 0, grain = 0, fame = 0 },
+                casualties = {},
+                soldierLosses = { infantry = 0, archers = 0 },
+            }
+        end
         SaveSystem.AutoSave()
         return report
     end

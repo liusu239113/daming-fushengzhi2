@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "default_language": "cmn",
+  "default_stability": 0.5,
+  "characters": {
+    "哭灵女声": {
+      "voice_id": "T6RUk3SBIlAZfLREiUM7",
+      "voice_name": "哭灵女声_voice",
+      "description": "Voice Design - Middle-aged Chinese woman in her 40s, deeply sorrowful and grieving, voice trembling with weeping, traditional Chinese funeral mourning style, high-pitched wailing quality interspersed with sobbing, emotionally expressive with intense sadness, professional Chinese voice actress, studio-quality recording.",
+      "language": "cmn",
+      "stability": 0.5,
+      "created_at": "2026-05-23T11:08:20.790Z",
+      "last_used": "2026-05-23T11:08:20.790Z"
+    }
+  },
+  "special_voices": {}
+}

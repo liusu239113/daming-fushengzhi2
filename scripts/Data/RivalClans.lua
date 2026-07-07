@@ -5,6 +5,7 @@
 -- ============================================================================
 
 local GameData = require("Data.GameData")
+local EquipmentSystem = require("Systems.EquipmentSystem")
 
 local RivalClans = {}
 
@@ -54,9 +55,9 @@ local RIVAL_TITLES_FEMALE = {
 RivalClans.RANK_SCALING = {
     [5] = { soldierMul = 1.0,  statBonus = 0,  memberExtra = 0, rewardMul = 1.0 },
     [6] = { soldierMul = 3.0,  statBonus = 8,  memberExtra = 1, rewardMul = 2.0 },
-    [7] = { soldierMul = 8.0,  statBonus = 15, memberExtra = 2, rewardMul = 4.0 },
-    [8] = { soldierMul = 20.0, statBonus = 22, memberExtra = 3, rewardMul = 7.0 },
-    [9] = { soldierMul = 40.0, statBonus = 30, memberExtra = 4, rewardMul = 12.0 },
+    [7] = { soldierMul = 6.0,  statBonus = 10, memberExtra = 2, rewardMul = 4.0 },
+    [8] = { soldierMul = 12.0, statBonus = 15, memberExtra = 3, rewardMul = 7.0 },
+    [9] = { soldierMul = 22.0, statBonus = 20, memberExtra = 4, rewardMul = 12.0 },
 }
 
 -- ============================================================================
@@ -234,21 +235,34 @@ end
 ---@param member table GameData member
 ---@return table battleUnit
 function RivalClans.MemberToBattleUnit(member)
-    -- 攻击力 = 武艺 * 0.8 + 5
-    local atk = math.floor(member.martial * 0.8 + 5)
-    -- 生命值 = 健康 * 2 + 50
-    local hp = math.floor(member.health * 2 + 50)
+    -- 装备加成
+    local eqBonus = EquipmentSystem.GetBonus(member)
+    local totalMartial = member.martial + (eqBonus.martial or 0)
+    local totalHealth  = member.health  + (eqBonus.health or 0)
+    -- 攻击力 = (武艺+装备武艺) * 0.8 + 5
+    local atk = math.floor(totalMartial * 0.8 + 5)
+    -- 生命值 = (健康+装备健康) * 2 + 50
+    local hp = math.floor(totalHealth * 2 + 50)
     -- 速度 = 武艺 * 0.3 + 20（影响移动和攻击间隔）
-    local spd = math.floor(member.martial * 0.3 + 20)
+    local spd = math.floor(totalMartial * 0.3 + 20)
     -- 骑马加成：移速 +40%
     local mounted = member.hasHorse == true
     if mounted then
         spd = math.floor(spd * 1.4)
     end
-    -- 防御 = 军衔加成
+    -- 防御 = 军衔加成 + 装备防御（armor提供额外防御）
     local def = 0
     if member.militaryRank == "把总" then def = 5
     elseif member.militaryRank == "守备" then def = 10
+    end
+    -- 护甲装备提供额外防御
+    if member.equipment and member.equipment.armor then
+        local armor = GameData.GetEquipment(member.equipment.armor)
+        if armor then
+            local rarity = GameData.GetRarityConfig(armor.rarity)
+            local mul = rarity and rarity.multiplier or 1.0
+            def = def + math.floor((armor.health or 0) * mul * 0.3)
+        end
     end
 
     return {

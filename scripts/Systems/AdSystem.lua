@@ -38,6 +38,8 @@ AdSystem.AD_SLOTS = {
     health_cure     = { id = "health_cure",      name = "神医诊治",     yearlyLimit = 4 },
     marriage_refresh = { id = "marriage_refresh", name = "换一批佳人",   yearlyLimit = 12 },
     clinic_boost     = { id = "clinic_boost",    name = "郎中加持",     yearlyLimit = 12 },
+    clinic_extra     = { id = "clinic_extra",    name = "增额郎中",     yearlyLimit = 99 },
+    funeral_grand    = { id = "funeral_grand",   name = "广大祭葬",     yearlyLimit = 3  },
 }
 
 -- ============================================================================
@@ -112,6 +114,13 @@ end
 ---@param onSuccess function 广告观看成功后的回调
 ---@param onFail function|nil 广告播放失败后的回调（可选）
 function AdSystem.ShowRewardAd(slotId, onSuccess, onFail)
+    -- GM 模式：跳过广告直接成功
+    if GameData.state and GameData.state.gmMode then
+        log:Write(LOG_INFO, "[AdSystem][GM] 跳过广告: " .. slotId)
+        if onSuccess then onSuccess() end
+        return
+    end
+
     if not AdSystem.IsAvailable(slotId) then
         if onFail then onFail("今年次数已用完，明年重置") end
         return
@@ -649,6 +658,114 @@ function AdSystem.RepayLoan(loanIndex, onDone)
     GameData.AddLog("提前归还钱庄贷款：" .. loan.name .. "，本金" .. loan.principal .. "两")
     table.remove(loans, loanIndex)
     if onDone then onDone(true, "已还清" .. loan.name) end
+end
+
+-- ============================================================================
+-- 增额郎中（看广告增加临时医生，每次+1人，1小时有效，最多同时3个临时医生）
+-- ============================================================================
+
+local CLINIC_EXTRA_DURATION = 3600  -- 1小时（秒）
+
+--- 清理过期的临时医生
+local function CleanExpiredExtraDoctors()
+    local s = GameData.state
+    if not s.clinicExtraDoctors then return end
+    local now = GetRealTime()
+    local i = 1
+    while i <= #s.clinicExtraDoctors do
+        if now >= s.clinicExtraDoctors[i].expiresAt then
+            table.remove(s.clinicExtraDoctors, i)
+        else
+            i = i + 1
+        end
+    end
+end
+
+--- 获取当前有效的临时医生列表
+---@return table[] { memberId, expiresAt }
+function AdSystem.GetExtraDoctors()
+    CleanExpiredExtraDoctors()
+    return GameData.state.clinicExtraDoctors or {}
+end
+
+--- 获取当前有效临时医生数量
+---@return number
+function AdSystem.GetExtraDoctorCount()
+    return #AdSystem.GetExtraDoctors()
+end
+
+--- 看广告增加一个临时医生
+---@param memberId number 要指派的族人ID
+---@param onDone function|nil callback(success, msg)
+function AdSystem.AddExtraDoctor(memberId, onDone)
+    CleanExpiredExtraDoctors()
+    local s = GameData.state
+    if not s.clinicExtraDoctors then s.clinicExtraDoctors = {} end
+
+    if #s.clinicExtraDoctors >= 3 then
+        if onDone then onDone(false, "临时医生已达上限（3人）") end
+        return
+    end
+
+    -- 检查族人是否有效
+    local member = GameData.GetMember(memberId)
+    if not member or not member.alive then
+        if onDone then onDone(false, "族人不存在") end
+        return
+    end
+    if member.age < 16 then
+        if onDone then onDone(false, "年龄不足16岁") end
+        return
+    end
+    -- 不能是正式郎中
+    if member.id == s.clinicDoctorId then
+        if onDone then onDone(false, "此人已是坐堂郎中") end
+        return
+    end
+    -- 不能重复指派
+    for _, d in ipairs(s.clinicExtraDoctors) do
+        if d.memberId == member.id then
+            if onDone then onDone(false, "此人已在临时坐诊") end
+            return
+        end
+    end
+
+    AdSystem.ShowRewardAd("clinic_extra", function()
+        s.clinicExtraDoctors[#s.clinicExtraDoctors + 1] = {
+            memberId = member.id,
+            expiresAt = GetRealTime() + CLINIC_EXTRA_DURATION,
+        }
+        GameData.AddLog(member.name .. "看广告就任临时郎中（1小时）")
+        if onDone then onDone(true, member.name .. "已就任临时郎中") end
+    end, function(msg)
+        if onDone then onDone(false, msg) end
+    end)
+end
+
+--- 获取所有活跃医生列表（正式 + 临时），用于自动治疗
+---@return table[] { memberId, isTemp }
+function AdSystem.GetAllActiveDoctors()
+    CleanExpiredExtraDoctors()
+    local s = GameData.state
+    local doctors = {}
+
+    -- 正式郎中
+    if s.clinicDoctorId then
+        local doc = GameData.GetMember(s.clinicDoctorId)
+        if doc and doc.alive and doc.gender == "female" and (doc.study or 0) >= 60 then
+            doctors[#doctors + 1] = { memberId = s.clinicDoctorId, isTemp = false }
+        end
+    end
+
+    -- 临时郎中
+    for _, d in ipairs(s.clinicExtraDoctors or {}) do
+        local doc = GameData.GetMember(d.memberId)
+        if doc and doc.alive then
+            doctors[#doctors + 1] = { memberId = d.memberId, isTemp = true }
+        end
+    end
+
+    return doctors
 end
 
 return AdSystem

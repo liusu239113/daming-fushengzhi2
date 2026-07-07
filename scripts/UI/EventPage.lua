@@ -32,9 +32,9 @@ function EventPage.Create(PageTitle, screen)
             width = "100%", height = 56, borderRadius = 8,
             backgroundGradient = Theme.GRADIENT_RED,
             justifyContent = "center", alignItems = "center",
-            onClick = function(self) screen.ShowEndingScreen() end,
+            onTap = function(self) screen.ShowEndingScreen() end,
             children = {
-                UI.Label { text = "甲申之变 · 查看终局结算", fontSize = 15, fontColor = Theme.TEXT_WHITE, letterSpacing = 1 },
+                UI.Label { text = "甲申之变 · 查看终局结算", fontSize = 17, fontColor = Theme.TEXT_WHITE, letterSpacing = 1 },
             },
         }
     end
@@ -45,7 +45,7 @@ function EventPage.Create(PageTitle, screen)
             width = "100%", height = 48, borderRadius = 8,
             backgroundGradient = Theme.GRADIENT_PRIMARY,
             justifyContent = "center", alignItems = "center",
-            onClick = function(self)
+            onTap = function(self)
                 AudioManager.MonthTick()
                 local report = MonthlyUpdate.Execute()
                 SaveSystem.AutoSave()
@@ -62,7 +62,7 @@ function EventPage.Create(PageTitle, screen)
             children = {
                 UI.Label {
                     text = "手动推进下月（" .. s.year .. "年" .. s.month .. "月→）",
-                    fontSize = 14, fontColor = Theme.TEXT_WHITE, letterSpacing = 1,
+                    fontSize = 16, fontColor = Theme.TEXT_WHITE, letterSpacing = 1,
                 },
             },
         }
@@ -71,7 +71,7 @@ function EventPage.Create(PageTitle, screen)
     -- 待处理事件
     if #s.pendingEvents > 0 then
         children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 10 }
-        children[#children + 1] = UI.Label { text = "待处理事件", fontSize = 15, fontColor = Theme.RED, marginTop = 4 }
+        children[#children + 1] = UI.Label { text = "待处理事件", fontSize = 17, fontColor = Theme.RED, marginTop = 4 }
 
         for i, evt in ipairs(s.pendingEvents) do
             children[#children + 1] = UI.Panel {
@@ -80,8 +80,8 @@ function EventPage.Create(PageTitle, screen)
                 borderWidth = 1, borderColor = Theme.RED_DARK, gap = 8,
                 children = (function()
                     local evtChildren = {
-                        UI.Label { text = evt.title, fontSize = 15, fontColor = Theme.GOLD },
-                        UI.Label { text = evt.desc, fontSize = 12, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
+                        UI.Label { text = evt.title, fontSize = 17, fontColor = Theme.GOLD },
+                        UI.Label { text = evt.desc, fontSize = 14, fontColor = Theme.TEXT_PRIMARY, whiteSpace = "normal" },
                     }
                     if evt.choices then
                         for _, choice in ipairs(evt.choices) do
@@ -89,7 +89,7 @@ function EventPage.Create(PageTitle, screen)
                                 width = "100%", height = 40, borderRadius = 6,
                                 backgroundColor = Theme.BG_INPUT, borderWidth = 1, borderColor = Theme.BORDER_GOLD,
                                 justifyContent = "center", alignItems = "center",
-                                onClick = function(self)
+                                onTap = function(self)
                                     AudioManager.Select()
                                     local ok2, err2 = pcall(choice.effect)
                                     if not ok2 then
@@ -99,7 +99,7 @@ function EventPage.Create(PageTitle, screen)
                                     SaveSystem.AutoSave()
                                     screen.RefreshAll()
                                 end,
-                                children = { UI.Label { text = choice.text, fontSize = 13, fontColor = Theme.GOLD } },
+                                children = { UI.Label { text = choice.text, fontSize = 15, fontColor = Theme.GOLD } },
                             }
                         end
                     end
@@ -110,7 +110,7 @@ function EventPage.Create(PageTitle, screen)
                             width = "100%", height = 32, borderRadius = 6, marginTop = 2,
                             backgroundGradient = { direction = "to-right", from = { 180, 130, 50, 255 }, to = { 160, 110, 30, 255 } },
                             flexDirection = "row", justifyContent = "center", alignItems = "center", gap = 4,
-                            onClick = function(self)
+                            onTap = function(self)
                                 AudioManager.Click()
                                 -- 固定额外奖励：银两+粮食
                                 local bonusReward = { silver = 10, grain = 8 }
@@ -122,8 +122,8 @@ function EventPage.Create(PageTitle, screen)
                                 end)
                             end,
                             children = {
-                                UI.Label { text = "▶ 看广告·额外奖励", fontSize = 10, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
-                                UI.Label { text = "(" .. adRemain .. "次)", fontSize = 9, fontColor = { 255, 255, 255, 160 } },
+                                UI.Label { text = "▶ 看广告·额外奖励", fontSize = 12, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                                UI.Label { text = "(" .. adRemain .. "次)", fontSize = 11, fontColor = { 255, 255, 255, 160 } },
                             },
                         }
                     end
@@ -135,7 +135,7 @@ function EventPage.Create(PageTitle, screen)
 
     -- 明末大势时间线
     children[#children + 1] = UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginTop = 14 }
-    children[#children + 1] = UI.Label { text = "明末大势", fontSize = 15, fontColor = Theme.GOLD, marginTop = 4 }
+    children[#children + 1] = UI.Label { text = "明末大势", fontSize = 17, fontColor = Theme.GOLD, marginTop = 4 }
 
     for _, evt in ipairs(GameData.HISTORY_EVENTS) do
         local triggered = s.triggeredHistoryYears[evt.year]
@@ -155,12 +155,12 @@ function EventPage.Create(PageTitle, screen)
                     children = {
                         UI.Label {
                             text = evt.year .. "年 " .. evt.title,
-                            fontSize = 13,
+                            fontSize = 15,
                             fontColor = triggered and Theme.GOLD or (isFuture and Theme.TEXT_MUTED or Theme.TEXT_PRIMARY),
                         },
                         UI.Label {
                             text = isFuture and "未来之事……" or evt.desc,
-                            fontSize = 10, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal",
+                            fontSize = 12, fontColor = Theme.TEXT_MUTED, whiteSpace = "normal",
                         },
                     },
                 },
