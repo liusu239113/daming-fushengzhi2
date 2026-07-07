@@ -1,0 +1,60 @@
+name: Android Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare release files
+        id: prep
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA::7}"
+          tag="android-${short_sha}"
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          out="daming-fushengzhi2-${tag}.apk"
+          test -f "$apk"
+          cp "$apk" "$out"
+          {
+            echo "tag=$tag"
+            echo "apk=$out"
+            echo "title=大明浮生志2 Android ${short_sha}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release and upload APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete "${{ steps.prep.outputs.tag }}" --yes --cleanup-tag || true
+          gh release create "${{ steps.prep.outputs.tag }}" \
+            "${{ steps.prep.outputs.apk }}" \
+            --title "${{ steps.prep.outputs.title }}" \
+            --notes "Automated Android APK build for commit ${GITHUB_SHA}."
