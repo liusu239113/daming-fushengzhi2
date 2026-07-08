@@ -1,4 +1,4 @@
-package com.daming.fushengzhi2.v3.ui
+package com.daming.fushengzhi3.v3.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -37,21 +37,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.daming.fushengzhi2.data.GameImages
-import com.daming.fushengzhi2.ui.components.AssetImage
-import com.daming.fushengzhi2.v3.data.V3ActiveEvent
-import com.daming.fushengzhi2.v3.data.V3AnnualGoal
-import com.daming.fushengzhi2.v3.data.V3Content
-import com.daming.fushengzhi2.v3.data.V3CountySite
-import com.daming.fushengzhi2.v3.data.V3EventChoice
-import com.daming.fushengzhi2.v3.data.V3FinalEnding
-import com.daming.fushengzhi2.v3.data.V3GameState
-import com.daming.fushengzhi2.v3.data.V3Person
-import com.daming.fushengzhi2.v3.data.V3Route
-import com.daming.fushengzhi2.v3.data.V3Screen
-import com.daming.fushengzhi2.v3.data.V3TaskType
-import com.daming.fushengzhi2.v3.logic.V3GameController
-import com.daming.fushengzhi2.v3.logic.V3GameEngine
+import com.daming.fushengzhi3.data.GameImages
+import com.daming.fushengzhi3.ui.components.AssetImage
+import com.daming.fushengzhi3.v3.data.V3ActiveEvent
+import com.daming.fushengzhi3.v3.data.V3AnnualGoal
+import com.daming.fushengzhi3.v3.data.V3Content
+import com.daming.fushengzhi3.v3.data.V3CountySite
+import com.daming.fushengzhi3.v3.data.V3EventChoice
+import com.daming.fushengzhi3.v3.data.V3FinalEnding
+import com.daming.fushengzhi3.v3.data.V3GameState
+import com.daming.fushengzhi3.v3.data.V3Person
+import com.daming.fushengzhi3.v3.data.V3Route
+import com.daming.fushengzhi3.v3.data.V3Screen
+import com.daming.fushengzhi3.v3.data.V3TaskType
+import com.daming.fushengzhi3.v3.logic.V3GameController
+import com.daming.fushengzhi3.v3.logic.V3GameEngine
 
 private val V3Ink = Color(0xFF1F1712)
 private val V3Paper = Color(0xFFF3E2C2)
@@ -85,7 +85,7 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
             V3Selector("家族信条", V3Content.creeds, creed) { creed = it }
             V3Selector("初始危机", V3Content.crises, crisis) { crisis = it }
             V3Panel {
-                Text("三代上架版已接入专属案牍美术、县域地图、人物成长、房支政治、营建升级、年度目标与正式终局。", color = V3Ink, fontSize = 15.sp)
+                Text("本作以明末县域为舞台，围绕旧地图、案牍急报、人物派遣、房支政治、年度目标与多路线终局展开。", color = V3Ink, fontSize = 15.sp)
                 Text("开局：$root / $county / $creed / $crisis", color = V3Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -100,12 +100,12 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
 }
 
 @Composable
-fun V3GameScreen(controller: V3GameController, onBackToV2: () -> Unit) {
+fun V3GameScreen(controller: V3GameController, onBackToMenu: () -> Unit) {
     LaunchedEffect(Unit) { controller.ensureV3Bgm() }
     val state = controller.state
     V3Background {
         Column(Modifier.fillMaxSize()) {
-            V3TopBar(state, controller, onBackToV2)
+            V3TopBar(state, controller, onBackToMenu)
             Column(
                 Modifier
                     .weight(1f)
@@ -117,7 +117,7 @@ fun V3GameScreen(controller: V3GameController, onBackToV2: () -> Unit) {
             ) {
                 val ending = state.finalEnding
                 if (ending != null) {
-                    V3EndingPage(ending, controller, onBackToV2)
+                    V3EndingPage(ending, controller, onBackToMenu)
                 } else {
                     when (controller.screen) {
                         V3Screen.County -> V3CountyPage(state, controller)
@@ -149,7 +149,7 @@ fun V3GameScreen(controller: V3GameController, onBackToV2: () -> Unit) {
 }
 
 @Composable
-private fun V3EndingPage(ending: V3FinalEnding, controller: V3GameController, onBackToV2: () -> Unit) {
+private fun V3EndingPage(ending: V3FinalEnding, controller: V3GameController, onBackToMenu: () -> Unit) {
     V3Section("终局家乘", "${ending.route.label} · ${ending.tier.label} · 终局评分 ${ending.score}")
     V3Panel {
         Text(ending.title, color = V3Red, fontSize = 28.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -157,13 +157,13 @@ private fun V3EndingPage(ending: V3FinalEnding, controller: V3GameController, on
         ending.stats.forEach { stat -> Text(stat, color = V3Muted, fontSize = 14.sp) }
     }
     V3Panel {
-        Text("上架版终局说明", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text("终局评卷", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Text("终局会根据路线倾向、地点稳定、资源、关系、族人功绩和房支状态综合评分。", color = V3Ink, fontSize = 14.sp)
         Text("评分等级：根基未稳 / 可成一线 / 大势已成 / 足载家乘。", color = V3Ink, fontSize = 14.sp)
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         V3Button("重新开局", Modifier.weight(1f), onClick = controller::restartAfterEnding)
-        V3Button("返回主菜单", Modifier.weight(1f), onClick = onBackToV2)
+        V3Button("返回主菜单", Modifier.weight(1f), onClick = onBackToMenu)
     }
 }
 
@@ -203,7 +203,7 @@ private fun V3CountyPage(state: V3GameState, controller: V3GameController) {
 
 @Composable
 private fun V3ClanPage(state: V3GameState) {
-    V3Section("宗族", "房支、凝聚、继承与内斗框架")
+    V3Section("宗族", "房支、凝聚、继承与内议")
     V3Panel {
         Text(state.clanName, color = V3Red, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("根基：${state.root}    信条：${state.creed}", color = V3Ink, fontSize = 15.sp)
@@ -234,10 +234,22 @@ private fun V3ClanPage(state: V3GameState) {
         }
     }
     V3Panel {
-        Text("后续要做满的宗族系统", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text("1. 族长继承争端：嫡长、贤能、军功、财富四种继承逻辑。", color = V3Ink, fontSize = 13.sp)
-        Text("2. 房支议事：每年由各房提出诉求，玩家裁决。", color = V3Ink, fontSize = 13.sp)
-        Text("3. 族产分配：田庄、商号、书院、寨堡都将影响房支利益。", color = V3Ink, fontSize = 13.sp)
+        Text("宗祠议事", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        val agenda = state.branches.sortedWith(compareByDescending<com.daming.fushengzhi3.v3.data.V3Branch> { it.grievance }.thenBy { it.loyalty }).take(3)
+        agenda.forEach { branch ->
+            val demand = when (branch.focus) {
+                V3Route.Scholar -> "请增修书院、延请名师，以保科举门第。"
+                V3Route.Merchant -> "请拨银通商、整顿集市，以扩宗族财源。"
+                V3Route.Fortress -> "请修寨募勇、屯粮练丁，以备流寇。"
+                V3Route.Loyalist -> "请结交县衙、响应军需，以换官府庇护。"
+                V3Route.Warlord -> "请掌山道、扩乡勇，以握县域实权。"
+                V3Route.Overseas -> "请经营码头、暗通海路，为宗族留退路。"
+                V3Route.Hermit -> "请轻徭薄敛、修祠赈民，以保香火。"
+            }
+            Text("${branch.name}：$demand", color = V3Ink, fontSize = 13.sp)
+            Text("忠${branch.loyalty} · 财${branch.wealth} · 势${branch.influence} · 怨${branch.grievance}", color = if (branch.grievance >= 35) V3Red else V3Muted, fontSize = 12.sp)
+        }
+        Text("每年岁末会根据房支怨气、活跃族人和路线倾向重新排列议题。高怨气房支可能提前入祠逼议。", color = V3Muted, fontSize = 12.sp)
     }
 }
 
@@ -304,13 +316,20 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController) {
         state.eventLog.take(10).forEach { Text(it, color = V3Ink, fontSize = 13.sp) }
     }
     V3Panel {
-        Text("开发路线", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("第一阶段：县域地图、人物派遣、房支、关系、事件、独立存档。", color = V3Ink, fontSize = 13.sp)
-        Text("第二阶段：补 30+ 地点事件、60+ 人物事件、20+ 房支矛盾事件。", color = V3Ink, fontSize = 13.sp)
-        Text("第三阶段：替换三代专属美术、动态音乐、官衙/军报/商路音效。", color = V3Ink, fontSize = 13.sp)
-        Text("第四阶段：做满七条结局线，并加入结局统计。", color = V3Ink, fontSize = 13.sp)
+        Text("天下大势", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        val totalRisk = state.sites.sumOf { it.risk }
+        val stableSites = state.sites.count { it.risk < 35 && it.control >= 40 }
+        val courtPressure = (state.year - 1600 + state.month / 2 + (50 - state.relations.yamen).coerceAtLeast(0) / 4).coerceAtLeast(0)
+        val banditPressure = (totalRisk / 9 - state.relations.bandits / 3).coerceIn(0, 100)
+        val faminePressure = (100 - state.grain / 4 + (state.sites.firstOrNull { it.id == "farmland" }?.risk ?: 0)).coerceIn(0, 100)
+        val seaChance = (state.relations.merchants + (state.sites.firstOrNull { it.id == "dock" }?.control ?: 0)).coerceIn(0, 100)
+        V3RelationRow("朝廷赋役", courtPressure)
+        V3RelationRow("流寇压力", banditPressure)
+        V3RelationRow("灾荒阴影", faminePressure)
+        V3RelationRow("海贸机会", seaChance)
+        Text("稳定地点：$stableSites / ${state.sites.size}。大势并非单一数值，而会通过事件池、终局评分和路线里程碑持续反馈。", color = V3Muted, fontSize = 12.sp)
     }
-    V3Button("查看设计文档位置", Modifier.fillMaxWidth(), onClick = controller::openDesignHint)
+    V3Button("玩法说明", Modifier.fillMaxWidth(), onClick = controller::openPlayGuide)
 }
 
 @Composable
@@ -400,7 +419,7 @@ private fun V3PersonCard(person: V3Person, state: V3GameState, controller: V3Gam
 }
 
 @Composable
-private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToV2: () -> Unit) {
+private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToMenu: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -414,8 +433,8 @@ private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToV
             Text("${state.year}年${state.month}月 · ${state.crisis}", color = V3Paper, fontSize = 13.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            V3SmallButton("文档", Modifier.width(76.dp)) { controller.openDesignHint() }
-            V3SmallButton("返回2代", Modifier.width(76.dp)) { onBackToV2() }
+            V3SmallButton("玩法", Modifier.width(76.dp)) { controller.openPlayGuide() }
+            V3SmallButton("主菜单", Modifier.width(76.dp)) { onBackToMenu() }
         }
     }
 }
@@ -632,12 +651,18 @@ private fun choiceImpactSummary(choice: V3EventChoice): String {
     add("粮", choice.grainDelta)
     add("凝", choice.cohesionDelta)
     add("望", choice.influenceDelta)
+    add("勇", choice.militiaDelta)
     add("官", choice.yamenDelta)
     add("绅", choice.gentryDelta)
     add("民", choice.villagersDelta)
     add("寇", choice.banditsDelta)
     add("商", choice.merchantsDelta)
     add("军", choice.garrisonDelta)
+    add("控", choice.siteControlDelta)
+    add("险", choice.siteRiskDelta)
+    add("功", choice.personMeritDelta)
+    add("劳", choice.personFatigueDelta)
+    add("忠", choice.personLoyaltyDelta)
     if (choice.routeDelta != 0) parts += "${choice.route.label}+${choice.routeDelta}"
     if (choice.branchImpacts.isNotEmpty()) {
         val branchCount = choice.branchImpacts.size

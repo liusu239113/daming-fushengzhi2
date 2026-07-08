@@ -1,4 +1,4 @@
-package com.daming.fushengzhi2.v3.data
+package com.daming.fushengzhi3.v3.data
 
 import kotlinx.serialization.Serializable
 
@@ -223,12 +223,20 @@ data class V3EventChoice(
     val grainDelta: Int = 0,
     val cohesionDelta: Int = 0,
     val influenceDelta: Int = 0,
+    val militiaDelta: Int = 0,
     val yamenDelta: Int = 0,
     val gentryDelta: Int = 0,
     val villagersDelta: Int = 0,
     val banditsDelta: Int = 0,
     val merchantsDelta: Int = 0,
     val garrisonDelta: Int = 0,
+    val siteId: String? = null,
+    val siteControlDelta: Int = 0,
+    val siteRiskDelta: Int = 0,
+    val personId: Int? = null,
+    val personFatigueDelta: Int = 0,
+    val personMeritDelta: Int = 0,
+    val personLoyaltyDelta: Int = 0,
     val route: V3Route,
     val routeDelta: Int = 4,
     val branchImpacts: List<V3BranchImpact> = emptyList()

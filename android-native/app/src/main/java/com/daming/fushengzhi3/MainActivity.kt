@@ -1,0 +1,71 @@
+package com.daming.fushengzhi3
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import com.daming.fushengzhi3.audio.GameAudio
+import com.daming.fushengzhi3.persistence.V3SaveStore
+import com.daming.fushengzhi3.ui.screens.MainMenuScreen
+import com.daming.fushengzhi3.ui.theme.MingTheme
+import com.daming.fushengzhi3.v3.logic.V3GameController
+import com.daming.fushengzhi3.v3.ui.V3CreateScreen
+import com.daming.fushengzhi3.v3.ui.V3GameScreen
+
+class MainActivity : ComponentActivity() {
+    private enum class AppScreen { Menu, Create, Game }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).let { controller ->
+            controller.hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        setContent {
+            MingTheme {
+                DamingApp()
+            }
+        }
+    }
+
+    @Composable
+    private fun DamingApp() {
+        val audio = remember { GameAudio(this) }
+        val v3Controller = remember { V3GameController(V3SaveStore(this), audio) }
+        var screen by remember { mutableStateOf(AppScreen.Menu) }
+
+        DisposableEffect(Unit) {
+            onDispose { audio.release() }
+        }
+        LaunchedEffect(screen) {
+            v3Controller.ensureV3Bgm()
+        }
+
+        when (screen) {
+            AppScreen.Menu -> MainMenuScreen(
+                v3Controller = v3Controller,
+                onNewGame = { screen = AppScreen.Create },
+                onContinue = { screen = AppScreen.Game }
+            )
+            AppScreen.Create -> V3CreateScreen(
+                controller = v3Controller,
+                onBack = { screen = AppScreen.Menu },
+                onStart = { screen = AppScreen.Game }
+            )
+            AppScreen.Game -> V3GameScreen(
+                controller = v3Controller,
+                onBackToMenu = { screen = AppScreen.Menu }
+            )
+        }
+    }
+}

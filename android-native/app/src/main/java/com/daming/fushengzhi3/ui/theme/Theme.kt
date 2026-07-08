@@ -1,4 +1,4 @@
-package com.daming.fushengzhi2.ui.theme
+package com.daming.fushengzhi3.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme

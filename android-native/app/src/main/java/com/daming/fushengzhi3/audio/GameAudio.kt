@@ -1,12 +1,12 @@
-package com.daming.fushengzhi2.audio
+package com.daming.fushengzhi3.audio
 
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.SoundPool
-import com.daming.fushengzhi2.data.BgmKey
-import com.daming.fushengzhi2.data.GameAudioAssets
-import com.daming.fushengzhi2.data.SfxKey
+import com.daming.fushengzhi3.data.BgmKey
+import com.daming.fushengzhi3.data.GameAudioAssets
+import com.daming.fushengzhi3.data.SfxKey
 import java.io.File
 
 class GameAudio(context: Context) {
@@ -53,10 +53,6 @@ class GameAudio(context: Context) {
         }
     }
 
-    fun playGameBgm(year: Int) {
-        playBgm(if (year >= 1620 || year in 1450..1464) BgmKey.Crisis else BgmKey.Peaceful)
-    }
-
     fun stopBgm() {
         bgmPlayer?.runCatchingStopAndRelease()
         bgmPlayer = null
@@ -71,15 +67,7 @@ class GameAudio(context: Context) {
     fun click() = playSfx(SfxKey.UiClick)
     fun select() = playSfx(SfxKey.UiSelect)
     fun tabSwitch() = playSfx(SfxKey.UiTabSwitch)
-    fun back() = playSfx(SfxKey.UiBack)
     fun monthTick() = playSfx(SfxKey.MonthAdvance)
-    fun gain() = playSfx(SfxKey.ResourceGain)
-    fun loss() = playSfx(SfxKey.ResourceLoss)
-    fun battle() = playSfx(SfxKey.EventBattle)
-    fun celebrate() = playSfx(SfxKey.EventCelebrate)
-    fun examPass() = playSfx(SfxKey.EventExam)
-    fun disaster() = playSfx(SfxKey.EventDisaster)
-    fun death() = playSfx(SfxKey.EventDeath)
 
     fun release() {
         stopBgm()

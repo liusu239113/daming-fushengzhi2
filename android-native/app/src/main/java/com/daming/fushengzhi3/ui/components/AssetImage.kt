@@ -1,4 +1,4 @@
-package com.daming.fushengzhi2.ui.components
+package com.daming.fushengzhi3.ui.components
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image

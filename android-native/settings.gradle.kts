@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "DamingFushengzhi2Native"
+rootProject.name = "DamingFushengzhi3Native"
 include(":app")

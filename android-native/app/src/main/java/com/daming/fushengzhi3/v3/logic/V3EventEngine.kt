@@ -1,11 +1,11 @@
-package com.daming.fushengzhi2.v3.logic
+package com.daming.fushengzhi3.v3.logic
 
-import com.daming.fushengzhi2.v3.data.V3ActiveEvent
-import com.daming.fushengzhi2.v3.data.V3BranchImpact
-import com.daming.fushengzhi2.v3.data.V3EventChoice
-import com.daming.fushengzhi2.v3.data.V3GameState
-import com.daming.fushengzhi2.v3.data.V3Relations
-import com.daming.fushengzhi2.v3.data.V3Route
+import com.daming.fushengzhi3.v3.data.V3ActiveEvent
+import com.daming.fushengzhi3.v3.data.V3BranchImpact
+import com.daming.fushengzhi3.v3.data.V3EventContent
+import com.daming.fushengzhi3.v3.data.V3EventChoice
+import com.daming.fushengzhi3.v3.data.V3GameState
+import com.daming.fushengzhi3.v3.data.V3Route
 import kotlin.math.max
 import kotlin.math.min
 
@@ -14,19 +14,33 @@ object V3EventEngine {
         if (state.activeEvent != null) return state.activeEvent
         val totalRisk = state.sites.sumOf { it.risk }
         val angryBranch = state.branches.maxByOrNull { it.grievance }
-        return when {
-            angryBranch != null && angryBranch.grievance >= 42 -> branchDemandEvent(angryBranch.id, angryBranch.name, angryBranch.focus)
-            state.crisis == "官府催税" || state.relations.yamen < -10 -> taxDemandEvent()
-            state.crisis == "流寇逼近" || totalRisk > 260 -> banditShadowEvent()
-            state.crisis == "饥荒将至" || state.grain < 120 -> refugeesEvent()
-            state.crisis == "瘟疫初起" || state.sites.any { it.id == "clinic" && it.risk > 35 } -> plagueRumorEvent()
-            state.crisis == "商路断绝" || state.relations.merchants > 20 -> merchantEscortEvent()
-            state.sites.any { it.id == "academy" && it.control > 35 && state.month % 3 == 0 } -> academyDebateEvent()
-            state.sites.any { it.id == "dock" && it.control > 30 && state.month % 5 == 0 } -> seaMerchantEvent()
-            state.cohesion < 45 -> branchDisputeEvent()
-            state.month % 4 == 0 -> countyRumorEvent()
+        val criticalEvent = when {
+            angryBranch != null && angryBranch.grievance >= 48 -> branchDemandEvent(angryBranch.id, angryBranch.name, angryBranch.focus)
+            state.cohesion < 38 -> branchDisputeEvent()
+            state.silver < 40 && state.month % 2 == 0 -> countyRumorEvent()
+            state.grain < 95 -> refugeesEvent()
+            totalRisk > 420 -> banditShadowEvent()
             else -> null
         }
+        if (criticalEvent != null) return criticalEvent
+
+        val weightedPool = V3EventContent.allEvents.filter { event ->
+            val titleNotRecent = state.eventLog.take(8).none { it.contains(event.title) }
+            val crisisMatched = when (state.crisis) {
+                "官府催税" -> event.title.contains("县") || event.title.contains("衙") || event.title.contains("辽饷") || event.title.contains("徭役")
+                "流寇逼近" -> event.title.contains("山") || event.title.contains("寇") || event.title.contains("寨") || event.title.contains("勇")
+                "饥荒将至" -> event.title.contains("粮") || event.title.contains("田") || event.title.contains("民") || event.title.contains("仓")
+                "族产争端" -> event.title.contains("房") || event.title.contains("祠") || event.title.contains("账") || event.title.contains("议")
+                "商路断绝" -> event.title.contains("商") || event.title.contains("市") || event.title.contains("码头") || event.title.contains("船")
+                "瘟疫初起" -> event.title.contains("医") || event.title.contains("药") || event.title.contains("疫") || event.title.contains("病")
+                else -> false
+            }
+            titleNotRecent && (crisisMatched || state.month % 3 == 0 || event.choices.any { it.siteId != null && (state.sites.firstOrNull { site -> site.id == it.siteId }?.risk ?: 0) >= 35 })
+        }
+        val pool = if (weightedPool.isNotEmpty()) weightedPool else V3EventContent.allEvents
+        if (pool.isEmpty()) return null
+        val index = ((state.year * 12 + state.month + totalRisk + state.routeScores.values.sum()) % pool.size).coerceAtLeast(0)
+        return pool[index]
     }
 
     fun choose(state: V3GameState, choice: V3EventChoice): V3GameState {
@@ -40,13 +54,36 @@ object V3EventEngine {
             garrison = clamp(state.relations.garrison + choice.garrisonDelta)
         )
         val nextBranches = applyBranchImpacts(state, choice.branchImpacts)
+        val nextSites = state.sites.map { site ->
+            if (choice.siteId == site.id) {
+                val nextControl = (site.control + choice.siteControlDelta).coerceIn(0, 100)
+                val nextRisk = (site.risk + choice.siteRiskDelta).coerceIn(0, 100)
+                site.copy(control = nextControl, risk = nextRisk, status = V3GameEngine.siteStatusFor(nextControl, nextRisk))
+            } else {
+                site
+            }
+        }
+        val nextPeople = state.people.map { person ->
+            if (choice.personId == person.id) {
+                person.copy(
+                    fatigue = (person.fatigue + choice.personFatigueDelta).coerceIn(0, 100),
+                    merit = (person.merit + choice.personMeritDelta).coerceIn(0, 999),
+                    loyalty = (person.loyalty + choice.personLoyaltyDelta).coerceIn(0, 100)
+                )
+            } else {
+                person
+            }
+        }
         val branchNotes = choice.branchImpacts.mapNotNull { it.note.takeIf { note -> note.isNotBlank() } }
         val log = (listOf("事件【${state.activeEvent?.title ?: "县域抉择"}】选择：${choice.label}。${choice.desc}") + branchNotes).joinToString(" ")
         return state.copy(
             silver = state.silver + choice.silverDelta,
             grain = state.grain + choice.grainDelta,
+            militia = (state.militia + choice.militiaDelta).coerceIn(0, 999),
             cohesion = (state.cohesion + choice.cohesionDelta).coerceIn(0, 100),
             influence = (state.influence + choice.influenceDelta).coerceIn(0, 100),
+            sites = nextSites,
+            people = nextPeople,
             relations = nextRelations,
             branches = nextBranches,
             routeScores = state.routeScores + (choice.route to routeScore),

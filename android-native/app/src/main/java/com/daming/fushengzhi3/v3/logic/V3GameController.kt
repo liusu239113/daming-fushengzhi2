@@ -1,18 +1,18 @@
-package com.daming.fushengzhi2.v3.logic
+package com.daming.fushengzhi3.v3.logic
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.daming.fushengzhi2.audio.GameAudio
-import com.daming.fushengzhi2.data.BgmKey
-import com.daming.fushengzhi2.data.SfxKey
-import com.daming.fushengzhi2.persistence.V3SaveStore
-import com.daming.fushengzhi2.v3.data.V3Content
-import com.daming.fushengzhi2.v3.data.V3GameState
-import com.daming.fushengzhi2.v3.data.V3MonthlyReport
-import com.daming.fushengzhi2.v3.data.V3Screen
-import com.daming.fushengzhi2.v3.data.V3TaskType
-import com.daming.fushengzhi2.v3.data.V3EventChoice
+import com.daming.fushengzhi3.audio.GameAudio
+import com.daming.fushengzhi3.data.BgmKey
+import com.daming.fushengzhi3.data.SfxKey
+import com.daming.fushengzhi3.persistence.V3SaveStore
+import com.daming.fushengzhi3.v3.data.V3Content
+import com.daming.fushengzhi3.v3.data.V3GameState
+import com.daming.fushengzhi3.v3.data.V3MonthlyReport
+import com.daming.fushengzhi3.v3.data.V3Screen
+import com.daming.fushengzhi3.v3.data.V3TaskType
+import com.daming.fushengzhi3.v3.data.V3EventChoice
 
 class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
     var state by mutableStateOf(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税"))
@@ -38,7 +38,18 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
         screen = V3Screen.County
         latestReport = null
-        message = "大明浮生志3框架已建立：县域地图、人物派遣、政略关系与路线倾向已接入。"
+        message = "族谱已立，县域局势初定。请审视地点、安排族人，并在乱世中为宗族择路。"
+    }
+
+    fun hasSave(): Boolean = saveStore.hasSave()
+
+    fun continueGame() {
+        audio.click()
+        ensureV3Bgm()
+        state = saveStore.load() ?: state
+        screen = V3Screen.County
+        latestReport = null
+        message = "案卷已启封，旧日县域局势重归案前。"
     }
 
     fun switchScreen(next: V3Screen) {
@@ -100,8 +111,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         message = null
     }
 
-    fun openDesignHint() {
+    fun openPlayGuide() {
         audio.playSfx(SfxKey.UiSelect)
-        message = "设计文档已写入 docs/DA_MING_FU_SHENG_ZHI_3_GDD.md。当前游戏内先接入三代可运行框架，后续逐步做满内容与资源。"
+        message = "每月可派遣族人处理地点事务。地点控制、风险、地方关系、房支怨气与路线倾向会共同决定宗族终局。"
+    }
+
+    fun openAudioVisualGuide() {
+        audio.playSfx(SfxKey.UiSelect)
+        message = "三代采用案牍卷轴、县域旧地图与宗祠议事风格界面，并配有专属县域主题音乐、印信、落笔、营建与终局音效。"
     }
 }

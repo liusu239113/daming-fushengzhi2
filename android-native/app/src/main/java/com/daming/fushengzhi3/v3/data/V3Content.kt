@@ -1,4 +1,4 @@
-package com.daming.fushengzhi2.v3.data
+package com.daming.fushengzhi3.v3.data
 
 object V3Content {
     val roots = listOf("寒门佃户", "没落士族", "边地军户", "江南商族", "山中堡寨", "海商遗族")

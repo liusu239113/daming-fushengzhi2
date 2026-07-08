@@ -1,23 +1,23 @@
-package com.daming.fushengzhi2.v3.logic
+package com.daming.fushengzhi3.v3.logic
 
-import com.daming.fushengzhi2.v3.data.V3AnnualGoal
-import com.daming.fushengzhi2.v3.data.V3Branch
-import com.daming.fushengzhi2.v3.data.V3Content
-import com.daming.fushengzhi2.v3.data.V3CountySite
-import com.daming.fushengzhi2.v3.data.V3CountySiteType
-import com.daming.fushengzhi2.v3.data.V3EndingPreview
-import com.daming.fushengzhi2.v3.data.V3EndingTier
-import com.daming.fushengzhi2.v3.data.V3FinalEnding
-import com.daming.fushengzhi2.v3.data.V3GameState
-import com.daming.fushengzhi2.v3.data.V3GoalMetric
-import com.daming.fushengzhi2.v3.data.V3MonthlyReport
-import com.daming.fushengzhi2.v3.data.V3Person
-import com.daming.fushengzhi2.v3.data.V3Relations
-import com.daming.fushengzhi2.v3.data.V3Route
-import com.daming.fushengzhi2.v3.data.V3Screen
-import com.daming.fushengzhi2.v3.data.V3SiteStatus
-import com.daming.fushengzhi2.v3.data.V3TaskType
-import com.daming.fushengzhi2.v3.data.V3UpgradeCost
+import com.daming.fushengzhi3.v3.data.V3AnnualGoal
+import com.daming.fushengzhi3.v3.data.V3Branch
+import com.daming.fushengzhi3.v3.data.V3Content
+import com.daming.fushengzhi3.v3.data.V3CountySite
+import com.daming.fushengzhi3.v3.data.V3CountySiteType
+import com.daming.fushengzhi3.v3.data.V3EndingPreview
+import com.daming.fushengzhi3.v3.data.V3EndingTier
+import com.daming.fushengzhi3.v3.data.V3FinalEnding
+import com.daming.fushengzhi3.v3.data.V3GameState
+import com.daming.fushengzhi3.v3.data.V3GoalMetric
+import com.daming.fushengzhi3.v3.data.V3MonthlyReport
+import com.daming.fushengzhi3.v3.data.V3Person
+import com.daming.fushengzhi3.v3.data.V3Relations
+import com.daming.fushengzhi3.v3.data.V3Route
+import com.daming.fushengzhi3.v3.data.V3Screen
+import com.daming.fushengzhi3.v3.data.V3SiteStatus
+import com.daming.fushengzhi3.v3.data.V3TaskType
+import com.daming.fushengzhi3.v3.data.V3UpgradeCost
 import kotlin.math.max
 import kotlin.math.min
 
@@ -215,6 +215,8 @@ object V3GameEngine {
             desc = plan?.goal ?: "宗族仍在乱世中寻找自己的归宿。"
         )
     }
+
+    fun siteStatusFor(control: Int, risk: Int): V3SiteStatus = statusFor(control, risk)
 
     fun shouldAutoEnd(state: V3GameState): Boolean = state.year >= 1644 || state.cohesion <= 0 || state.silver <= -300 || state.grain <= -300
 

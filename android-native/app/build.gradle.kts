@@ -6,15 +6,15 @@ plugins {
 }
 
 android {
-    namespace = "com.daming.fushengzhi2"
+    namespace = "com.daming.fushengzhi3"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.daming.fushengzhi2"
+        applicationId = "com.daming.fushengzhi3"
         minSdk = 23
         targetSdk = 35
-        versionCode = 51
-        versionName = "1.0.51"
+        versionCode = 60
+        versionName = "1.1.0"
     }
 
     buildTypes {
