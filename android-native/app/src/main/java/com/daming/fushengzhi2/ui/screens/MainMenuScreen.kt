@@ -1,15 +1,19 @@
 package com.daming.fushengzhi2.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -18,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +64,7 @@ fun MainMenuScreen(controller: GameController) {
                 contentScale = ContentScale.Fit
             )
             Spacer(Modifier.height(2.dp))
+            V3MenuButton { controller.openV3Create() }
             MenuImageButton(GameImages.ButtonStart, enabled = true) { controller.openCreate() }
             MenuImageButton(GameImages.ButtonContinue, enabled = controller.hasAnySave()) { controller.continueLatest() }
             MenuImageButton(GameImages.ButtonSaves, enabled = true) { controller.openArchiveHint() }
@@ -73,6 +79,32 @@ fun MainMenuScreen(controller: GameController) {
             title = { Text("提示") },
             text = { Text(msg, textAlign = TextAlign.Start) }
         )
+    }
+}
+
+@Composable
+private fun V3MenuButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .background(MingColors.TextPrimary.copy(alpha = 0.92f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            AssetImage(
+                path = GameImages.V3Icon,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                contentScale = ContentScale.Crop
+            )
+            Column(horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("大明浮生志3 · 县域宗族沙盘", color = MingColors.Gold, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("上架版方向：案牍美术 / 人物派遣 / 房支政治 / 多结局", color = MingColors.BgLight, fontSize = 12.sp)
+            }
+        }
     }
 }
 

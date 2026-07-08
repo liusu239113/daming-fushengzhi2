@@ -14,10 +14,14 @@ import com.daming.fushengzhi2.audio.GameAudio
 import com.daming.fushengzhi2.data.BgmKey
 import com.daming.fushengzhi2.logic.GameController
 import com.daming.fushengzhi2.persistence.SaveStore
+import com.daming.fushengzhi2.persistence.V3SaveStore
 import com.daming.fushengzhi2.ui.screens.CreateGameScreen
 import com.daming.fushengzhi2.ui.screens.GameScreen
 import com.daming.fushengzhi2.ui.screens.MainMenuScreen
 import com.daming.fushengzhi2.ui.theme.MingTheme
+import com.daming.fushengzhi2.v3.logic.V3GameController
+import com.daming.fushengzhi2.v3.ui.V3CreateScreen
+import com.daming.fushengzhi2.v3.ui.V3GameScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,6 +42,7 @@ class MainActivity : ComponentActivity() {
     private fun DamingApp() {
         val audio = remember { GameAudio(this) }
         val controller = remember { GameController(SaveStore(this), audio) }
+        val v3Controller = remember { V3GameController(V3SaveStore(this), audio) }
         DisposableEffect(Unit) {
             onDispose { audio.release() }
         }
@@ -52,6 +57,15 @@ class MainActivity : ComponentActivity() {
             GameController.Screen.Menu -> MainMenuScreen(controller)
             GameController.Screen.Create -> CreateGameScreen(controller)
             GameController.Screen.Game -> GameScreen(controller)
+            GameController.Screen.V3Create -> V3CreateScreen(
+                controller = v3Controller,
+                onBack = controller::backToMenu,
+                onStart = controller::openV3Game
+            )
+            GameController.Screen.V3Game -> V3GameScreen(
+                controller = v3Controller,
+                onBackToV2 = controller::backToMenu
+            )
         }
     }
 }

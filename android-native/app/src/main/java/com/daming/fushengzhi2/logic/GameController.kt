@@ -13,7 +13,7 @@ import com.daming.fushengzhi2.data.SfxKey
 import com.daming.fushengzhi2.persistence.SaveStore
 
 class GameController(private val saveStore: SaveStore, val audio: GameAudio) {
-    enum class Screen { Menu, Create, Game }
+    enum class Screen { Menu, Create, Game, V3Create, V3Game }
     enum class ClanSubTab(val label: String) { Main("宗祠"), Rules("[锁]族规"), Chronicle("家族志") }
     enum class IndustrySubTab(val label: String) { Main("产业"), Market("[锁]集市"), Store("[锁]库房") }
     enum class CareerSubTab(val label: String) { Career("仕途"), Academy("书院"), Expedition("历练") }
@@ -54,6 +54,16 @@ class GameController(private val saveStore: SaveStore, val audio: GameAudio) {
     fun openCreate() {
         audio.click()
         screen = Screen.Create
+    }
+
+    fun openV3Create() {
+        audio.click()
+        screen = Screen.V3Create
+    }
+
+    fun openV3Game() {
+        audio.click()
+        screen = Screen.V3Game
     }
 
     fun backToMenu() {

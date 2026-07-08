@@ -10,6 +10,10 @@ object GameImages {
     const val ButtonSettings = "image/btn_config_20260510194729.png"
     const val ButtonStartJourney = "image/btn_start_journey_20260510213136.png"
 
+    const val V3DossierBg = "image/v3_dossier_bg.png"
+    const val V3CountyMap = "image/v3_county_map.png"
+    const val V3Icon = "image/v3_icon.png"
+
     const val ResourceSilver = "image/res_icon_silver_20260511123321.png"
     const val ResourceGrain = "image/res_icon_grain_20260511123117.png"
     const val ResourceCloth = "image/res_icon_cloth_20260511122929.png"
@@ -119,7 +123,7 @@ object GameImages {
     )
 }
 
-enum class BgmKey { Menu, Peaceful, Crisis, Battle, Funeral }
+enum class BgmKey { Menu, Peaceful, Crisis, Battle, Funeral, V3County }
 
 enum class SfxKey {
     UiClick,
@@ -136,7 +140,12 @@ enum class SfxKey {
     MonthAdvance,
     BattleHit,
     BattleSwing,
-    BattleArrow
+    BattleArrow,
+    V3Edict,
+    V3Brush,
+    V3Build,
+    V3Dispute,
+    V3Finale
 }
 
 object GameAudioAssets {
@@ -145,7 +154,8 @@ object GameAudioAssets {
         BgmKey.Peaceful to "audio/music_1778466591795.ogg",
         BgmKey.Crisis to "audio/music_1778466712651.ogg",
         BgmKey.Battle to "audio/music_1778523134060.ogg",
-        BgmKey.Funeral to "audio/funeral_bgm.ogg"
+        BgmKey.Funeral to "audio/funeral_bgm.ogg",
+        BgmKey.V3County to "audio/v3_county_dossier_theme.ogg"
     )
 
     val sfx = mapOf(
@@ -163,6 +173,11 @@ object GameAudioAssets {
         SfxKey.MonthAdvance to "audio/sfx/month_advance.ogg",
         SfxKey.BattleHit to "audio/sfx/battle_hit.ogg",
         SfxKey.BattleSwing to "audio/sfx/battle_swing.ogg",
-        SfxKey.BattleArrow to "audio/sfx/battle_arrow_shoot.ogg"
+        SfxKey.BattleArrow to "audio/sfx/battle_arrow_shoot.ogg",
+        SfxKey.V3Edict to "audio/sfx/v3_official_edict_stamp.ogg",
+        SfxKey.V3Brush to "audio/sfx/v3_brush_write.ogg",
+        SfxKey.V3Build to "audio/sfx/v3_county_build.ogg",
+        SfxKey.V3Dispute to "audio/sfx/v3_branch_dispute.ogg",
+        SfxKey.V3Finale to "audio/sfx/v3_final_chronicle.ogg"
     )
 }
