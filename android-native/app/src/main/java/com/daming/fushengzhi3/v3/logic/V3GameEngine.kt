@@ -688,7 +688,10 @@ object V3GameEngine {
     private fun monthlySilverExpense(state: V3GameState): Int = 3 + state.clanRank * 2 + state.militia / 35
 
     private fun monthlyGrainExpense(state: V3GameState): Int {
-        val peopleCost = alivePeople(state).sumOf { if (it.age < 12) 1 else 3 }
+        var peopleCost = 0
+        alivePeople(state).forEach { person ->
+            peopleCost += if (person.age < 12) 1 else 3
+        }
         return peopleCost + state.militia / 8
     }
 
