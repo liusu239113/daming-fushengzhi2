@@ -12,6 +12,7 @@ import kotlin.math.min
 object V3EventEngine {
     fun generateEvent(state: V3GameState): V3ActiveEvent? {
         if (state.activeEvent != null) return state.activeEvent
+        if (V3GameEngine.alivePeople(state).size < 2 && state.year == 1601 && state.month <= 6) return null
         val totalRisk = state.sites.sumOf { it.risk }
         val angryBranch = state.branches.maxByOrNull { it.grievance }
         val criticalEvent = when {

@@ -38,7 +38,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
         screen = V3Screen.County
         latestReport = null
-        message = "族谱已立，县域局势初定。请审视地点、安排族人，并在乱世中为宗族择路。"
+        message = "你从一户起家。先娶妻成家，再置产业、养子嗣、派族人经营，逐步把小户养成大族。"
     }
 
     fun hasSave(): Boolean = saveStore.hasSave()
@@ -57,15 +57,31 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         screen = next
     }
 
+    fun marry(candidateId: String) {
+        audio.playSfx(SfxKey.V3Edict)
+        state = V3GameEngine.marry(state, candidateId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun rankUp() {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.rankUp(state)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun assignTask(personId: Int, siteId: String, task: V3TaskType) {
         audio.select()
         state = V3GameEngine.assignTask(state, personId, siteId, task)
+        message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
 
     fun upgradeSite(siteId: String) {
         audio.playSfx(SfxKey.V3Build)
         state = V3GameEngine.upgradeSite(state, siteId)
+        message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
 
@@ -113,7 +129,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun openPlayGuide() {
         audio.playSfx(SfxKey.UiSelect)
-        message = "每月可派遣族人处理地点事务。地点控制、风险、地方关系、房支怨气与路线倾向会共同决定宗族终局。"
+        message = "玩法核心：一户起家 → 娶妻添丁 → 建田庄/铺面获得月产 → 族人长大后派去经营 → 达成人口、产业、资源条件后晋升宗族。每个按钮都应先看收益预期，再推进月结。"
     }
 
     fun openAudioVisualGuide() {

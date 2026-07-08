@@ -33,9 +33,9 @@ class V3SaveStore(context: Context) {
         val file = File(saveDir, slot.fileName)
         if (!file.exists()) return null
         val envelope = json.decodeFromString(V3SaveEnvelope.serializer(), file.readText())
-        if (envelope.version > V3_SAVE_VERSION) return null
+        if (envelope.version != V3_SAVE_VERSION) return null
         envelope.state
     }.getOrNull()
 
-    fun hasSave(slot: Slot = Slot.Auto): Boolean = File(saveDir, slot.fileName).exists()
+    fun hasSave(slot: Slot = Slot.Auto): Boolean = load(slot) != null
 }

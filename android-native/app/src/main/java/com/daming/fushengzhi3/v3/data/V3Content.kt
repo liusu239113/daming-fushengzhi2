@@ -7,25 +7,18 @@ object V3Content {
     val crises = listOf("饥荒将至", "流寇逼近", "官府催税", "族产争端", "商路断绝", "瘟疫初起")
 
     val initialPeople = listOf(
-        V3Person(1, "李慎行", 42, "主房", "族长", V3Trait.Smooth, study = 62, martial = 35, commerce = 44, diplomacy = 68, loyalty = 82),
-        V3Person(2, "李承岳", 24, "武支", "乡勇头目", V3Trait.Martial, study = 28, martial = 74, commerce = 22, diplomacy = 34, loyalty = 71),
-        V3Person(3, "李若兰", 21, "书香支", "廪生之女", V3Trait.Studious, study = 77, martial = 18, commerce = 37, diplomacy = 56, loyalty = 76),
-        V3Person(4, "李仲财", 36, "商支", "行商", V3Trait.Greedy, study = 31, martial = 26, commerce = 80, diplomacy = 45, loyalty = 58),
-        V3Person(5, "李济民", 30, "二房", "郎中", V3Trait.Benevolent, study = 54, martial = 20, commerce = 34, diplomacy = 62, loyalty = 79),
-        V3Person(6, "李守砚", 17, "书香支", "童生", V3Trait.Ambitious, study = 69, martial = 22, commerce = 28, diplomacy = 41, loyalty = 65),
-        V3Person(7, "李阿衡", 29, "武支", "寨丁", V3Trait.Fierce, study = 20, martial = 81, commerce = 18, diplomacy = 26, loyalty = 73),
-        V3Person(8, "李环娘", 27, "商支", "账房", V3Trait.Cunning, study = 43, martial = 16, commerce = 76, diplomacy = 67, loyalty = 61),
-        V3Person(9, "李观潮", 33, "海路支", "舵工", V3Trait.Smooth, study = 35, martial = 42, commerce = 71, diplomacy = 52, loyalty = 57),
-        V3Person(10, "李采薇", 19, "二房", "药童", V3Trait.Honest, study = 58, martial = 17, commerce = 29, diplomacy = 48, loyalty = 84)
+        V3Person(1, "李慎行", 24, "主房", "开族祖", V3Trait.Smooth, study = 26, martial = 22, commerce = 20, diplomacy = 24, loyalty = 90)
+    )
+
+    val spouseCandidates = listOf(
+        V3SpouseCandidate("farmer", "王春娘", "邻村农户之女，能持家、会管田，适合稳住粮仓。", silverCost = 18, grainCost = 35, influenceReq = 0, studyBonus = 4, commerceBonus = 8, diplomacyBonus = 4, route = V3Route.Hermit),
+        V3SpouseCandidate("merchant", "沈玉娘", "小商户之女，带来账本和货路，适合早期积银。", silverCost = 45, grainCost = 20, influenceReq = 8, commerceBonus = 16, diplomacyBonus = 6, route = V3Route.Merchant),
+        V3SpouseCandidate("scholar", "陈婉仪", "寒门书香之后，擅识字教子，适合耕读路线。", silverCost = 35, grainCost = 25, influenceReq = 12, studyBonus = 16, diplomacyBonus = 7, route = V3Route.Scholar),
+        V3SpouseCandidate("martial", "赵月英", "军户孤女，熟弓马与寨防，适合乱世自保。", silverCost = 30, grainCost = 30, influenceReq = 10, martialBonus = 16, diplomacyBonus = 3, route = V3Route.Fortress)
     )
 
     val initialBranches = listOf(
-        V3Branch("main", "主房", "李慎行", V3Route.Hermit, loyalty = 82, wealth = 48, influence = 62, grievance = 8, desc = "掌宗祠谱牒，重秩序与继承。"),
-        V3Branch("second", "二房", "李济民", V3Route.Hermit, loyalty = 74, wealth = 35, influence = 41, grievance = 15, desc = "重民心与医药，常为族中缓冲。"),
-        V3Branch("merchant", "商支", "李仲财", V3Route.Merchant, loyalty = 58, wealth = 73, influence = 46, grievance = 31, desc = "掌集市商路，求利也最易生私心。"),
-        V3Branch("martial", "武支", "李承岳", V3Route.Fortress, loyalty = 69, wealth = 28, influence = 50, grievance = 24, desc = "主张募勇筑寨，乱世先求自保。"),
-        V3Branch("scholar", "书香支", "李若兰", V3Route.Scholar, loyalty = 76, wealth = 31, influence = 58, grievance = 12, desc = "主张修书院、走科举、联士绅。"),
-        V3Branch("sea", "海路支", "李观潮", V3Route.Overseas, loyalty = 55, wealth = 50, influence = 33, grievance = 20, desc = "熟悉码头与海商，通向远渡海外路线。")
+        V3Branch("main", "主房", "李慎行", V3Route.Hermit, loyalty = 86, wealth = 18, influence = 20, grievance = 0, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。")
     )
 
     val routePlans = listOf(
@@ -59,10 +52,14 @@ object V3Content {
     )
 
     val initialAnnualGoals = listOf(
-        V3AnnualGoal("grain_320", "岁内蓄粮", "乱世先看粮仓，年底前把粮食储备推到 320。", V3GoalMetric.GrainStock, 320, V3Route.Hermit, rewardCohesion = 4),
-        V3AnnualGoal("safe_4", "靖安四方", "至少让 4 个县域地点风险低于 30。", V3GoalMetric.SafeSites, 4, V3Route.Fortress, rewardInfluence = 4),
-        V3AnnualGoal("control_5", "握住县域", "至少让 5 个地点控制达到 50。", V3GoalMetric.ControlledSites, 5, V3Route.Warlord, rewardInfluence = 5),
-        V3AnnualGoal("silver_260", "积银备变", "年底前把银两储备推到 260。", V3GoalMetric.SilverStock, 260, V3Route.Merchant, rewardSilver = 20),
+        V3AnnualGoal("marry", "先成一户", "娶妻成家，家族才有后续人口与传承。", V3GoalMetric.Population, 2, V3Route.Hermit, rewardCohesion = 3),
+        V3AnnualGoal("build_2", "置下两产", "至少建成 2 处产业，形成稳定月入。", V3GoalMetric.BuiltSites, 2, V3Route.Merchant, rewardSilver = 18),
+        V3AnnualGoal("child_3", "添丁进口", "让家族人口达到 3 人，宗族开始有后继。", V3GoalMetric.Population, 3, V3Route.Hermit, rewardGrain = 25),
+        V3AnnualGoal("grain_260", "岁内蓄粮", "乱世先看粮仓，年底前把粮食储备推到 260。", V3GoalMetric.GrainStock, 260, V3Route.Hermit, rewardCohesion = 4),
+        V3AnnualGoal("silver_220", "积银备变", "年底前把银两储备推到 220。", V3GoalMetric.SilverStock, 220, V3Route.Merchant, rewardSilver = 20),
+        V3AnnualGoal("rank_2", "升为小族", "人口、产业与族望达标后晋升宗族品第。", V3GoalMetric.ClanRank, 2, V3Route.Hermit, rewardInfluence = 4),
+        V3AnnualGoal("safe_3", "靖安三处", "至少让 3 个县域地点风险低于 30。", V3GoalMetric.SafeSites, 3, V3Route.Fortress, rewardInfluence = 4),
+        V3AnnualGoal("control_4", "握住县域", "至少让 4 个地点控制达到 50。", V3GoalMetric.ControlledSites, 4, V3Route.Warlord, rewardInfluence = 5),
         V3AnnualGoal("cohesion_72", "合族同心", "把宗族凝聚提升到 72。", V3GoalMetric.Cohesion, 72, V3Route.Hermit, rewardGrain = 30),
         V3AnnualGoal("influence_48", "族望入县", "把族望声名提升到 48。", V3GoalMetric.Influence, 48, V3Route.Scholar, rewardInfluence = 3)
     )
@@ -70,23 +67,26 @@ object V3Content {
     fun goalsFor(creed: String, crisis: String): List<V3AnnualGoal> {
         val creedGoal = when (creed) {
             "耕读传家" -> initialAnnualGoals.first { it.id == "influence_48" }
-            "重商逐利" -> initialAnnualGoals.first { it.id == "silver_260" }
-            "聚族自保" -> initialAnnualGoals.first { it.id == "safe_4" }
-            "忠君报国" -> initialAnnualGoals.first { it.id == "control_5" }
-            "开海远行" -> initialAnnualGoals.first { it.id == "silver_260" }
+            "重商逐利" -> initialAnnualGoals.first { it.id == "silver_220" }
+            "聚族自保" -> initialAnnualGoals.first { it.id == "safe_3" }
+            "忠君报国" -> initialAnnualGoals.first { it.id == "control_4" }
+            "开海远行" -> initialAnnualGoals.first { it.id == "silver_220" }
             else -> initialAnnualGoals.first { it.id == "cohesion_72" }
         }
         val crisisGoal = when (crisis) {
-            "饥荒将至" -> initialAnnualGoals.first { it.id == "grain_320" }
-            "流寇逼近" -> initialAnnualGoals.first { it.id == "safe_4" }
-            "官府催税" -> initialAnnualGoals.first { it.id == "silver_260" }
+            "饥荒将至" -> initialAnnualGoals.first { it.id == "grain_260" }
+            "流寇逼近" -> initialAnnualGoals.first { it.id == "safe_3" }
+            "官府催税" -> initialAnnualGoals.first { it.id == "silver_220" }
             "族产争端" -> initialAnnualGoals.first { it.id == "cohesion_72" }
-            "商路断绝" -> initialAnnualGoals.first { it.id == "control_5" }
-            else -> initialAnnualGoals.first { it.id == "safe_4" }
+            "商路断绝" -> initialAnnualGoals.first { it.id == "build_2" }
+            else -> initialAnnualGoals.first { it.id == "safe_3" }
         }
-        return listOf(creedGoal, crisisGoal, initialAnnualGoals.first { it.id == "control_5" })
-            .distinctBy { it.id }
-            .take(3)
+        return listOf(
+            initialAnnualGoals.first { it.id == "marry" },
+            initialAnnualGoals.first { it.id == "build_2" },
+            creedGoal,
+            crisisGoal
+        ).distinctBy { it.id }.take(3)
     }
 
     val initialSites = listOf(
@@ -98,7 +98,7 @@ object V3Content {
             control = 72,
             risk = 10,
             status = V3SiteStatus.Stable,
-            desc = "族谱、族规、房支议事之地。",
+            desc = "祖屋旁一间小祠，先记名、立规、守住香火。",
             taskTypes = listOf(V3TaskType.Govern, V3TaskType.Diplomacy)
         ),
         V3CountySite(
@@ -106,30 +106,30 @@ object V3Content {
             name = "南乡田庄",
             type = V3CountySiteType.Farmland,
             level = 1,
-            control = 55,
-            risk = 28,
+            control = 46,
+            risk = 24,
             status = V3SiteStatus.Strained,
-            desc = "宗族粮仓根基，受天候和乡民劳力影响。",
+            desc = "祖上留下的几亩薄田，早期主要靠它活命。",
             taskTypes = listOf(V3TaskType.Farm, V3TaskType.Relief)
         ),
         V3CountySite(
             id = "market",
             name = "西河集市",
             type = V3CountySiteType.Market,
-            level = 1,
-            control = 41,
-            risk = 34,
-            status = V3SiteStatus.Strained,
-            desc = "银两、商品、商帮关系汇集之处。",
+            level = 0,
+            control = 20,
+            risk = 22,
+            status = V3SiteStatus.Stable,
+            desc = "摆摊开铺后的银两来源，需花银营建。",
             taskTypes = listOf(V3TaskType.Trade, V3TaskType.Scout)
         ),
         V3CountySite(
             id = "yamen",
             name = "清河县衙",
             type = V3CountySiteType.Yamen,
-            level = 1,
-            control = 22,
-            risk = 45,
+            level = 0,
+            control = 12,
+            risk = 42,
             status = V3SiteStatus.Threatened,
             desc = "税赋、徭役、官府关系和仕途入口。",
             taskTypes = listOf(V3TaskType.Diplomacy, V3TaskType.Govern)
@@ -218,6 +218,29 @@ object V3Content {
                 "山中堡寨" -> "李氏寨族"
                 else -> "李氏宗族"
             },
+            silver = when (root) {
+                "寒门佃户" -> 42
+                "没落士族" -> 58
+                "边地军户" -> 50
+                "江南商族" -> 90
+                "山中堡寨" -> 56
+                else -> 70
+            },
+            grain = when (root) {
+                "寒门佃户" -> 120
+                "边地军户" -> 100
+                "江南商族" -> 80
+                "山中堡寨" -> 110
+                else -> 95
+            },
+            influence = when (root) {
+                "没落士族" -> 14
+                "江南商族" -> 10
+                "边地军户" -> 8
+                else -> 6
+            },
+            cohesion = 62,
+            militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3,
             annualGoals = goalsFor(creed, crisis),
             routeScores = base.routeScores + (routeBoost to ((base.routeScores[routeBoost] ?: 0) + 12)),
             pendingReports = listOf("${county}局势未稳，${crisis}已成眼前第一患。"),

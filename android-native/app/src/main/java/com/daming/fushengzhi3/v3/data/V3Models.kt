@@ -2,10 +2,13 @@ package com.daming.fushengzhi3.v3.data
 
 import kotlinx.serialization.Serializable
 
-const val V3_SAVE_VERSION = 1
+const val V3_SAVE_VERSION = 2
 
 @Serializable
 enum class V3Screen { County, Clan, People, Strategy }
+
+@Serializable
+enum class V3Gender(val label: String) { Male("男"), Female("女") }
 
 @Serializable
 enum class V3CountySiteType(val label: String) {
@@ -76,6 +79,9 @@ enum class V3GoalMetric(val label: String) {
     Influence("族望声名"),
     ControlledSites("控制地点"),
     SafeSites("安定地点"),
+    BuiltSites("已建产业"),
+    Population("家族人口"),
+    ClanRank("宗族品第"),
     RouteScore("路线倾向"),
     RelationTotal("地方关系")
 }
@@ -104,10 +110,55 @@ data class V3AnnualGoal(
 )
 
 @Serializable
+data class V3SpouseCandidate(
+    val id: String,
+    val name: String,
+    val desc: String,
+    val silverCost: Int,
+    val grainCost: Int,
+    val influenceReq: Int,
+    val studyBonus: Int = 0,
+    val martialBonus: Int = 0,
+    val commerceBonus: Int = 0,
+    val diplomacyBonus: Int = 0,
+    val route: V3Route
+)
+
+@Serializable
 data class V3UpgradeCost(
     val silver: Int,
     val grain: Int,
     val desc: String
+)
+
+data class V3RankCost(
+    val silver: Int,
+    val grain: Int,
+    val population: Int,
+    val builtSites: Int,
+    val influence: Int,
+    val title: String
+)
+
+data class V3SiteYield(
+    val silver: Int = 0,
+    val grain: Int = 0,
+    val influence: Int = 0,
+    val cohesion: Int = 0,
+    val militia: Int = 0,
+    val desc: String = ""
+)
+
+data class V3MonthlyForecast(
+    val silverIncome: Int = 0,
+    val grainIncome: Int = 0,
+    val influenceIncome: Int = 0,
+    val cohesionIncome: Int = 0,
+    val militiaIncome: Int = 0,
+    val silverExpense: Int = 0,
+    val grainExpense: Int = 0,
+    val dangerSites: Int = 0,
+    val summary: String = ""
 )
 
 @Serializable
@@ -119,6 +170,8 @@ data class V3GameState(
     val crisis: String = "官府催税",
     val year: Int = 1601,
     val month: Int = 1,
+    val clanRank: Int = 1,
+    val nextPersonId: Int = 2,
     val silver: Int = 160,
     val grain: Int = 260,
     val influence: Int = 35,
@@ -163,6 +216,12 @@ data class V3Person(
     val commerce: Int,
     val diplomacy: Int,
     val loyalty: Int,
+    val gender: V3Gender = V3Gender.Male,
+    val generation: Int = 1,
+    val spouseId: Int? = null,
+    val parentId: Int? = null,
+    val childrenIds: List<Int> = emptyList(),
+    val alive: Boolean = true,
     val merit: Int = 0,
     val fatigue: Int = 0,
     val currentTask: V3TaskType? = null,
