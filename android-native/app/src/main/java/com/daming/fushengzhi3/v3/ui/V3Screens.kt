@@ -669,7 +669,7 @@ private fun choiceImpactSummary(choice: V3EventChoice): String {
         val grievance = choice.branchImpacts.sumOf { it.grievanceDelta }
         val influence = choice.branchImpacts.sumOf { it.influenceDelta }
         val branchText = buildString {
-            append("房支$branchCount项")
+            append("房支${branchCount}项")
             if (grievance > 0) append(" 怨+$grievance")
             if (grievance < 0) append(" 怨$grievance")
             if (influence > 0) append(" 势+$influence")
