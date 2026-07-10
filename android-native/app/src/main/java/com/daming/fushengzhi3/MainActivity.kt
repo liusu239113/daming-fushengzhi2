@@ -24,6 +24,8 @@ import com.daming.fushengzhi3.v3.ui.V3GameScreen
 class MainActivity : ComponentActivity() {
     private enum class AppScreen { Menu, Create, Game }
 
+    private var gameAudio: GameAudio? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -38,14 +40,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        gameAudio?.suspendAudio()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        gameAudio?.resumeAudio()
+    }
+
     @Composable
     private fun DamingApp() {
-        val audio = remember { GameAudio(this) }
+        val audio = remember { GameAudio(this).also { gameAudio = it } }
         val v3Controller = remember { V3GameController(V3SaveStore(this), audio) }
         var screen by remember { mutableStateOf(AppScreen.Menu) }
 
         DisposableEffect(Unit) {
-            onDispose { audio.release() }
+            onDispose {
+                audio.release()
+                if (gameAudio === audio) gameAudio = null
+            }
         }
         LaunchedEffect(screen) {
             v3Controller.ensureV3Bgm()

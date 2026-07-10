@@ -60,6 +60,47 @@ enum class V3TaskType(val label: String) {
 }
 
 @Serializable
+enum class V3TrainingType(val label: String, val desc: String) {
+    Enlighten("启蒙读书", "提升学识，适合儿童和科举路线"),
+    MartialDrill("习武演练", "提升武艺，适合从军与防务路线"),
+    Abacus("账房学算", "提升经商，适合产业和商路路线"),
+    Etiquette("礼法应对", "提升谋略，适合官府士绅周旋")
+}
+
+@Serializable
+enum class V3ExamStage(val label: String, val title: String) {
+    County("县试", "童生"),
+    Prefecture("府试", "秀才"),
+    Provincial("乡试", "举人")
+}
+
+@Serializable
+data class V3ExamQuestion(
+    val id: String,
+    val stage: V3ExamStage,
+    val question: String,
+    val options: List<String>,
+    val answerIndex: Int,
+    val note: String
+)
+
+@Serializable
+data class V3ExamSession(
+    val personId: Int,
+    val stage: V3ExamStage,
+    val questionId: String
+)
+
+@Serializable
+data class V3BattleState(
+    val target: String,
+    val enemyPower: Int,
+    val rewardInfluence: Int,
+    val rewardSilver: Int,
+    val risk: String
+)
+
+@Serializable
 enum class V3Route(val label: String) {
     Scholar("耕读传家"),
     Merchant("富甲江南"),
@@ -183,6 +224,9 @@ data class V3GameState(
     val relations: V3Relations = V3Relations(),
     val routeScores: Map<V3Route, Int> = V3Content.initialRouteScores,
     val annualGoals: List<V3AnnualGoal> = V3Content.initialAnnualGoals,
+    val examSession: V3ExamSession? = null,
+    val battleState: V3BattleState? = null,
+    val rebelHeat: Int = 0,
     val finalEnding: V3FinalEnding? = null,
     val activeEvent: V3ActiveEvent? = null,
     val pendingReports: List<String> = listOf("县域初定，族老请你先审视祠堂、田庄、集市与县衙。"),
@@ -223,6 +267,10 @@ data class V3Person(
     val childrenIds: List<Int> = emptyList(),
     val alive: Boolean = true,
     val merit: Int = 0,
+    val officeRank: String? = null,
+    val militaryRank: String? = null,
+    val examStage: V3ExamStage? = null,
+    val trainingFocus: V3TrainingType? = null,
     val fatigue: Int = 0,
     val currentTask: V3TaskType? = null,
     val assignedSiteId: String? = null

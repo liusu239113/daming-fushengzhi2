@@ -12,6 +12,7 @@ import com.daming.fushengzhi3.v3.data.V3GameState
 import com.daming.fushengzhi3.v3.data.V3MonthlyReport
 import com.daming.fushengzhi3.v3.data.V3Screen
 import com.daming.fushengzhi3.v3.data.V3TaskType
+import com.daming.fushengzhi3.v3.data.V3TrainingType
 import com.daming.fushengzhi3.v3.data.V3EventChoice
 
 class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
@@ -25,6 +26,15 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         private set
 
     var message by mutableStateOf<String?>(null)
+        private set
+
+    var settingsVisible by mutableStateOf(false)
+        private set
+
+    var bgmVolume by mutableStateOf(audio.currentBgmVolume)
+        private set
+
+    var sfxVolume by mutableStateOf(audio.currentSfxVolume)
         private set
 
     fun ensureV3Bgm() {
@@ -57,6 +67,30 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         screen = next
     }
 
+    fun openSettings() {
+        audio.click()
+        settingsVisible = true
+    }
+
+    fun closeSettings() {
+        audio.click()
+        settingsVisible = false
+    }
+
+    fun pageTurn() {
+        audio.playSfx(SfxKey.V3PageTurn)
+    }
+
+    fun setBgmVolume(value: Float) {
+        audio.setBgmVolume(value)
+        bgmVolume = audio.currentBgmVolume
+    }
+
+    fun setSfxVolume(value: Float) {
+        audio.setSfxVolume(value)
+        sfxVolume = audio.currentSfxVolume
+    }
+
     fun marry(candidateId: String) {
         audio.playSfx(SfxKey.V3Edict)
         state = V3GameEngine.marry(state, candidateId)
@@ -85,6 +119,55 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun trainPerson(personId: Int, training: V3TrainingType) {
+        audio.select()
+        state = V3GameEngine.trainPerson(state, personId, training)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun startExam(personId: Int) {
+        audio.playSfx(SfxKey.UiSelect)
+        state = V3GameEngine.startExam(state, personId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun answerExam(answerIndex: Int) {
+        audio.playSfx(SfxKey.V3Edict)
+        state = V3GameEngine.answerExam(state, answerIndex)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun startBattle() {
+        audio.playSfx(SfxKey.V3Dispute)
+        state = V3GameEngine.startBattle(state)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun resolveBattle() {
+        audio.playSfx(SfxKey.V3Dispute)
+        state = V3GameEngine.resolveBattle(state)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun cancelBattle() {
+        audio.click()
+        state = V3GameEngine.cancelBattle(state)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun raiseBanner() {
+        audio.playSfx(SfxKey.V3Finale)
+        state = V3GameEngine.raiseBanner(state)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun advanceMonth() {
         audio.monthTick()
         val report = V3GameEngine.advanceMonth(state)
@@ -101,6 +184,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun chooseEvent(choice: V3EventChoice) {
         audio.playSfx(SfxKey.V3Edict)
         state = V3EventEngine.choose(state, choice)
+        message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
 
@@ -129,7 +213,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun openPlayGuide() {
         audio.playSfx(SfxKey.UiSelect)
-        message = "玩法核心：一户起家 → 娶妻添丁 → 建田庄/铺面获得月产 → 族人长大后派去经营 → 达成人口、产业、资源条件后晋升宗族。每个按钮都应先看收益预期，再推进月结。"
+        message = "玩法核心：从一户起家，先通过婚配形成家庭，再置办田庄、集市、书院、寨堡等产业。族人可以每月培养属性；成年后可派去经营地点。学识高的族人可参加科举答题，武艺和乡勇足够后可讨伐流寇；控制据点、积累乡勇和族望后可以尝试举旗造反。"
     }
 
     fun openAudioVisualGuide() {

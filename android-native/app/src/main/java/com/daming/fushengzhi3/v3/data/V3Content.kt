@@ -51,6 +51,57 @@ object V3Content {
         V3TaskPlan(V3TaskType.Recruit, "武艺", "增加乡勇，强化军备", "持续消耗粮银", V3Route.Fortress)
     )
 
+    val examQuestions = listOf(
+        V3ExamQuestion(
+            id = "county_1",
+            stage = V3ExamStage.County,
+            question = "明代地方最低一级正式行政单位通常由谁主政？",
+            options = listOf("知县", "巡抚", "尚书", "都督"),
+            answerIndex = 0,
+            note = "县由知县主政，县衙关系会影响早期仕途。"
+        ),
+        V3ExamQuestion(
+            id = "county_2",
+            stage = V3ExamStage.County,
+            question = "宗族经营中，最能稳定香火与族内秩序的根基是什么？",
+            options = listOf("只扩乡勇", "修谱立规", "拒绝婚配", "弃田逐商"),
+            answerIndex = 1,
+            note = "宗祠、谱牒和族规是宗族长期稳定的核心。"
+        ),
+        V3ExamQuestion(
+            id = "prefecture_1",
+            stage = V3ExamStage.Prefecture,
+            question = "明末辽饷、剿饷等加派容易首先压到哪类地方关系？",
+            options = listOf("海外商路", "官府与乡民", "宗族祭祀", "儿童启蒙"),
+            answerIndex = 1,
+            note = "赋役压力会同时影响官府关系与乡民负担。"
+        ),
+        V3ExamQuestion(
+            id = "prefecture_2",
+            stage = V3ExamStage.Prefecture,
+            question = "若族人走仕途，哪项属性最直接降低考试难度？",
+            options = listOf("学识", "乡勇", "粮食", "风险"),
+            answerIndex = 0,
+            note = "学识越高，科举容错越高；谋略可作为辅助。"
+        ),
+        V3ExamQuestion(
+            id = "provincial_1",
+            stage = V3ExamStage.Provincial,
+            question = "乱世中宗族由自保转向割据，最关键的硬实力通常是？",
+            options = listOf("题库数量", "乡勇与据点", "菜单按钮", "童生头衔"),
+            answerIndex = 1,
+            note = "乡勇、寨堡、山道控制决定战斗和举旗成功率。"
+        ),
+        V3ExamQuestion(
+            id = "provincial_2",
+            stage = V3ExamStage.Provincial,
+            question = "明代士人取得举人身份后，家族最可能获得什么提升？",
+            options = listOf("士绅声望", "婴儿数量立刻翻倍", "所有风险清零", "无需粮食"),
+            answerIndex = 0,
+            note = "举人身份会显著提高士绅关系、族望和仕途路线。"
+        )
+    )
+
     val initialAnnualGoals = listOf(
         V3AnnualGoal("marry", "先成一户", "娶妻成家，家族才有后续人口与传承。", V3GoalMetric.Population, 2, V3Route.Hermit, rewardCohesion = 3),
         V3AnnualGoal("build_2", "置下两产", "至少建成 2 处产业，形成稳定月入。", V3GoalMetric.BuiltSites, 2, V3Route.Merchant, rewardSilver = 18),
@@ -219,11 +270,11 @@ object V3Content {
                 else -> "李氏宗族"
             },
             silver = when (root) {
-                "寒门佃户" -> 42
-                "没落士族" -> 58
-                "边地军户" -> 50
-                "江南商族" -> 90
-                "山中堡寨" -> 56
+                "寒门佃户" -> 58
+                "没落士族" -> 76
+                "边地军户" -> 68
+                "江南商族" -> 110
+                "山中堡寨" -> 74
                 else -> 70
             },
             grain = when (root) {

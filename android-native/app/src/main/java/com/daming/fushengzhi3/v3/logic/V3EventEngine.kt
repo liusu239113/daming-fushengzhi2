@@ -26,19 +26,22 @@ object V3EventEngine {
         if (criticalEvent != null) return criticalEvent
 
         val weightedPool = V3EventContent.allEvents.filter { event ->
-            val titleNotRecent = state.eventLog.take(8).none { it.contains(event.title) }
-            val crisisMatched = when (state.crisis) {
-                "官府催税" -> event.title.contains("县") || event.title.contains("衙") || event.title.contains("辽饷") || event.title.contains("徭役")
-                "流寇逼近" -> event.title.contains("山") || event.title.contains("寇") || event.title.contains("寨") || event.title.contains("勇")
-                "饥荒将至" -> event.title.contains("粮") || event.title.contains("田") || event.title.contains("民") || event.title.contains("仓")
-                "族产争端" -> event.title.contains("房") || event.title.contains("祠") || event.title.contains("账") || event.title.contains("议")
-                "商路断绝" -> event.title.contains("商") || event.title.contains("市") || event.title.contains("码头") || event.title.contains("船")
-                "瘟疫初起" -> event.title.contains("医") || event.title.contains("药") || event.title.contains("疫") || event.title.contains("病")
-                else -> false
+            eventMatchesState(event, state) && run {
+                val titleNotRecent = state.eventLog.take(8).none { it.contains(event.title) }
+                val crisisMatched = when (state.crisis) {
+                    "官府催税" -> event.title.contains("县") || event.title.contains("衙") || event.title.contains("辽饷") || event.title.contains("徭役")
+                    "流寇逼近" -> event.title.contains("山") || event.title.contains("寇") || event.title.contains("寨") || event.title.contains("勇")
+                    "饥荒将至" -> event.title.contains("粮") || event.title.contains("田") || event.title.contains("民") || event.title.contains("仓")
+                    "族产争端" -> event.title.contains("房") || event.title.contains("祠") || event.title.contains("账") || event.title.contains("议")
+                    "商路断绝" -> event.title.contains("商") || event.title.contains("市") || event.title.contains("码头") || event.title.contains("船")
+                    "瘟疫初起" -> event.title.contains("医") || event.title.contains("药") || event.title.contains("疫") || event.title.contains("病")
+                    else -> false
+                }
+                titleNotRecent && (crisisMatched || state.month % 3 == 0 || event.choices.any { it.siteId != null && (state.sites.firstOrNull { site -> site.id == it.siteId }?.risk ?: 0) >= 35 })
             }
-            titleNotRecent && (crisisMatched || state.month % 3 == 0 || event.choices.any { it.siteId != null && (state.sites.firstOrNull { site -> site.id == it.siteId }?.risk ?: 0) >= 35 })
         }
-        val pool = if (weightedPool.isNotEmpty()) weightedPool else V3EventContent.allEvents
+        val fallbackPool = V3EventContent.allEvents.filter { eventMatchesState(it, state) }
+        val pool = if (weightedPool.isNotEmpty()) weightedPool else fallbackPool
         if (pool.isEmpty()) return null
         val index = ((state.year * 12 + state.month + totalRisk + state.routeScores.values.sum()) % pool.size).coerceAtLeast(0)
         return pool[index]
@@ -203,6 +206,16 @@ object V3EventEngine {
             V3EventChoice("募练乡勇", "军镇关系提升。", silverDelta = -25, garrisonDelta = 6, route = V3Route.Fortress)
         )
     )
+
+    private fun eventMatchesState(event: V3ActiveEvent, state: V3GameState): Boolean {
+        val personOk = event.choices.all { choice ->
+            choice.personId == null || state.people.any { it.id == choice.personId && it.alive && event.body.contains(it.name) }
+        }
+        val siteOk = event.choices.all { choice -> choice.siteId == null || state.sites.any { it.id == choice.siteId } }
+        val branchIds = state.branches.map { it.id }.toSet()
+        val branchOk = event.choices.flatMap { it.branchImpacts }.all { impact -> impact.branchId == "main" || impact.branchId in branchIds }
+        return personOk && siteOk && branchOk
+    }
 
     private fun applyBranchImpacts(state: V3GameState, impacts: List<V3BranchImpact>) = if (impacts.isEmpty()) {
         state.branches

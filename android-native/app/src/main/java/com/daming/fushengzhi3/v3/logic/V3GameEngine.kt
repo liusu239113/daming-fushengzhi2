@@ -22,7 +22,13 @@ import com.daming.fushengzhi3.v3.data.V3SiteStatus
 import com.daming.fushengzhi3.v3.data.V3SiteYield
 import com.daming.fushengzhi3.v3.data.V3SpouseCandidate
 import com.daming.fushengzhi3.v3.data.V3TaskType
+import com.daming.fushengzhi3.v3.data.V3TrainingType
+import com.daming.fushengzhi3.v3.data.V3Trait
 import com.daming.fushengzhi3.v3.data.V3UpgradeCost
+import com.daming.fushengzhi3.v3.data.V3BattleState
+import com.daming.fushengzhi3.v3.data.V3ExamQuestion
+import com.daming.fushengzhi3.v3.data.V3ExamSession
+import com.daming.fushengzhi3.v3.data.V3ExamStage
 import kotlin.math.max
 import kotlin.math.min
 
@@ -131,8 +137,8 @@ object V3GameEngine {
     fun upgradeCost(site: V3CountySite): V3UpgradeCost? {
         if (site.level >= 3) return null
         val nextLevel = site.level + 1
-        val silver = 28 + nextLevel * 24 + site.risk / 5
-        val grain = 12 + nextLevel * 14
+        val silver = 16 + nextLevel * 16 + site.risk / 8
+        val grain = 8 + nextLevel * 10
         val desc = when (site.type) {
             V3CountySiteType.Shrine -> "修谱立规，提升凝聚与年度评分。"
             V3CountySiteType.Farmland -> "开垦修渠，显著增加每月粮食。"
@@ -190,7 +196,10 @@ object V3GameEngine {
         val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
         val site = state.sites.firstOrNull { it.id == siteId && it.taskTypes.contains(task) } ?: return state
         if (person.age < 12) return state.copy(pendingReports = listOf("${person.name}尚年幼，不能外出办事。"))
+        val training = person.trainingFocus
+        if (training != null) return state.copy(pendingReports = listOf("${person.name}本月正在${training.label}，不能同时外出办事。"))
         val previousPersonId = site.assignedPersonId
+        val previousSiteId = person.assignedSiteId
         val people = state.people.map {
             when (it.id) {
                 personId -> it.copy(currentTask = task, assignedSiteId = siteId)
@@ -201,6 +210,7 @@ object V3GameEngine {
         val sites = state.sites.map {
             when {
                 it.id == siteId -> it.copy(assignedPersonId = personId)
+                it.id == previousSiteId -> it.copy(assignedPersonId = null)
                 it.assignedPersonId == personId -> it.copy(assignedPersonId = null)
                 else -> it
             }
@@ -213,8 +223,204 @@ object V3GameEngine {
         )
     }
 
+    fun trainPerson(state: V3GameState, personId: Int, training: V3TrainingType): V3GameState {
+        val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
+        if (person.currentTask != null || person.trainingFocus != null) {
+            return state.copy(pendingReports = listOf("${person.name}本月已有安排，推进月结后才能重新培养。"))
+        }
+        val costSilver = if (person.age < 12) 2 else 5
+        val costGrain = if (person.age < 12) 1 else 2
+        if (state.silver < costSilver || state.grain < costGrain) {
+            return state.copy(pendingReports = listOf("培养【${person.name}】需要银$costSilver、粮$costGrain。"))
+        }
+        val people = state.people.map {
+            if (it.id == personId) it.copy(trainingFocus = training, assignedSiteId = null, currentTask = null) else it
+        }
+        val sites = state.sites.map { if (it.assignedPersonId == personId) it.copy(assignedPersonId = null) else it }
+        return state.copy(
+            silver = state.silver - costSilver,
+            grain = state.grain - costGrain,
+            people = people,
+            sites = sites,
+            pendingReports = listOf("已安排${person.name}本月【${training.label}】。${training.desc}，月结时增长属性。")
+        )
+    }
+
+    fun nextExamStage(person: V3Person): V3ExamStage? = when (person.examStage) {
+        null -> V3ExamStage.County
+        V3ExamStage.County -> V3ExamStage.Prefecture
+        V3ExamStage.Prefecture -> V3ExamStage.Provincial
+        V3ExamStage.Provincial -> null
+    }
+
+    fun canStartExam(state: V3GameState, person: V3Person): Boolean {
+        val stage = nextExamStage(person) ?: return false
+        val academy = state.sites.firstOrNull { it.type == V3CountySiteType.Academy }
+        val requiredStudy = when (stage) {
+            V3ExamStage.County -> 18
+            V3ExamStage.Prefecture -> 36
+            V3ExamStage.Provincial -> 58
+        }
+        return person.alive && person.age >= 12 && person.study >= requiredStudy && state.examSession == null && (academy?.level ?: 0) > 0
+    }
+
+    fun examQuestion(session: V3ExamSession): V3ExamQuestion? = V3Content.examQuestions.firstOrNull { it.id == session.questionId }
+
+    fun startExam(state: V3GameState, personId: Int): V3GameState {
+        val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
+        val stage = nextExamStage(person) ?: return state.copy(pendingReports = listOf("${person.name}已过乡试，暂不需要继续考试。"))
+        val academy = state.sites.firstOrNull { it.type == V3CountySiteType.Academy }
+        if ((academy?.level ?: 0) <= 0) return state.copy(pendingReports = listOf("需要先营建书院，才能送族人参加科举。"))
+        if (!canStartExam(state, person)) {
+            return state.copy(pendingReports = listOf("${person.name}暂不适合参加${stage.label}：需年龄12岁以上、学识达标，且当前没有正在进行的考试。"))
+        }
+        val costSilver = when (stage) {
+            V3ExamStage.County -> 8
+            V3ExamStage.Prefecture -> 18
+            V3ExamStage.Provincial -> 36
+        }
+        if (state.silver < costSilver) return state.copy(pendingReports = listOf("参加${stage.label}需要银$costSilver，用于束脩、盘缠与打点。"))
+        val pool = V3Content.examQuestions.filter { it.stage == stage }
+        val question = pool[(person.id + state.year + state.month) % pool.size]
+        return state.copy(
+            silver = state.silver - costSilver,
+            examSession = V3ExamSession(person.id, stage, question.id),
+            pendingReports = listOf("${person.name}入场参加${stage.label}。学识越高，答错时也越可能凭底子补救。")
+        )
+    }
+
+    fun answerExam(state: V3GameState, answerIndex: Int): V3GameState {
+        val session = state.examSession ?: return state
+        val question = examQuestion(session) ?: return state.copy(examSession = null)
+        val person = state.people.firstOrNull { it.id == session.personId && it.alive } ?: return state.copy(examSession = null)
+        val difficulty = when (session.stage) {
+            V3ExamStage.County -> 34
+            V3ExamStage.Prefecture -> 58
+            V3ExamStage.Provincial -> 82
+        }
+        val examPower = person.study + person.diplomacy / 3 + traitExamBonus(person.trait)
+        val answeredCorrectly = answerIndex == question.answerIndex
+        val passed = answeredCorrectly || examPower >= difficulty
+        val nextPeople = state.people.map {
+            if (it.id == person.id) {
+                if (passed) {
+                    it.copy(
+                        examStage = session.stage,
+                        officeRank = session.stage.title,
+                        merit = (it.merit + 8 + session.stage.ordinal * 5).coerceAtMost(999),
+                        fatigue = (it.fatigue + 12).coerceIn(0, 100),
+                        study = (it.study + 2).coerceAtMost(100),
+                        diplomacy = (it.diplomacy + 1).coerceAtMost(100)
+                    )
+                } else {
+                    it.copy(fatigue = (it.fatigue + 16).coerceIn(0, 100), study = (it.study + 1).coerceAtMost(100))
+                }
+            } else it
+        }
+        val routeGain = if (passed) 10 + session.stage.ordinal * 4 else 2
+        val influenceGain = if (passed) 5 + session.stage.ordinal * 3 else 0
+        val relationGain = if (passed) 4 + session.stage.ordinal * 2 else 0
+        val result = if (passed) {
+            val reason = if (answeredCorrectly) "答中考题" else "虽答偏一字，但学识底子扎实，阅卷官仍予录取"
+            "${person.name}${reason}，通过${session.stage.label}，取得【${session.stage.title}】身份。${question.note}"
+        } else {
+            "${person.name}${session.stage.label}落第。正确答案是【${question.options[question.answerIndex]}】。${question.note}"
+        }
+        return state.copy(
+            people = nextPeople,
+            influence = (state.influence + influenceGain).coerceIn(0, 100),
+            relations = state.relations.copy(gentry = clamp(state.relations.gentry + relationGain), yamen = clamp(state.relations.yamen + (if (passed) 2 else 0))),
+            routeScores = state.routeScores + (V3Route.Scholar to ((state.routeScores[V3Route.Scholar] ?: 0) + routeGain)),
+            examSession = null,
+            pendingReports = listOf(result),
+            eventLog = (listOf("${state.year}年${state.month}月 · $result") + state.eventLog).take(100)
+        )
+    }
+
+    fun startBattle(state: V3GameState): V3GameState {
+        if (state.battleState != null) return state
+        if (state.militia < 15) return state.copy(pendingReports = listOf("乡勇不足15，不宜出兵。先在寨堡或山道募勇、筑寨。"))
+        val riskySite = state.sites.maxByOrNull { it.risk } ?: return state
+        val enemyPower = 35 + riskySite.risk + state.rebelHeat / 3
+        val battle = V3BattleState(
+            target = riskySite.name,
+            enemyPower = enemyPower,
+            rewardInfluence = 4 + riskySite.risk / 12,
+            rewardSilver = 12 + riskySite.risk / 5,
+            risk = if (enemyPower > state.militia + 40) "凶险" else "可战"
+        )
+        return state.copy(battleState = battle, pendingReports = listOf("已集结乡勇，准备讨伐【${battle.target}】。敌势${battle.enemyPower}，风险：${battle.risk}。"))
+    }
+
+    fun cancelBattle(state: V3GameState): V3GameState = state.copy(battleState = null, pendingReports = listOf("已暂缓出兵，乡勇回寨待命。"))
+
+    fun resolveBattle(state: V3GameState): V3GameState {
+        val battle = state.battleState ?: return state
+        val bestWarrior = alivePeople(state).maxByOrNull { it.martial + it.merit / 4 }
+        val fortLevel = state.sites.firstOrNull { it.type == V3CountySiteType.Fort }?.level ?: 0
+        val power = state.militia + (bestWarrior?.martial ?: 0) + fortLevel * 12 + max(0, state.relations.garrison) / 2
+        val victory = power >= battle.enemyPower
+        val loss = if (victory) max(3, battle.enemyPower / 18) else max(8, battle.enemyPower / 10)
+        val targetSite = state.sites.maxByOrNull { it.risk }
+        val nextSites = state.sites.map { site ->
+            if (site.id == targetSite?.id) {
+                val risk = (site.risk - (if (victory) 24 else 8)).coerceAtLeast(0)
+                val control = (site.control + (if (victory) 12 else 3)).coerceAtMost(100)
+                site.copy(risk = risk, control = control, status = statusFor(control, risk))
+            } else site
+        }
+        val nextPeople = state.people.map {
+            if (it.id == bestWarrior?.id) {
+                it.copy(
+                    merit = (it.merit + (if (victory) 10 else 4)).coerceAtMost(999),
+                    martial = (it.martial + (if (victory) 2 else 1)).coerceAtMost(100),
+                    fatigue = (it.fatigue + (if (victory) 14 else 24)).coerceIn(0, 100),
+                    militaryRank = if (victory && it.militaryRank == null) "乡勇头目" else it.militaryRank
+                )
+            } else it
+        }
+        val message = if (victory) {
+            "讨伐【${battle.target}】得胜。${bestWarrior?.name ?: "族中勇丁"}立下军功，地点风险下降，割据与自保路线推进。"
+        } else {
+            "讨伐【${battle.target}】失利。乡勇折损较重，但摸清了敌势。建议先筑寨募勇再战。"
+        }
+        return state.copy(
+            sites = nextSites,
+            people = nextPeople,
+            militia = (state.militia - loss).coerceAtLeast(0),
+            silver = state.silver + (if (victory) battle.rewardSilver else 0),
+            influence = (state.influence + (if (victory) battle.rewardInfluence else 1)).coerceIn(0, 100),
+            relations = state.relations.copy(bandits = clamp(state.relations.bandits - (if (victory) 12 else 4)), garrison = clamp(state.relations.garrison + (if (victory) 3 else 0))),
+            routeScores = state.routeScores + mapOf(
+                V3Route.Fortress to ((state.routeScores[V3Route.Fortress] ?: 0) + (if (victory) 7 else 2)),
+                V3Route.Warlord to ((state.routeScores[V3Route.Warlord] ?: 0) + (if (victory) 5 else 1))
+            ),
+            battleState = null,
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    fun raiseBanner(state: V3GameState): V3GameState {
+        val controlled = state.sites.count { it.control >= 60 && it.risk <= 45 }
+        val power = state.militia + state.influence + controlled * 18 + state.rebelHeat
+        if (power < 140) {
+            return state.copy(pendingReports = listOf("举旗条件不足：需乡勇、族望、稳定据点共同支撑。当前举旗评估 $power / 140。"))
+        }
+        val message = "李氏在县中举起义旗，接管粮仓与城门。官府关系大降，割据路线大幅推进，后续会引来官军与周边家族压力。"
+        return state.copy(
+            rebelHeat = (state.rebelHeat + 35).coerceAtMost(100),
+            influence = (state.influence + 8).coerceIn(0, 100),
+            cohesion = (state.cohesion - 6).coerceIn(0, 100),
+            relations = state.relations.copy(yamen = clamp(state.relations.yamen - 25), garrison = clamp(state.relations.garrison - 8), villagers = clamp(state.relations.villagers + 4)),
+            routeScores = state.routeScores + (V3Route.Warlord to ((state.routeScores[V3Route.Warlord] ?: 0) + 24)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
     fun assignmentPreview(person: V3Person, site: V3CountySite, task: V3TaskType): String {
-        val power = taskPower(person.study, person.martial, person.commerce, person.diplomacy, task)
+        val power = taskPower(person, task)
         val controlGain = max(2, power / 16)
         val riskDrop = max(1, power / 20)
         val silver = taskSilver(task, power)
@@ -232,7 +438,7 @@ object V3GameEngine {
         fun scale(value: Int): Int = max(0, value * site.level * quality / 100)
         return when (site.type) {
             V3CountySiteType.Shrine -> V3SiteYield(influence = scale(1), cohesion = scale(2), desc = "凝聚与族望")
-            V3CountySiteType.Farmland -> V3SiteYield(grain = scale(34), cohesion = scale(1), desc = "粮食主产")
+            V3CountySiteType.Farmland -> V3SiteYield(silver = scale(4), grain = scale(34), cohesion = scale(1), desc = "粮食主产，兼有租银")
             V3CountySiteType.Market -> V3SiteYield(silver = scale(24), desc = "银两主产")
             V3CountySiteType.Yamen -> V3SiteYield(silver = scale(5), influence = scale(2), desc = "赋役缓冲")
             V3CountySiteType.Academy -> V3SiteYield(influence = scale(3), cohesion = scale(1), desc = "读书声望")
@@ -249,6 +455,8 @@ object V3GameEngine {
         var influenceIncome = 0
         var cohesionIncome = 0
         var militiaIncome = 0
+        var taskSilverExpense = 0
+        var taskGrainExpense = 0
         state.sites.forEach { site ->
             val yield = siteYield(site)
             silverIncome += yield.silver
@@ -260,14 +468,14 @@ object V3GameEngine {
         state.sites.forEach { site ->
             val person = site.assignedPersonId?.let { id -> state.people.firstOrNull { it.id == id } } ?: return@forEach
             val task = person.currentTask ?: return@forEach
-            val power = taskPower(person.study, person.martial, person.commerce, person.diplomacy, task)
+            val power = taskPower(person, task)
             val silver = taskSilver(task, power)
             val grain = taskGrain(task, power)
-            if (silver > 0) silverIncome += silver
-            if (grain > 0) grainIncome += grain
+            if (silver > 0) silverIncome += silver else taskSilverExpense += -silver
+            if (grain > 0) grainIncome += grain else taskGrainExpense += -grain
         }
-        val silverExpense = monthlySilverExpense(state)
-        val grainExpense = monthlyGrainExpense(state)
+        val silverExpense = monthlySilverExpense(state) + taskSilverExpense
+        val grainExpense = monthlyGrainExpense(state) + taskGrainExpense
         val netSilver = silverIncome - silverExpense
         val netGrain = grainIncome - grainExpense
         val dangerSites = state.sites.count { it.risk >= 55 }
@@ -307,7 +515,7 @@ object V3GameEngine {
                 site.copy(risk = risk, status = statusFor(site.control, risk))
             } else {
                 val task = assigned.currentTask ?: V3TaskType.Govern
-                val power = taskPower(assigned.study, assigned.martial, assigned.commerce, assigned.diplomacy, task)
+                val power = taskPower(assigned, task)
                 val controlGain = max(2, power / 16)
                 val riskDrop = max(1, power / 20)
                 silverDelta += taskSilver(task, power)
@@ -463,7 +671,27 @@ object V3GameEngine {
             val baseAge = if (yearEnded) person.age + 1 else person.age
             val task = assignments[person.id]
             if (task == null) {
-                person.copy(age = baseAge, fatigue = (person.fatigue - 8).coerceAtLeast(0), currentTask = null, assignedSiteId = null)
+                val training = person.trainingFocus
+                if (training == null) {
+                    person.copy(age = baseAge, fatigue = (person.fatigue - 8).coerceAtLeast(0), currentTask = null, assignedSiteId = null)
+                } else {
+                    val grow = trainingGrowth(training, person.trait, person.age)
+                    val next = person.copy(
+                        age = baseAge,
+                        study = (person.study + grow.study).coerceAtMost(100),
+                        martial = (person.martial + grow.martial).coerceAtMost(100),
+                        commerce = (person.commerce + grow.commerce).coerceAtMost(100),
+                        diplomacy = (person.diplomacy + grow.diplomacy).coerceAtMost(100),
+                        loyalty = (person.loyalty + grow.loyalty).coerceIn(0, 100),
+                        merit = (person.merit + grow.merit).coerceAtMost(999),
+                        fatigue = (person.fatigue + grow.fatigue).coerceIn(0, 100),
+                        trainingFocus = null,
+                        currentTask = null,
+                        assignedSiteId = null
+                    )
+                    lines += "${person.name}完成${training.label}，${trainingResultText(grow)}。"
+                    next
+                }
             } else {
                 val grow = growthFor(task)
                 val next = person.copy(
@@ -475,6 +703,7 @@ object V3GameEngine {
                     loyalty = (person.loyalty + grow.loyalty).coerceIn(0, 100),
                     merit = (person.merit + grow.merit).coerceAtMost(999),
                     fatigue = (person.fatigue + grow.fatigue).coerceIn(0, 100),
+                    trainingFocus = null,
                     currentTask = null,
                     assignedSiteId = null
                 )
@@ -547,9 +776,9 @@ object V3GameEngine {
                 else -> -1
             }
             val next = branch.copy(
-                loyalty = (branch.loyalty + if (active > 0) 1 else 0).coerceIn(0, 100),
+                loyalty = (branch.loyalty + (if (active > 0) 1 else 0)).coerceIn(0, 100),
                 wealth = (branch.wealth + wealthShift).coerceIn(0, 100),
-                influence = (branch.influence + if (active > 0) 1 else 0).coerceIn(0, 100),
+                influence = (branch.influence + (if (active > 0) 1 else 0)).coerceIn(0, 100),
                 grievance = (branch.grievance + grievanceShift).coerceIn(0, 100)
             )
             if (next.grievance >= 35 && branch.grievance < 35) lines += "${branch.name}怨气渐重，需在宗族页留意。"
@@ -577,6 +806,55 @@ object V3GameEngine {
         V3TaskType.Fortify -> GrowthDelta(martial = 2, loyalty = 1, merit = 2, fatigue = 10)
         V3TaskType.Scout -> GrowthDelta(martial = 1, diplomacy = 1, merit = 2, fatigue = 10)
         V3TaskType.Recruit -> GrowthDelta(martial = 2, merit = 2, fatigue = 9)
+    }
+
+    private fun trainingGrowth(training: V3TrainingType, trait: V3Trait, age: Int): GrowthDelta {
+        val childBonus = if (age < 12) 1 else 0
+        val base = when (training) {
+            V3TrainingType.Enlighten -> GrowthDelta(study = 2 + childBonus, diplomacy = 1, fatigue = 3)
+            V3TrainingType.MartialDrill -> GrowthDelta(martial = 2 + childBonus, loyalty = 1, fatigue = 5)
+            V3TrainingType.Abacus -> GrowthDelta(commerce = 2 + childBonus, study = 1, fatigue = 4)
+            V3TrainingType.Etiquette -> GrowthDelta(diplomacy = 2 + childBonus, study = 1, fatigue = 3)
+        }
+        return when (trait) {
+            V3Trait.Studious -> if (training == V3TrainingType.Enlighten) base.copy(study = base.study + 1) else base
+            V3Trait.Martial, V3Trait.Fierce -> if (training == V3TrainingType.MartialDrill) base.copy(martial = base.martial + 1) else base
+            V3Trait.Greedy -> if (training == V3TrainingType.Abacus) base.copy(commerce = base.commerce + 1) else base
+            V3Trait.Smooth, V3Trait.Cunning -> if (training == V3TrainingType.Etiquette) base.copy(diplomacy = base.diplomacy + 1) else base
+            else -> base
+        }
+    }
+
+    private fun trainingResultText(grow: GrowthDelta): String {
+        val parts = mutableListOf<String>()
+        if (grow.study > 0) parts += "学+${grow.study}"
+        if (grow.martial > 0) parts += "武+${grow.martial}"
+        if (grow.commerce > 0) parts += "商+${grow.commerce}"
+        if (grow.diplomacy > 0) parts += "谋+${grow.diplomacy}"
+        if (grow.loyalty > 0) parts += "忠+${grow.loyalty}"
+        if (grow.fatigue > 0) parts += "劳+${grow.fatigue}"
+        return parts.joinToString("，")
+    }
+
+    private fun traitTaskBonus(trait: V3Trait, task: V3TaskType): Int = when (trait) {
+        V3Trait.Studious -> if (task == V3TaskType.Study) 8 else 0
+        V3Trait.Martial -> if (task == V3TaskType.Fortify || task == V3TaskType.Recruit || task == V3TaskType.Scout) 8 else 0
+        V3Trait.Fierce -> if (task == V3TaskType.Fortify || task == V3TaskType.Recruit) 6 else if (task == V3TaskType.Diplomacy) -4 else 0
+        V3Trait.Greedy -> if (task == V3TaskType.Trade || task == V3TaskType.Farm) 6 else 0
+        V3Trait.Benevolent -> if (task == V3TaskType.Relief || task == V3TaskType.Govern) 7 else 0
+        V3Trait.Cunning -> if (task == V3TaskType.Scout || task == V3TaskType.Diplomacy || task == V3TaskType.Trade) 6 else 0
+        V3Trait.Smooth -> if (task == V3TaskType.Diplomacy || task == V3TaskType.Govern) 7 else 0
+        V3Trait.Timid -> if (task == V3TaskType.Scout || task == V3TaskType.Recruit) -5 else 2
+        V3Trait.Ambitious -> if (task == V3TaskType.Study || task == V3TaskType.Diplomacy || task == V3TaskType.Recruit) 4 else 0
+        V3Trait.Honest -> if (task == V3TaskType.Govern || task == V3TaskType.Farm) 4 else 0
+    }
+
+    private fun traitExamBonus(trait: V3Trait): Int = when (trait) {
+        V3Trait.Studious -> 10
+        V3Trait.Smooth -> 4
+        V3Trait.Ambitious -> 3
+        V3Trait.Timid -> -3
+        else -> 0
     }
 
     private fun evaluateAnnualGoals(state: V3GameState, lines: MutableList<String>, yearEnded: Boolean): V3GameState {
@@ -639,22 +917,25 @@ object V3GameEngine {
         }
     }
 
-    private fun taskPower(study: Int, martial: Int, commerce: Int, diplomacy: Int, task: V3TaskType): Int = when (task) {
-        V3TaskType.Govern -> (study + diplomacy) / 2
-        V3TaskType.Farm -> (study + commerce) / 2
-        V3TaskType.Trade -> commerce
-        V3TaskType.Study -> study
-        V3TaskType.Diplomacy -> diplomacy
-        V3TaskType.Relief -> (study + diplomacy) / 2
-        V3TaskType.Fortify -> martial
-        V3TaskType.Scout -> (martial + diplomacy) / 2
-        V3TaskType.Recruit -> martial
+    private fun taskPower(person: V3Person, task: V3TaskType): Int {
+        val base = when (task) {
+            V3TaskType.Govern -> (person.study + person.diplomacy) / 2
+            V3TaskType.Farm -> (person.study + person.commerce) / 2
+            V3TaskType.Trade -> person.commerce
+            V3TaskType.Study -> person.study
+            V3TaskType.Diplomacy -> person.diplomacy
+            V3TaskType.Relief -> (person.study + person.diplomacy) / 2
+            V3TaskType.Fortify -> person.martial
+            V3TaskType.Scout -> (person.martial + person.diplomacy) / 2
+            V3TaskType.Recruit -> person.martial
+        }
+        return (base + traitTaskBonus(person.trait, task) + person.merit / 20 - person.fatigue / 12).coerceAtLeast(1)
     }
 
     private fun taskSilver(task: V3TaskType, power: Int): Int = when (task) {
-        V3TaskType.Trade -> max(4, power / 4)
-        V3TaskType.Diplomacy -> -4
-        V3TaskType.Farm -> 1
+        V3TaskType.Trade -> max(8, power / 3)
+        V3TaskType.Diplomacy -> -3
+        V3TaskType.Farm -> max(2, power / 10)
         V3TaskType.Relief -> -8
         V3TaskType.Fortify -> -10
         V3TaskType.Recruit -> -12
@@ -685,7 +966,7 @@ object V3GameEngine {
         else -> 0
     }
 
-    private fun monthlySilverExpense(state: V3GameState): Int = 3 + state.clanRank * 2 + state.militia / 35
+    private fun monthlySilverExpense(state: V3GameState): Int = 2 + state.clanRank + state.militia / 50
 
     private fun monthlyGrainExpense(state: V3GameState): Int {
         var peopleCost = 0
