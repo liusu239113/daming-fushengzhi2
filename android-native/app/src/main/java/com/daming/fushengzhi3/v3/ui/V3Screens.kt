@@ -749,8 +749,8 @@ private fun V3SettingsDialog(controller: V3GameController, onBackToMenu: () -> U
         V3ImagePanel(GameImages.V3UiSettingsScroll, Modifier.widthIn(max = 460.dp)) {
             Text("游戏设置", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Text("声音", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            V3VolumeRow("背景音乐", controller.bgmVolume, controller::setBgmVolume)
-            V3VolumeRow("音效", controller.sfxVolume, controller::setSfxVolume)
+            V3VolumeRow("背景音乐", controller.bgmVolume, controller::updateBgmVolume)
+            V3VolumeRow("音效", controller.sfxVolume, controller::updateSfxVolume)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 V3SmallButton("返回主菜单", Modifier.weight(1f)) {
                     controller.closeSettings()

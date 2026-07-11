@@ -81,12 +81,12 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(SfxKey.V3PageTurn)
     }
 
-    fun setBgmVolume(value: Float) {
+    fun updateBgmVolume(value: Float) {
         audio.setBgmVolume(value)
         bgmVolume = audio.currentBgmVolume
     }
 
-    fun setSfxVolume(value: Float) {
+    fun updateSfxVolume(value: Float) {
         audio.setSfxVolume(value)
         sfxVolume = audio.currentSfxVolume
     }
