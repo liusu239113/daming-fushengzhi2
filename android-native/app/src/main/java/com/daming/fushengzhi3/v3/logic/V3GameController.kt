@@ -14,6 +14,7 @@ import com.daming.fushengzhi3.v3.data.V3Screen
 import com.daming.fushengzhi3.v3.data.V3TaskType
 import com.daming.fushengzhi3.v3.data.V3TrainingType
 import com.daming.fushengzhi3.v3.data.V3EventChoice
+import com.daming.fushengzhi3.v3.data.V3EstateType
 
 class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
     var state by mutableStateOf(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税"))
@@ -115,6 +116,55 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun upgradeSite(siteId: String) {
         audio.playSfx(SfxKey.V3Build)
         state = V3GameEngine.upgradeSite(state, siteId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun upgradeEstate(type: V3EstateType) {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.upgradeEstate(state, type)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun contactRegion(regionId: String) {
+        audio.select()
+        state = V3GameEngine.contactRegion(state, regionId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun influenceRegion(regionId: String) {
+        audio.select()
+        state = V3GameEngine.influenceRegion(state, regionId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun startConquest(regionId: String) {
+        audio.playSfx(SfxKey.V3Dispute)
+        state = V3GameEngine.startConquest(state, regionId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun resolveConquest() {
+        audio.playSfx(SfxKey.V3Dispute)
+        state = V3GameEngine.resolveConquest(state)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun cancelConquest() {
+        audio.click()
+        state = V3GameEngine.cancelConquest(state)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun proclaimUnification() {
+        audio.playSfx(SfxKey.V3Finale)
+        state = V3GameEngine.proclaimUnification(state)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }

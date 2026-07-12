@@ -6,6 +6,8 @@ import com.daming.fushengzhi3.v3.data.V3Content
 import com.daming.fushengzhi3.v3.data.V3CountySite
 import com.daming.fushengzhi3.v3.data.V3CountySiteType
 import com.daming.fushengzhi3.v3.data.V3EndingPreview
+import com.daming.fushengzhi3.v3.data.V3EstateAsset
+import com.daming.fushengzhi3.v3.data.V3EstateType
 import com.daming.fushengzhi3.v3.data.V3EndingTier
 import com.daming.fushengzhi3.v3.data.V3FinalEnding
 import com.daming.fushengzhi3.v3.data.V3GameState
@@ -15,6 +17,7 @@ import com.daming.fushengzhi3.v3.data.V3MonthlyForecast
 import com.daming.fushengzhi3.v3.data.V3MonthlyReport
 import com.daming.fushengzhi3.v3.data.V3Person
 import com.daming.fushengzhi3.v3.data.V3RankCost
+import com.daming.fushengzhi3.v3.data.V3RegionStatus
 import com.daming.fushengzhi3.v3.data.V3Relations
 import com.daming.fushengzhi3.v3.data.V3Route
 import com.daming.fushengzhi3.v3.data.V3Screen
@@ -26,6 +29,7 @@ import com.daming.fushengzhi3.v3.data.V3TrainingType
 import com.daming.fushengzhi3.v3.data.V3Trait
 import com.daming.fushengzhi3.v3.data.V3UpgradeCost
 import com.daming.fushengzhi3.v3.data.V3BattleState
+import com.daming.fushengzhi3.v3.data.V3ConquestState
 import com.daming.fushengzhi3.v3.data.V3ExamQuestion
 import com.daming.fushengzhi3.v3.data.V3ExamSession
 import com.daming.fushengzhi3.v3.data.V3ExamStage
@@ -54,6 +58,183 @@ object V3GameEngine {
     }
 
     fun builtSiteCount(state: V3GameState): Int = state.sites.count { it.level > 0 && it.type != V3CountySiteType.Shrine }
+
+    fun estateLevelTotal(state: V3GameState): Int = state.estateAssets.sumOf { it.level }
+
+    fun controlledRegionCount(state: V3GameState): Int = state.worldRegions.count { it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified }
+
+    fun estateYield(asset: V3EstateAsset): V3SiteYield = when (asset.type) {
+        V3EstateType.TenantLand -> V3SiteYield(silver = 2 * asset.level, grain = 22 * asset.level, desc = "佃田租谷")
+        V3EstateType.Shop -> V3SiteYield(silver = 18 * asset.level, desc = "铺面营收")
+        V3EstateType.Workshop -> V3SiteYield(silver = 26 * asset.level, grain = -2 * asset.level, desc = "作坊利润")
+        V3EstateType.Warehouse -> V3SiteYield(grain = 10 * asset.level, cohesion = asset.level, desc = "粮仓周转")
+        V3EstateType.Caravan -> V3SiteYield(silver = 24 * asset.level, influence = asset.level, desc = "商队通路")
+        V3EstateType.Barracks -> V3SiteYield(silver = -4 * asset.level, grain = -5 * asset.level, militia = 8 * asset.level, desc = "团练养勇")
+    }
+
+    fun estateUpgradeCost(state: V3GameState, type: V3EstateType): V3UpgradeCost {
+        val current = state.estateAssets.firstOrNull { it.type == type }
+        val nextLevel = (current?.level ?: 0) + 1
+        val baseSilver = when (type) {
+            V3EstateType.TenantLand -> 28
+            V3EstateType.Shop -> 42
+            V3EstateType.Workshop -> 70
+            V3EstateType.Warehouse -> 55
+            V3EstateType.Caravan -> 90
+            V3EstateType.Barracks -> 85
+        }
+        val baseGrain = when (type) {
+            V3EstateType.TenantLand -> 12
+            V3EstateType.Shop -> 8
+            V3EstateType.Workshop -> 22
+            V3EstateType.Warehouse -> 40
+            V3EstateType.Caravan -> 28
+            V3EstateType.Barracks -> 55
+        }
+        return V3UpgradeCost(baseSilver * nextLevel, baseGrain * nextLevel, type.desc)
+    }
+
+    fun upgradeEstate(state: V3GameState, type: V3EstateType): V3GameState {
+        val current = state.estateAssets.firstOrNull { it.type == type }
+        if ((current?.level ?: 0) >= 5) return state.copy(pendingReports = listOf("${type.label}已达最高等级。"))
+        val cost = estateUpgradeCost(state, type)
+        val requiredPopulation = when (type) {
+            V3EstateType.Workshop -> 4
+            V3EstateType.Caravan -> 5
+            V3EstateType.Barracks -> 6
+            else -> 1
+        }
+        if (alivePeople(state).size < requiredPopulation) return state.copy(pendingReports = listOf("经营${type.label}需要人口至少$requiredPopulation。先成婚育子、扩大家族。"))
+        if (state.silver < cost.silver || state.grain < cost.grain) return state.copy(pendingReports = listOf("扩建${type.label}需要银${cost.silver}、粮${cost.grain}。"))
+        val nextLevel = (current?.level ?: 0) + 1
+        val nextAsset = V3EstateAsset(type.name.lowercase(), type, nextLevel, workers = requiredPopulation, desc = type.desc)
+        val assets = if (current == null) state.estateAssets + nextAsset else state.estateAssets.map { if (it.type == type) nextAsset else it }
+        val route = when (type) {
+            V3EstateType.Barracks -> V3Route.Fortress
+            V3EstateType.Caravan, V3EstateType.Shop, V3EstateType.Workshop -> V3Route.Merchant
+            else -> V3Route.Hermit
+        }
+        val message = "家产扩建【${type.label}】至 Lv.$nextLevel：${yieldText(estateYield(nextAsset))}。${type.desc}"
+        return state.copy(
+            silver = state.silver - cost.silver,
+            grain = state.grain - cost.grain,
+            estateAssets = assets,
+            routeScores = state.routeScores + (route to ((state.routeScores[route] ?: 0) + 5)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    fun contactRegion(state: V3GameState, regionId: String): V3GameState {
+        val region = state.worldRegions.firstOrNull { it.id == regionId } ?: return state
+        if (region.status != V3RegionStatus.Unknown) return state.copy(pendingReports = listOf("${region.name}已经进入家族视野，可继续经营或征伐。"))
+        val costSilver = 30 + region.tier * 24
+        val costInfluence = region.tier * 6
+        if (state.silver < costSilver || state.influence < costInfluence) return state.copy(pendingReports = listOf("结交${region.name}需要银$costSilver、族望$costInfluence。"))
+        val regions = state.worldRegions.map { if (it.id == regionId) it.copy(status = V3RegionStatus.Contacted, control = 12) else it }
+        val message = "派人结交【${region.name}】：商路、士绅和乡勇开始进入此地。后续可经营声望或征伐控制。"
+        return state.copy(
+            silver = state.silver - costSilver,
+            worldRegions = regions,
+            routeScores = state.routeScores + (V3Route.Merchant to ((state.routeScores[V3Route.Merchant] ?: 0) + 3)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    fun influenceRegion(state: V3GameState, regionId: String): V3GameState {
+        val region = state.worldRegions.firstOrNull { it.id == regionId } ?: return state
+        if (region.status == V3RegionStatus.Unknown) return contactRegion(state, regionId)
+        if (region.status == V3RegionStatus.Pacified) return state.copy(pendingReports = listOf("${region.name}已经归附，无需再经营。"))
+        val costSilver = 18 + region.tier * 16
+        val costGrain = 10 + region.tier * 12
+        if (state.silver < costSilver || state.grain < costGrain) return state.copy(pendingReports = listOf("经营${region.name}需要银$costSilver、粮$costGrain。"))
+        val gain = 12 + state.influence / 10 + estateLevelTotal(state) / 3
+        val nextControl = (region.control + gain).coerceAtMost(100)
+        val nextStatus = when {
+            nextControl >= 80 -> V3RegionStatus.Pacified
+            nextControl >= 45 -> V3RegionStatus.Influenced
+            else -> V3RegionStatus.Contacted
+        }
+        val regions = state.worldRegions.map { if (it.id == regionId) it.copy(control = nextControl, status = nextStatus) else it }
+        val message = "经营【${region.name}】：控制+$gain，当前$nextControl。通过商路、婚盟、士绅和族产渗入地方。"
+        return state.copy(
+            silver = state.silver - costSilver,
+            grain = state.grain - costGrain,
+            worldRegions = regions,
+            influence = (state.influence + (if (nextStatus == V3RegionStatus.Pacified) 4 else 1)).coerceIn(0, 100),
+            unificationProgress = calculateUnification(regions),
+            routeScores = state.routeScores + (V3Route.Merchant to ((state.routeScores[V3Route.Merchant] ?: 0) + 4)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    fun startConquest(state: V3GameState, regionId: String): V3GameState {
+        if (state.conquestState != null) return state
+        val region = state.worldRegions.firstOrNull { it.id == regionId } ?: return state
+        if (region.status == V3RegionStatus.Pacified || region.status == V3RegionStatus.Controlled) return state.copy(pendingReports = listOf("${region.name}已在掌中，继续经营即可。"))
+        val prerequisite = if (region.tier <= 2) 1 else region.tier
+        if (controlledRegionCount(state) < prerequisite) return state.copy(pendingReports = listOf("征伐${region.name}前，至少要控制$prerequisite 个地域。先稳住县域和府县。"))
+        if (state.militia < 40 + region.tier * 25) return state.copy(pendingReports = listOf("乡勇不足，征伐${region.name}至少需要${40 + region.tier * 25}。"))
+        val enemy = region.enemyPower + state.rebelHeat / 2 - region.control / 3
+        val conquest = V3ConquestState(region.id, enemy, region.wealth / 2, region.wealth / 3, 5 + region.tier * 3, region.name, if (region.tier >= 4) "天下大战" else "地域征伐")
+        return state.copy(conquestState = conquest, pendingReports = listOf("已准备${conquest.scale}【${region.name}】：敌势${conquest.enemyPower}。胜则控制地域，败则折损乡勇。"))
+    }
+
+    fun cancelConquest(state: V3GameState): V3GameState = state.copy(conquestState = null, pendingReports = listOf("已暂缓征伐，粮草和乡勇留待后用。"))
+
+    fun resolveConquest(state: V3GameState): V3GameState {
+        val conquest = state.conquestState ?: return state
+        val region = state.worldRegions.firstOrNull { it.id == conquest.regionId } ?: return state.copy(conquestState = null)
+        val bestWarrior = alivePeople(state).maxByOrNull { it.martial + it.merit / 4 }
+        val barracks = state.estateAssets.firstOrNull { it.type == V3EstateType.Barracks }?.level ?: 0
+        val fortLevel = state.sites.firstOrNull { it.type == V3CountySiteType.Fort }?.level ?: 0
+        val power = state.militia + (bestWarrior?.martial ?: 0) + barracks * 24 + fortLevel * 14 + state.influence / 2 + state.unificationProgress / 2
+        val victory = power >= conquest.enemyPower
+        val loss = if (victory) max(12, conquest.enemyPower / 16) else max(28, conquest.enemyPower / 8)
+        val nextRegions = state.worldRegions.map {
+            if (it.id == region.id) {
+                val control = (it.control + (if (victory) 65 else 18)).coerceAtMost(100)
+                it.copy(control = control, status = if (victory) V3RegionStatus.Controlled else V3RegionStatus.Influenced)
+            } else it
+        }
+        val nextProgress = calculateUnification(nextRegions)
+        val nextPeople = state.people.map {
+            if (it.id == bestWarrior?.id) it.copy(martial = (it.martial + (if (victory) 3 else 1)).coerceAtMost(100), merit = (it.merit + (if (victory) 18 else 6)).coerceAtMost(999), militaryRank = if (victory && it.militaryRank == null) "统兵族将" else it.militaryRank, fatigue = (it.fatigue + (if (victory) 18 else 32)).coerceIn(0, 100)) else it
+        }
+        val message = if (victory) "征伐【${region.name}】得胜，家族势力跨出县域，统一进度推进到$nextProgress。" else "征伐【${region.name}】失利，虽未控制地域，但地方已知李氏兵威。"
+        return state.copy(
+            people = nextPeople,
+            worldRegions = nextRegions,
+            unificationProgress = nextProgress,
+            conquestState = null,
+            militia = (state.militia - loss).coerceAtLeast(0),
+            silver = state.silver + (if (victory) conquest.rewardSilver else 0),
+            grain = state.grain + (if (victory) conquest.rewardGrain else 0),
+            influence = (state.influence + (if (victory) conquest.rewardInfluence else 1)).coerceIn(0, 100),
+            rebelHeat = (state.rebelHeat + (if (victory) 8 + region.tier * 4 else 4)).coerceAtMost(100),
+            routeScores = state.routeScores + (V3Route.Warlord to ((state.routeScores[V3Route.Warlord] ?: 0) + (if (victory) 16 else 4))),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    fun proclaimUnification(state: V3GameState): V3GameState {
+        val controlled = controlledRegionCount(state)
+        val realmControlled = state.worldRegions.any { it.id == "all_realm" && (it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified) }
+        val power = state.unificationProgress + state.militia / 6 + state.influence / 2 + estateLevelTotal(state) * 2 + alivePeople(state).size * 2
+        if (!realmControlled || controlled < 6 || power < 150) return state.copy(pendingReports = listOf("统一条件不足：需控制清河、府县、南直隶、京畿与天下节点，且综合国力达到150。当前地域$controlled/6，国力$power/150。"))
+        val ending = V3FinalEnding(
+            route = V3Route.Warlord,
+            tier = V3EndingTier.Historic,
+            score = power + state.unificationProgress,
+            title = "李氏定鼎天下",
+            body = "李氏由一人起家，娶妻生子、置田开铺、修祠建学、团练征伐，最终从清河县扩张到州府、京畿与天下。旧朝崩裂之际，家族不再只是求活，而是以宗族、产业与兵权重塑秩序。",
+            stats = listOf("统一进度：${state.unificationProgress}", "控制地域：$controlled / ${state.worldRegions.size}", "家产总等级：${estateLevelTotal(state)}", "家族人口：${alivePeople(state).size}", "乡勇：${state.militia}", "族望：${state.influence}")
+        )
+        return state.copy(finalEnding = ending, activeEvent = null, conquestState = null, pendingReports = listOf("天下归一，李氏家乘写入新朝开篇。"))
+    }
 
     fun canRankUp(state: V3GameState): Boolean {
         val cost = nextRankCost(state) ?: return false
@@ -465,6 +646,19 @@ object V3GameEngine {
             cohesionIncome += yield.cohesion
             militiaIncome += yield.militia
         }
+        state.estateAssets.forEach { asset ->
+            val yield = estateYield(asset)
+            silverIncome += yield.silver
+            grainIncome += yield.grain
+            influenceIncome += yield.influence
+            cohesionIncome += yield.cohesion
+            militiaIncome += yield.militia
+        }
+        state.worldRegions.filter { it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified }.forEach { region ->
+            silverIncome += region.wealth / 12
+            grainIncome += region.wealth / 18
+            influenceIncome += region.tier
+        }
         state.sites.forEach { site ->
             val person = site.assignedPersonId?.let { id -> state.people.firstOrNull { it.id == id } } ?: return@forEach
             val task = person.currentTask ?: return@forEach
@@ -505,6 +699,23 @@ object V3GameEngine {
             if (site.level > 0 && (yield.silver + yield.grain + yield.influence + yield.cohesion + yield.militia) > 0) {
                 incomeParts += "${site.name}${yieldText(yield)}"
             }
+        }
+        state.estateAssets.forEach { asset ->
+            val yield = estateYield(asset)
+            silverDelta += yield.silver
+            grainDelta += yield.grain
+            influenceDelta += yield.influence
+            cohesionDelta += yield.cohesion
+            militiaDelta += yield.militia
+            incomeParts += "${asset.type.label}${yieldText(yield)}"
+        }
+        state.worldRegions.filter { it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified }.forEach { region ->
+            val silver = region.wealth / 12
+            val grain = region.wealth / 18
+            silverDelta += silver
+            grainDelta += grain
+            influenceDelta += region.tier
+            incomeParts += "${region.name}银+$silver/粮+$grain/望+${region.tier}"
         }
 
         val sites = state.sites.map { site ->
@@ -601,6 +812,9 @@ object V3GameEngine {
         V3GoalMetric.ControlledSites -> state.sites.count { it.control >= 50 }
         V3GoalMetric.SafeSites -> state.sites.count { it.risk < 30 }
         V3GoalMetric.BuiltSites -> builtSiteCount(state)
+        V3GoalMetric.EstateLevel -> estateLevelTotal(state)
+        V3GoalMetric.ControlledRegions -> controlledRegionCount(state)
+        V3GoalMetric.Unification -> state.unificationProgress
         V3GoalMetric.Population -> alivePeople(state).size
         V3GoalMetric.ClanRank -> state.clanRank
         V3GoalMetric.RouteScore -> state.routeScores[goal.route] ?: 0
@@ -614,7 +828,7 @@ object V3GameEngine {
         val resourceScore = (state.silver / 22) + (state.grain / 30) + (state.militia / 10)
         val familyScore = alivePeople(state).size * 3 + state.clanRank * 12 + builtSiteCount(state) * 5
         val relationScore = relationTotal(state.relations) / 8
-        val score = routeScore + stableSites * 4 + resourceScore + familyScore + relationScore + state.cohesion / 5 + state.influence / 4
+        val score = routeScore + stableSites * 4 + resourceScore + familyScore + relationScore + state.cohesion / 5 + state.influence / 4 + estateLevelTotal(state) * 3 + controlledRegionCount(state) * 12 + state.unificationProgress
         val tier = when {
             score >= 150 -> V3EndingTier.Historic
             score >= 105 -> V3EndingTier.Strong
@@ -660,6 +874,9 @@ object V3GameEngine {
                 "宗族品第：${clanRankName(state)}",
                 "家族人口：${alivePeople(state).size}（子嗣 $heirCount）",
                 "经营产业：${builtSiteCount(state)} 处",
+                "家产总等级：${estateLevelTotal(state)}",
+                "控制地域：${controlledRegionCount(state)} / ${state.worldRegions.size}",
+                "统一进度：${state.unificationProgress}",
                 "稳定地点：$stableSites / ${state.sites.size}",
                 "最有功绩族人：${bestPerson?.name ?: "无"}（${bestPerson?.merit ?: 0}）"
             )
@@ -912,6 +1129,9 @@ object V3GameEngine {
             !hasSpouse(state) -> pool.firstOrNull { it.id == "marry" }
             alivePeople(state).size < 3 -> pool.firstOrNull { it.id == "child_3" }
             builtSiteCount(state) < 2 -> pool.firstOrNull { it.id == "build_2" }
+            estateLevelTotal(state) < 5 -> pool.firstOrNull { it.id == "estate_5" }
+            controlledRegionCount(state) < 2 && state.clanRank >= 3 -> pool.firstOrNull { it.id == "region_2" }
+            state.unificationProgress < 30 && controlledRegionCount(state) >= 2 -> pool.firstOrNull { it.id == "unify_30" }
             !canRankUp(state) -> pool.firstOrNull { it.id == "rank_2" }
             else -> pool.firstOrNull { it.route == route } ?: pool.firstOrNull()
         }
@@ -1016,11 +1236,11 @@ object V3GameEngine {
 
     private fun yieldText(yield: V3SiteYield): String {
         val parts = mutableListOf<String>()
-        if (yield.silver != 0) parts += "银+${yield.silver}"
-        if (yield.grain != 0) parts += "粮+${yield.grain}"
-        if (yield.influence != 0) parts += "望+${yield.influence}"
-        if (yield.cohesion != 0) parts += "凝+${yield.cohesion}"
-        if (yield.militia != 0) parts += "勇+${yield.militia}"
+        if (yield.silver != 0) parts += "银${signed(yield.silver)}"
+        if (yield.grain != 0) parts += "粮${signed(yield.grain)}"
+        if (yield.influence != 0) parts += "望${signed(yield.influence)}"
+        if (yield.cohesion != 0) parts += "凝${signed(yield.cohesion)}"
+        if (yield.militia != 0) parts += "勇${signed(yield.militia)}"
         return if (parts.isEmpty()) "无月产" else parts.joinToString("/")
     }
 
@@ -1039,6 +1259,20 @@ object V3GameEngine {
 
     private fun relationTotal(relations: V3Relations): Int {
         return relations.yamen + relations.gentry + relations.villagers + relations.merchants + relations.garrison - relations.bandits
+    }
+
+    private fun calculateUnification(regions: List<com.daming.fushengzhi3.v3.data.V3WorldRegion>): Int {
+        val score = regions.sumOf { region ->
+            val base = when (region.status) {
+                V3RegionStatus.Unknown -> 0
+                V3RegionStatus.Contacted -> region.control / 10
+                V3RegionStatus.Influenced -> 6 + region.control / 8
+                V3RegionStatus.Controlled -> 12 + region.tier * 8
+                V3RegionStatus.Pacified -> 16 + region.tier * 9
+            }
+            base
+        }
+        return score.coerceIn(0, 100)
     }
 
     private fun clamp(value: Int): Int = min(100, max(-100, value))

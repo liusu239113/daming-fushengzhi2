@@ -112,6 +112,57 @@ enum class V3Route(val label: String) {
 }
 
 @Serializable
+enum class V3EstateType(val label: String, val desc: String) {
+    TenantLand("佃田", "稳定产粮，是一户起家的根基"),
+    Shop("铺面", "每月产银，支撑婚配、打点和扩张"),
+    Workshop("作坊", "产银较高，但需要人口和集市"),
+    Warehouse("粮仓", "提高存粮与灾荒承受力"),
+    Caravan("商队", "联通集市和码头，提升商路收益"),
+    Barracks("团练营", "持续训练乡勇，是征伐和造反根基")
+}
+
+@Serializable
+data class V3EstateAsset(
+    val id: String,
+    val type: V3EstateType,
+    val level: Int,
+    val workers: Int = 0,
+    val desc: String = ""
+)
+
+@Serializable
+enum class V3RegionStatus(val label: String) {
+    Unknown("未涉足"),
+    Contacted("已结交"),
+    Influenced("有声望"),
+    Controlled("已控制"),
+    Pacified("已归附")
+}
+
+@Serializable
+data class V3WorldRegion(
+    val id: String,
+    val name: String,
+    val tier: Int,
+    val status: V3RegionStatus,
+    val control: Int,
+    val enemyPower: Int,
+    val wealth: Int,
+    val desc: String
+)
+
+@Serializable
+data class V3ConquestState(
+    val regionId: String,
+    val enemyPower: Int,
+    val rewardSilver: Int,
+    val rewardGrain: Int,
+    val rewardInfluence: Int,
+    val targetName: String,
+    val scale: String
+)
+
+@Serializable
 enum class V3GoalMetric(val label: String) {
     SilverStock("银两储备"),
     GrainStock("粮食储备"),
@@ -121,6 +172,9 @@ enum class V3GoalMetric(val label: String) {
     ControlledSites("控制地点"),
     SafeSites("安定地点"),
     BuiltSites("已建产业"),
+    EstateLevel("家产等级"),
+    ControlledRegions("控制地域"),
+    Unification("统一进度"),
     Population("家族人口"),
     ClanRank("宗族品第"),
     RouteScore("路线倾向"),
@@ -221,6 +275,10 @@ data class V3GameState(
     val people: List<V3Person> = V3Content.initialPeople,
     val branches: List<V3Branch> = V3Content.initialBranches,
     val sites: List<V3CountySite> = V3Content.initialSites,
+    val estateAssets: List<V3EstateAsset> = V3Content.initialEstateAssets,
+    val worldRegions: List<V3WorldRegion> = V3Content.initialWorldRegions,
+    val conquestState: V3ConquestState? = null,
+    val unificationProgress: Int = 20,
     val relations: V3Relations = V3Relations(),
     val routeScores: Map<V3Route, Int> = V3Content.initialRouteScores,
     val annualGoals: List<V3AnnualGoal> = V3Content.initialAnnualGoals,
