@@ -413,8 +413,6 @@ private fun V3WorldRouteMap(state: V3GameState) {
 @Composable
 private fun V3CountyMapView(state: V3GameState, selectedSiteId: String, onSelectSite: (String) -> Unit) {
     var pan by remember { mutableStateOf(Offset.Zero) }
-    val mapWidth = 760.dp
-    val mapHeight = 980.dp
     val frameHeight = 520.dp
     val frameShape = RoundedCornerShape(10.dp)
     val density = LocalDensity.current
@@ -426,24 +424,24 @@ private fun V3CountyMapView(state: V3GameState, selectedSiteId: String, onSelect
         BoxWithConstraints(
             Modifier.fillMaxWidth().height(frameHeight).clip(frameShape).background(Color(0xFF2A2018), frameShape)
         ) {
-            val mapWidthPx = with(density) { mapWidth.toPx() }
-            val mapHeightPx = with(density) { mapHeight.toPx() }
             val frameWidthPx = with(density) { maxWidth.toPx() }
             val frameHeightPx = with(density) { maxHeight.toPx() }
-            val minPanX = (frameWidthPx - mapWidthPx).coerceAtMost(0f)
+            val mapWidthPx = frameWidthPx
+            val mapHeightPx = frameHeightPx * 1.45f
+            val mapHeight = with(density) { mapHeightPx.toDp() }
             val minPanY = (frameHeightPx - mapHeightPx).coerceAtMost(0f)
-            val boundedPan = Offset(pan.x.coerceIn(minPanX, 0f), pan.y.coerceIn(minPanY, 0f))
+            val boundedPan = Offset(0f, pan.y.coerceIn(minPanY, 0f))
             Box(
-                Modifier.fillMaxSize().pointerInput(minPanX, minPanY) {
+                Modifier.fillMaxSize().pointerInput(minPanY) {
                     detectDragGestures { _, dragAmount ->
-                        pan = Offset((pan.x + dragAmount.x).coerceIn(minPanX, 0f), (pan.y + dragAmount.y).coerceIn(minPanY, 0f))
+                        pan = Offset(0f, (pan.y + dragAmount.y).coerceIn(minPanY, 0f))
                     }
                 }
             ) {
-                Box(Modifier.size(width = mapWidth, height = mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
+                Box(Modifier.fillMaxWidth().height(mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
                     AssetImage(GameImages.V3MapBgPlain, null, Modifier.fillMaxSize(), ContentScale.Crop)
                     state.sites.forEach { site ->
-                        V3MapSitePin(site, selectedSiteId == site.id) { onSelectSite(site.id) }
+                        V3MapSitePin(site, selectedSiteId == site.id, mapWidthPx = mapWidthPx, mapHeightPx = mapHeightPx) { onSelectSite(site.id) }
                     }
                 }
             }
@@ -452,14 +450,19 @@ private fun V3CountyMapView(state: V3GameState, selectedSiteId: String, onSelect
 }
 
 @Composable
-private fun V3MapSitePin(site: V3CountySite, selected: Boolean, onClick: () -> Unit) {
+private fun V3MapSitePin(site: V3CountySite, selected: Boolean, mapWidthPx: Float, mapHeightPx: Float, onClick: () -> Unit) {
     val point = siteMapPoint(site.id)
     val icon = GameImages.v3SiteIcons[site.id] ?: return
     val density = LocalDensity.current
+    val pinWidthPx = with(density) { 92.dp.toPx() }
+    val pinHeightPx = with(density) { 110.dp.toPx() }
+    val safeMarginPx = with(density) { 10.dp.toPx() }
+    val x = (mapWidthPx * point.x - pinWidthPx * 0.5f).coerceIn(safeMarginPx, mapWidthPx - pinWidthPx - safeMarginPx)
+    val y = (mapHeightPx * point.y - pinHeightPx * 0.35f).coerceIn(safeMarginPx, mapHeightPx - pinHeightPx - safeMarginPx)
     Column(
         Modifier.graphicsLayer {
-            translationX = with(density) { point.x.dp.toPx() }
-            translationY = with(density) { point.y.dp.toPx() }
+            translationX = x
+            translationY = y
         }.width(92.dp).clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(1.dp)
@@ -472,16 +475,16 @@ private fun V3MapSitePin(site: V3CountySite, selected: Boolean, onClick: () -> U
 }
 
 private fun siteMapPoint(siteId: String): Offset = when (siteId) {
-    "fort" -> Offset(86f, 128f)
-    "yamen" -> Offset(330f, 150f)
-    "academy" -> Offset(520f, 235f)
-    "shrine" -> Offset(245f, 330f)
-    "farmland" -> Offset(82f, 500f)
-    "market" -> Offset(405f, 465f)
-    "clinic" -> Offset(185f, 635f)
-    "dock" -> Offset(520f, 710f)
-    "mountain_pass" -> Offset(92f, 820f)
-    else -> Offset(330f, 450f)
+    "fort" -> Offset(0.18f, 0.14f)
+    "yamen" -> Offset(0.50f, 0.18f)
+    "academy" -> Offset(0.78f, 0.28f)
+    "shrine" -> Offset(0.43f, 0.37f)
+    "farmland" -> Offset(0.20f, 0.50f)
+    "market" -> Offset(0.62f, 0.56f)
+    "clinic" -> Offset(0.32f, 0.68f)
+    "dock" -> Offset(0.76f, 0.78f)
+    "mountain_pass" -> Offset(0.22f, 0.88f)
+    else -> Offset(0.50f, 0.48f)
 }
 
 @Composable
