@@ -1,6 +1,7 @@
 package com.daming.fushengzhi3.v3.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -58,6 +60,7 @@ import com.daming.fushengzhi3.v3.data.V3EventChoice
 import com.daming.fushengzhi3.v3.data.V3EstateType
 import com.daming.fushengzhi3.v3.data.V3FinalEnding
 import com.daming.fushengzhi3.v3.data.V3GameState
+import com.daming.fushengzhi3.v3.data.V3Gender
 import com.daming.fushengzhi3.v3.data.V3Person
 import com.daming.fushengzhi3.v3.data.V3Route
 import com.daming.fushengzhi3.v3.data.V3RegionStatus
@@ -65,6 +68,7 @@ import com.daming.fushengzhi3.v3.data.V3Screen
 import com.daming.fushengzhi3.v3.data.V3SiteYield
 import com.daming.fushengzhi3.v3.data.V3TaskType
 import com.daming.fushengzhi3.v3.data.V3TrainingType
+import com.daming.fushengzhi3.v3.data.V3WorldRegion
 import com.daming.fushengzhi3.v3.logic.V3GameController
 import com.daming.fushengzhi3.v3.logic.V3GameEngine
 
@@ -171,8 +175,8 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
 
 @Composable
 private fun V3HomePage(state: V3GameState, controller: V3GameController) {
-    var selectedSiteId by remember { mutableStateOf(state.sites.firstOrNull { it.level > 0 }?.id ?: state.sites.first().id) }
-    val selectedSite = state.sites.firstOrNull { it.id == selectedSiteId } ?: state.sites.first()
+    var selectedSiteId by remember { mutableStateOf<String?>(null) }
+    val selectedSite = selectedSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
     val forecast = V3GameEngine.monthlyForecast(state)
 
     V3Section("家业", nextAdvice(state))
@@ -190,11 +194,12 @@ private fun V3HomePage(state: V3GameState, controller: V3GameController) {
         Text("眼前目标", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         state.annualGoals.take(3).forEach { goal -> V3GoalRow(state, goal) }
     }
-    V3CountyMapView(state, selectedSiteId) { selectedSiteId = it }
-    V3SelectorChips("产业", state.sites.map { it.id to siteChipText(it) }, selectedSiteId) { selectedSiteId = it }
-    V3SiteCard(selectedSite, state, controller)
+    V3CountyMapView(state) { selectedSiteId = it }
     V3EstatePanel(state, controller)
     V3Button("推进一月", Modifier.fillMaxWidth(), onClick = controller::advanceMonth)
+    selectedSite?.let { site ->
+        V3SiteManageDialog(site = site, state = state, controller = controller, onDismiss = { selectedSiteId = null })
+    }
 }
 
 @Composable
@@ -253,50 +258,36 @@ private fun V3ClanPage(state: V3GameState, controller: V3GameController) {
 @Composable
 private fun V3PeoplePage(state: V3GameState, controller: V3GameController) {
     val people = V3GameEngine.alivePeople(state)
-    var selectedPersonId by remember { mutableStateOf(people.firstOrNull()?.id ?: 1) }
-    val person = people.firstOrNull { it.id == selectedPersonId } ?: people.firstOrNull()
-    V3Section("族谱", "树状图查看血脉关系；点击族人节点后，下方安排培养、科举、经营或军务。")
-    V3GenealogyTree(people, selectedPersonId, onSelect = { selectedPersonId = it })
-    if (person != null) V3PersonCard(person, state, controller)
+    var selectedPersonId by remember { mutableStateOf<Int?>(null) }
+    val person = selectedPersonId?.let { id -> people.firstOrNull { it.id == id } }
+    V3Section("族谱", "可拖动查看大族树状图；点小卡片弹出族人详情与培养安排。")
+    V3GenealogyTree(people, onSelect = { selectedPersonId = it })
+    person?.let { selected ->
+        V3PersonDetailDialog(person = selected, state = state, controller = controller, onDismiss = { selectedPersonId = null })
+    }
 }
 
 @Composable
-private fun V3GenealogyTree(people: List<V3Person>, selectedPersonId: Int, onSelect: (Int) -> Unit) {
-    val firstRoot = people.firstOrNull { it.parentId == null }
-    val spouse = firstRoot?.spouseId?.let { id -> people.firstOrNull { it.id == id } }
-    val roots = people.filter { it.parentId == null && it.id != spouse?.id }.ifEmpty { people.take(1) }
-    val children = people.filter { it.parentId == firstRoot?.id || (spouse != null && it.parentId == spouse.id) }
-    val others = people.filter { person -> person !in roots && person != spouse && person !in children }.take(4)
+private fun V3GenealogyTree(people: List<V3Person>, onSelect: (Int) -> Unit) {
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    val roots = people.filter { it.parentId == null }.ifEmpty { people.take(1) }
+    val generations = people.groupBy { it.generation }.toSortedMap()
     V3Panel {
         Text("李氏族谱树", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text("高亮节点为当前选中族人；没有父母记录的人显示在根脉。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        Column(Modifier.fillMaxWidth().background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                roots.take(2).forEach { person -> V3FamilyNode(person, selectedPersonId == person.id, Modifier.weight(1f), onSelect) }
-            }
-            if (spouse != null) {
-                Text("┃ 婚配", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    V3FamilyNode(spouse, selectedPersonId == spouse.id, Modifier.weight(1f), onSelect)
+        Text("族人多时拖动画布查看；节点只保留头像、姓名、年龄性别，详情点开弹窗。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+        Box(Modifier.fillMaxWidth().height(430.dp).background(V3PaperDeep, RoundedCornerShape(0.dp)).pointerInput(Unit) {
+            detectDragGestures { _, dragAmount -> pan = Offset((pan.x + dragAmount.x).coerceIn(-1400f, 180f), (pan.y + dragAmount.y).coerceIn(-1400f, 180f)) }
+        }) {
+            Box(Modifier.size(width = 1500.dp, height = 1500.dp).graphicsLayer { translationX = pan.x; translationY = pan.y }) {
+                roots.take(12).forEachIndexed { index, person ->
+                    V3FamilyMiniNode(person, x = 640 + index * 104, y = 28, onSelect = onSelect)
                 }
-            }
-            if (children.isNotEmpty()) {
-                Text("┗━ 子嗣", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                children.chunked(2).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { child -> V3FamilyNode(child, selectedPersonId == child.id, Modifier.weight(1f), onSelect) }
-                        repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            } else {
-                Text("尚无子嗣：先在【宗族】迎娶妻子，再推进月份。", color = V3Muted, fontSize = 12.sp)
-            }
-            if (others.isNotEmpty()) {
-                Text("旁支 / 入谱", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                others.chunked(2).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { person -> V3FamilyNode(person, selectedPersonId == person.id, Modifier.weight(1f), onSelect) }
-                        repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+                generations.filterKeys { it > 1 }.forEach { (gen, members) ->
+                    val y = 28 + (gen - 1) * 138
+                    members.take(80).forEachIndexed { index, person ->
+                        val x = 80 + (index % 12) * 112
+                        val row = index / 12
+                        V3FamilyMiniNode(person, x = x, y = y + row * 122, onSelect = onSelect)
                     }
                 }
             }
@@ -305,14 +296,25 @@ private fun V3GenealogyTree(people: List<V3Person>, selectedPersonId: Int, onSel
 }
 
 @Composable
-private fun V3FamilyNode(person: V3Person, selected: Boolean, modifier: Modifier, onSelect: (Int) -> Unit) {
+private fun V3FamilyMiniNode(person: V3Person, x: Int, y: Int, onSelect: (Int) -> Unit) {
     Column(
-        modifier.background(if (selected) V3Red else V3Paper, RoundedCornerShape(0.dp)).clickable { onSelect(person.id) }.padding(9.dp),
+        Modifier.graphicsLayer { translationX = x.toFloat(); translationY = y.toFloat() }.width(96.dp).background(V3Paper, RoundedCornerShape(0.dp)).clickable { onSelect(person.id) }.padding(6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Text(person.name, color = if (selected) V3Ink else V3Gold, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        Text("${person.gender.label} · ${person.age}岁 · ${person.identity}", color = if (selected) V3Ink else V3Muted, fontSize = 11.sp)
-        Text("学${person.study} 武${person.martial} 商${person.commerce} 谋${person.diplomacy}", color = if (selected) V3Ink else V3Muted, fontSize = 10.sp)
+        Text(if (person.gender == V3Gender.Male) "男" else "女", color = V3Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(person.name, color = V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text("${person.age}岁 · ${person.gender.label}", color = V3Muted, fontSize = 10.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun V3PersonDetailDialog(person: V3Person, state: V3GameState, controller: V3GameController, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 480.dp)) {
+            V3PersonCard(person, state, controller)
+            V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
+        }
     }
 }
 
@@ -360,70 +362,100 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController) {
 
 @Composable
 private fun V3WorldPanel(state: V3GameState, controller: V3GameController) {
+    var selectedRegionId by remember { mutableStateOf<String?>(null) }
+    val selectedRegion = selectedRegionId?.let { id -> state.worldRegions.firstOrNull { it.id == id } }
     V3Panel {
         Text("天下地图", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text("统一进度 ${state.unificationProgress} · 控制地域 ${V3GameEngine.controlledRegionCount(state)}/${state.worldRegions.size}。先结交经营，再征伐控制，最后才能定鼎天下。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
-        V3WorldRouteMap(state)
-        state.worldRegions.forEach { region ->
-            Column(Modifier.fillMaxWidth().background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("${region.name} · ${region.status.label}", color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Text("控${region.control} 敌${region.enemyPower}", color = V3Muted, fontSize = 12.sp)
-                }
-                Text(region.desc, color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    V3SmallButton("结交", Modifier.weight(1f), enabled = region.status == V3RegionStatus.Unknown) { controller.contactRegion(region.id) }
-                    V3SmallButton("经营", Modifier.weight(1f)) { controller.influenceRegion(region.id) }
-                    V3SmallButton("征伐", Modifier.weight(1f), enabled = state.conquestState == null) { controller.startConquest(region.id) }
-                }
-            }
-        }
+        Text("统一进度 ${state.unificationProgress} · 控制地域 ${V3GameEngine.controlledRegionCount(state)}/${state.worldRegions.size}。点地图节点弹出结交、经营、征伐。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+        V3WorldVisualMap(state) { selectedRegionId = it }
         V3SmallButton("统一天下", Modifier.fillMaxWidth()) { controller.proclaimUnification() }
     }
-}
-
-@Composable
-private fun V3WorldRouteMap(state: V3GameState) {
-    val rows = listOf(
-        listOf("home_county", "river_prefecture", "mountain_prefecture"),
-        listOf("south_province", "north_capital", "all_realm")
-    )
-    Column(Modifier.fillMaxWidth().background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        rows.forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                row.forEach { id ->
-                    val region = state.worldRegions.firstOrNull { it.id == id }
-                    val status = region?.status ?: V3RegionStatus.Unknown
-                    val color = when (status) {
-                        V3RegionStatus.Unknown -> V3Muted
-                        V3RegionStatus.Contacted -> V3Blue
-                        V3RegionStatus.Influenced -> V3Gold
-                        V3RegionStatus.Controlled -> V3Green
-                        V3RegionStatus.Pacified -> V3Red
-                    }
-                    Column(Modifier.weight(1f).background(color.copy(alpha = 0.18f), RoundedCornerShape(0.dp)).padding(7.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(region?.name ?: "未知", color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                        Text(status.label, color = V3Ink, fontSize = 10.sp, textAlign = TextAlign.Center)
-                        Text("控${region?.control ?: 0}", color = V3Muted, fontSize = 10.sp, textAlign = TextAlign.Center)
-                    }
-                }
-            }
-        }
-        Text("扩张路线：清河县 → 府县 → 南直隶 → 京畿 → 天下。颜色越深代表掌控越强。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+    selectedRegion?.let { region ->
+        V3RegionManageDialog(region = region, state = state, controller = controller, onDismiss = { selectedRegionId = null })
     }
 }
 
 @Composable
-private fun V3CountyMapView(state: V3GameState, selectedSiteId: String, onSelectSite: (String) -> Unit) {
+private fun V3RegionManageDialog(region: V3WorldRegion, state: V3GameState, controller: V3GameController, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 470.dp)) {
+            Text("${region.name} · ${region.status.label}", color = V3Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("控制 ${region.control} · 敌势 ${region.enemyPower} · 财富 ${region.wealth}", color = V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(region.desc, color = V3Muted, fontSize = 13.sp, lineHeight = 20.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                V3SmallButton("结交", Modifier.weight(1f), enabled = region.status == V3RegionStatus.Unknown) { controller.contactRegion(region.id) }
+                V3SmallButton("经营", Modifier.weight(1f)) { controller.influenceRegion(region.id) }
+                V3SmallButton("征伐", Modifier.weight(1f), enabled = state.conquestState == null) { controller.startConquest(region.id) }
+            }
+            V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
+        }
+    }
+}
+
+@Composable
+private fun V3WorldVisualMap(state: V3GameState, onSelect: (String) -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(360.dp).background(V3PaperDeep, RoundedCornerShape(0.dp)).clip(RoundedCornerShape(0.dp))) {
+        val worldWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+        val worldHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+        AssetImage(GameImages.V3CountyMap, null, Modifier.matchParentSize(), ContentScale.Crop, alpha = 0.82f)
+        Canvas(Modifier.matchParentSize()) {
+            drawLine(V3Gold.copy(alpha = 0.55f), Offset(size.width * 0.18f, size.height * 0.70f), Offset(size.width * 0.42f, size.height * 0.52f), strokeWidth = 4f, cap = StrokeCap.Square)
+            drawLine(V3Gold.copy(alpha = 0.55f), Offset(size.width * 0.42f, size.height * 0.52f), Offset(size.width * 0.66f, size.height * 0.38f), strokeWidth = 4f, cap = StrokeCap.Square)
+            drawLine(V3Gold.copy(alpha = 0.55f), Offset(size.width * 0.66f, size.height * 0.38f), Offset(size.width * 0.78f, size.height * 0.18f), strokeWidth = 4f, cap = StrokeCap.Square)
+            drawLine(V3Gold.copy(alpha = 0.55f), Offset(size.width * 0.42f, size.height * 0.52f), Offset(size.width * 0.28f, size.height * 0.26f), strokeWidth = 4f, cap = StrokeCap.Square)
+            drawLine(V3Gold.copy(alpha = 0.55f), Offset(size.width * 0.78f, size.height * 0.18f), Offset(size.width * 0.50f, size.height * 0.10f), strokeWidth = 4f, cap = StrokeCap.Square)
+        }
+        state.worldRegions.forEach { region ->
+            V3WorldRegionPin(region, worldWidthPx = worldWidthPx, worldHeightPx = worldHeightPx, onClick = { onSelect(region.id) })
+        }
+    }
+}
+
+@Composable
+private fun V3WorldRegionPin(region: V3WorldRegion, worldWidthPx: Float, worldHeightPx: Float, onClick: () -> Unit) {
+    val point = worldMapPoint(region.id)
+    val density = LocalDensity.current
+    val pinWidthPx = with(density) { 92.dp.toPx() }
+    val x = (worldWidthPx * point.x - pinWidthPx * 0.5f).coerceIn(4f, worldWidthPx - pinWidthPx - 4f)
+    val y = (worldHeightPx * point.y).coerceIn(4f, worldHeightPx - with(density) { 66.dp.toPx() })
+    val color = when (region.status) {
+        V3RegionStatus.Unknown -> V3Muted
+        V3RegionStatus.Contacted -> V3Blue
+        V3RegionStatus.Influenced -> V3Gold
+        V3RegionStatus.Controlled -> V3Green
+        V3RegionStatus.Pacified -> V3Red
+    }
+    Column(
+        Modifier.graphicsLayer { translationX = x; translationY = y }.width(92.dp).background(V3Paper.copy(alpha = 0.92f), RoundedCornerShape(0.dp)).clickable(onClick = onClick).padding(5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(region.name, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1)
+        Text(region.status.label, color = V3Ink, fontSize = 10.sp, textAlign = TextAlign.Center, maxLines = 1)
+        Text("控${region.control}", color = V3Muted, fontSize = 10.sp, textAlign = TextAlign.Center)
+    }
+}
+
+private fun worldMapPoint(regionId: String): Offset = when (regionId) {
+    "home_county" -> Offset(0.18f, 0.68f)
+    "river_prefecture" -> Offset(0.42f, 0.52f)
+    "mountain_prefecture" -> Offset(0.28f, 0.25f)
+    "south_province" -> Offset(0.66f, 0.38f)
+    "north_capital" -> Offset(0.78f, 0.16f)
+    "all_realm" -> Offset(0.50f, 0.08f)
+    else -> Offset(0.50f, 0.50f)
+}
+
+@Composable
+private fun V3CountyMapView(state: V3GameState, onSelectSite: (String) -> Unit) {
     var pan by remember { mutableStateOf(Offset.Zero) }
-    val frameHeight = 520.dp
+    val frameHeight = 560.dp
     val frameShape = RoundedCornerShape(0.dp)
     val density = LocalDensity.current
     V3Panel {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            val selectedSite = state.sites.firstOrNull { it.id == selectedSiteId }
-            Text("县域地图 · ${selectedSite?.name ?: "未选"}", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("点建筑切换详情", color = V3Muted, fontSize = 12.sp)
+            Text("县域地图", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("点建筑弹出管理", color = V3Muted, fontSize = 12.sp)
         }
         BoxWithConstraints(
             Modifier.fillMaxWidth().height(frameHeight).clip(frameShape).background(V3PaperDeep, frameShape)
@@ -431,7 +463,7 @@ private fun V3CountyMapView(state: V3GameState, selectedSiteId: String, onSelect
             val frameWidthPx = with(density) { maxWidth.toPx() }
             val frameHeightPx = with(density) { maxHeight.toPx() }
             val mapWidthPx = frameWidthPx
-            val mapHeightPx = frameHeightPx * 2.05f
+            val mapHeightPx = maxOf(frameHeightPx + 1f, frameWidthPx * 1180f / 760f)
             val mapHeight = with(density) { mapHeightPx.toDp() }
             val minPanY = (frameHeightPx - mapHeightPx).coerceAtMost(0f)
             val boundedPan = Offset(0f, pan.y.coerceIn(minPanY, 0f))
@@ -445,7 +477,7 @@ private fun V3CountyMapView(state: V3GameState, selectedSiteId: String, onSelect
                 Box(Modifier.fillMaxWidth().height(mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
                     AssetImage(GameImages.V3MapBgPlain, null, Modifier.fillMaxSize(), ContentScale.Crop)
                     state.sites.forEach { site ->
-                        V3MapSitePin(site, selectedSiteId == site.id, mapWidthPx = mapWidthPx, mapHeightPx = mapHeightPx) { onSelectSite(site.id) }
+                        V3MapSitePin(site, mapWidthPx = mapWidthPx, mapHeightPx = mapHeightPx) { onSelectSite(site.id) }
                     }
                 }
             }
@@ -454,7 +486,7 @@ private fun V3CountyMapView(state: V3GameState, selectedSiteId: String, onSelect
 }
 
 @Composable
-private fun V3MapSitePin(site: V3CountySite, selected: Boolean, mapWidthPx: Float, mapHeightPx: Float, onClick: () -> Unit) {
+private fun V3MapSitePin(site: V3CountySite, mapWidthPx: Float, mapHeightPx: Float, onClick: () -> Unit) {
     val point = siteMapPoint(site.id)
     val icon = GameImages.v3SiteIcons[site.id] ?: return
     val density = LocalDensity.current
@@ -469,13 +501,12 @@ private fun V3MapSitePin(site: V3CountySite, selected: Boolean, mapWidthPx: Floa
             translationY = y
         }.width(92.dp).clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Box(Modifier.size(if (selected) 78.dp else 66.dp).background(if (selected) V3Gold.copy(alpha = 0.28f) else Color.Transparent, RoundedCornerShape(0.dp)), contentAlignment = Alignment.Center) {
-            AssetImage(icon, site.name, Modifier.size(if (selected) 70.dp else 60.dp), ContentScale.Fit)
+        Box(Modifier.size(66.dp).background(V3PaperDeep.copy(alpha = 0.38f), RoundedCornerShape(0.dp)), contentAlignment = Alignment.Center) {
+            AssetImage(icon, site.name, Modifier.size(58.dp), ContentScale.Fit)
         }
-        Text(site.name, color = if (selected) V3Ink else V3Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.background(if (selected) V3Red else V3PaperDeep, RoundedCornerShape(0.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
-        if (selected) Text("已选中", color = V3Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(site.name, color = V3Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
     }
 }
 
@@ -490,6 +521,17 @@ private fun siteMapPoint(siteId: String): Offset = when (siteId) {
     "dock" -> Offset(0.72f, 0.84f)
     "mountain_pass" -> Offset(0.24f, 0.92f)
     else -> Offset(0.50f, 0.50f)
+}
+
+@Composable
+private fun V3SiteManageDialog(site: V3CountySite, state: V3GameState, controller: V3GameController, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 470.dp)) {
+            Text("${site.name} 管理", color = V3Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            V3SiteCard(site, state, controller)
+            V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
+        }
+    }
 }
 
 @Composable
@@ -646,10 +688,10 @@ private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToM
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            V3ResourceMetric(GameImages.V3IconSilver, "银", state.silver, V3Gold, Modifier.weight(1f))
-            V3ResourceMetric(GameImages.V3IconGrain, "粮", state.grain, V3Green, Modifier.weight(1f))
-            V3ResourceMetric(GameImages.V3IconPopulation, "人", V3GameEngine.alivePeople(state).size, V3Blue, Modifier.weight(1f))
-            V3ResourceMetric(GameImages.V3IconIndustry, "产", V3GameEngine.builtSiteCount(state), V3Red, Modifier.weight(1f))
+            V3ResourceMetric(GameImages.V3IconSilver, "银两", state.silver, V3Gold, Modifier.weight(1f))
+            V3ResourceMetric(GameImages.V3IconGrain, "粮食", state.grain, V3Green, Modifier.weight(1f))
+            V3ResourceMetric(GameImages.V3IconPopulation, "人口", V3GameEngine.alivePeople(state).size, V3Blue, Modifier.weight(1f))
+            V3ResourceMetric(GameImages.V3IconIndustry, "产业", V3GameEngine.builtSiteCount(state), V3Red, Modifier.weight(1f))
         }
     }
 }
@@ -739,16 +781,14 @@ private fun V3Metric(label: String, value: Int, color: Color, modifier: Modifier
 
 @Composable
 private fun V3ResourceMetric(iconPath: String, label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
-    Row(
-        modifier.background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(horizontal = 6.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    Column(
+        modifier.background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(horizontal = 4.dp, vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        AssetImage(iconPath, label, Modifier.size(28.dp), ContentScale.Fit)
-        Column(horizontalAlignment = Alignment.Start) {
-            Text(label, color = V3Muted, fontSize = 10.sp)
-            Text(value.toString(), color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        }
+        AssetImage(iconPath, label, Modifier.size(26.dp), ContentScale.Fit)
+        Text(value.toString(), color = color, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Text(label, color = V3Muted, fontSize = 10.sp, textAlign = TextAlign.Center)
     }
 }
 
