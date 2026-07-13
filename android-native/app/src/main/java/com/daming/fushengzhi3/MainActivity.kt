@@ -16,6 +16,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.daming.fushengzhi3.audio.GameAudio
 import com.daming.fushengzhi3.persistence.V3SaveStore
 import com.daming.fushengzhi3.ui.screens.MainMenuScreen
+import com.daming.fushengzhi3.ui.theme.FontPreference
 import com.daming.fushengzhi3.ui.theme.MingTheme
 import com.daming.fushengzhi3.v3.logic.V3GameController
 import com.daming.fushengzhi3.v3.ui.V3CreateScreen
@@ -34,8 +35,9 @@ class MainActivity : ComponentActivity() {
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         setContent {
-            MingTheme {
-                DamingApp()
+            val fontPreference = remember { FontPreference(this@MainActivity) }
+            MingTheme(fontStyle = fontPreference.style) {
+                DamingApp(fontPreference)
             }
         }
     }
@@ -51,7 +53,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun DamingApp() {
+    private fun DamingApp(fontPreference: FontPreference) {
         val audio = remember { GameAudio(this).also { gameAudio = it } }
         val v3Controller = remember { V3GameController(V3SaveStore(this), audio) }
         var screen by remember { mutableStateOf(AppScreen.Menu) }
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
         when (screen) {
             AppScreen.Menu -> MainMenuScreen(
                 v3Controller = v3Controller,
+                fontPreference = fontPreference,
                 onNewGame = { screen = AppScreen.Create },
                 onContinue = { screen = AppScreen.Game }
             )
@@ -79,6 +82,7 @@ class MainActivity : ComponentActivity() {
             )
             AppScreen.Game -> V3GameScreen(
                 controller = v3Controller,
+                fontPreference = fontPreference,
                 onBackToMenu = { screen = AppScreen.Menu }
             )
         }

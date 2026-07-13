@@ -13,8 +13,8 @@ android {
         applicationId = "com.daming.fushengzhi3"
         minSdk = 23
         targetSdk = 35
-        versionCode = 60
-        versionName = "1.1.0"
+        versionCode = 61
+        versionName = "1.0.0"
     }
 
     buildTypes {
