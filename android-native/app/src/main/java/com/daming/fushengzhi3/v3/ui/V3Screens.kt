@@ -414,10 +414,12 @@ private fun V3WorldVisualMap(state: V3GameState, onSelect: (String) -> Unit) {
 @Composable
 private fun V3WorldRegionPin(region: V3WorldRegion, worldWidthPx: Float, worldHeightPx: Float, onClick: () -> Unit) {
     val point = worldMapPoint(region.id)
+    val icon = GameImages.v3WorldRegionIcons[region.id]
     val density = LocalDensity.current
-    val pinWidthPx = with(density) { 92.dp.toPx() }
+    val pinWidthPx = with(density) { 108.dp.toPx() }
+    val pinHeightPx = with(density) { 118.dp.toPx() }
     val x = (worldWidthPx * point.x - pinWidthPx * 0.5f).coerceIn(4f, worldWidthPx - pinWidthPx - 4f)
-    val y = (worldHeightPx * point.y).coerceIn(4f, worldHeightPx - with(density) { 66.dp.toPx() })
+    val y = (worldHeightPx * point.y - pinHeightPx * 0.45f).coerceIn(4f, worldHeightPx - pinHeightPx - 4f)
     val color = when (region.status) {
         V3RegionStatus.Unknown -> V3Muted
         V3RegionStatus.Contacted -> V3Blue
@@ -426,13 +428,23 @@ private fun V3WorldRegionPin(region: V3WorldRegion, worldWidthPx: Float, worldHe
         V3RegionStatus.Pacified -> V3Red
     }
     Column(
-        Modifier.graphicsLayer { translationX = x; translationY = y }.width(92.dp).background(V3Paper.copy(alpha = 0.92f), RoundedCornerShape(0.dp)).clickable(onClick = onClick).padding(5.dp),
+        Modifier.graphicsLayer { translationX = x; translationY = y }.width(108.dp).clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Text(region.name, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1)
-        Text(region.status.label, color = V3Ink, fontSize = 10.sp, textAlign = TextAlign.Center, maxLines = 1)
-        Text("控${region.control}", color = V3Muted, fontSize = 10.sp, textAlign = TextAlign.Center)
+        Box(Modifier.size(72.dp).background(V3Paper.copy(alpha = 0.24f), RoundedCornerShape(0.dp)), contentAlignment = Alignment.Center) {
+            if (icon != null) {
+                AssetImage(icon, region.name, Modifier.size(68.dp), ContentScale.Fit)
+            }
+        }
+        Column(
+            Modifier.fillMaxWidth().background(V3Paper.copy(alpha = 0.92f), RoundedCornerShape(0.dp)).padding(horizontal = 4.dp, vertical = 3.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp)
+        ) {
+            Text(region.name, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 1)
+            Text(region.status.label, color = V3Ink, fontSize = 9.sp, textAlign = TextAlign.Center, maxLines = 1)
+        }
     }
 }
 

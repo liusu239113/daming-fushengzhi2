@@ -54,16 +54,16 @@ fun MainMenuScreen(
     LaunchedEffect(Unit) { v3Controller.ensureV3Bgm() }
 
     Box(Modifier.fillMaxSize().background(MenuBg)) {
-        AssetImage(GameImages.V3DossierBg, null, Modifier.fillMaxSize(), ContentScale.Crop, alpha = 0.28f)
-        Box(Modifier.fillMaxSize().background(Color(0xD50B0B18)))
+        AssetImage(GameImages.V3MainMenuBg, null, Modifier.fillMaxSize(), ContentScale.Crop, alpha = 1f)
+        Box(Modifier.fillMaxSize().background(Color(0x9F0B0B18)))
         Column(
-            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(0.9f).widthIn(max = 560.dp).padding(top = 78.dp),
+            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.9f).widthIn(max = 560.dp).padding(top = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(15.dp)
         ) {
-            Text("大明浮生志3", color = MenuGold, fontSize = 42.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            AssetImage(GameImages.V3MainLogo, "大明浮生志3", Modifier.fillMaxWidth().height(156.dp), ContentScale.Fit)
             Text("一户起家 · 娶妻生子 · 经营宗族 · 举旗定鼎", color = MenuInk, fontSize = 16.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(22.dp))
             MenuButton("开始新局", "从一人一户重立族谱", primary = true, onClick = onNewGame)
             MenuButton(
                 "继续游戏",
@@ -106,9 +106,13 @@ private fun MenuButton(text: String, subtitle: String = "", enabled: Boolean = t
         border = BorderStroke(2.dp, border),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
     ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 15.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(text, color = if (enabled) MenuInk else MenuMuted, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-            if (subtitle.isNotBlank()) Text(subtitle, color = if (enabled) MenuMuted else MenuMuted.copy(alpha = 0.6f), fontSize = 12.sp)
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 15.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(text, color = if (enabled) MenuInk else MenuMuted, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            if (subtitle.isNotBlank()) Text(subtitle, color = if (enabled) MenuMuted else MenuMuted.copy(alpha = 0.6f), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }
 }

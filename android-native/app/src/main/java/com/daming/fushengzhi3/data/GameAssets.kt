@@ -1,6 +1,8 @@
 package com.daming.fushengzhi3.data
 
 object GameImages {
+    const val V3MainMenuBg = "image/v3_main_menu_bg.png"
+    const val V3MainLogo = "image/v3_main_logo.png"
     const val V3DossierBg = "image/v3_dossier_bg.png"
     const val V3CountyMap = "image/v3_county_map.png"
     const val V3Icon = "image/v3_icon.png"
@@ -27,6 +29,14 @@ object GameImages {
         "academy" to "image/v3_site_academy.png",
         "clinic" to "image/v3_site_clinic.png",
         "mountain_pass" to "image/v3_site_mountain_pass.png"
+    )
+    val v3WorldRegionIcons = mapOf(
+        "home_county" to "image/v3_world_home_county.png",
+        "river_prefecture" to "image/v3_world_river_prefecture.png",
+        "mountain_prefecture" to "image/v3_world_mountain_prefecture.png",
+        "south_province" to "image/v3_world_south_province.png",
+        "north_capital" to "image/v3_world_north_capital.png",
+        "all_realm" to "image/v3_world_all_realm.png"
     )
 }
 
