@@ -1110,6 +1110,8 @@ object V3GameEngine {
             goals = activeGoals.take(3)
         }
         if (goals.isEmpty()) goals = V3Content.goalsFor(state.creed, state.crisis)
+        lines += goalProgressAdvice(state, goals)
+        lines += nextActionAdvice(state)
         return state.copy(
             silver = silver.coerceAtLeast(-999),
             grain = grain.coerceAtLeast(-999),
@@ -1119,6 +1121,26 @@ object V3GameEngine {
             pendingReports = lines,
             eventLog = (goalLines.map { "${state.year}年${state.month}月 · $it" } + state.eventLog).take(80)
         )
+    }
+
+    private fun goalProgressAdvice(state: V3GameState, goals: List<V3AnnualGoal>): String {
+        val active = goals.filter { !it.completed }.take(3)
+        if (active.isEmpty()) return "目标进展：本阶段目标已全部完成，家族可转向扩产、育人或外拓。"
+        return "目标进展：" + active.joinToString("；") { goal ->
+            "${goal.title} ${goalProgress(state, goal)}/${goal.target}"
+        } + "。"
+    }
+
+    private fun nextActionAdvice(state: V3GameState): String = when {
+        !hasSpouse(state) -> "下月建议：到【宗族】迎娶妻子，人口从一人一户开始扩张。"
+        builtSiteCount(state) < 2 -> "下月建议：点县域地图的集市、书院或寨堡，先建第二处产业。"
+        state.silver < 90 -> "下月建议：扩铺面、跑商或经营集市，先补银库。"
+        state.grain < 140 -> "下月建议：扩田庄、粮仓或安排管田，先保粮食。"
+        state.sites.any { it.risk >= 55 } -> "下月建议：优先治理高风险地点，或在【大势】讨伐流寇。"
+        canRankUp(state) -> "下月建议：到【宗族】晋升品第，解锁更多产业容量。"
+        alivePeople(state).any { it.age >= 12 && it.currentTask == null && it.trainingFocus == null } -> "下月建议：到【族人】给空闲族人安排培养或派遣，别让人手闲着。"
+        controlledRegionCount(state) < 2 && state.clanRank >= 3 -> "下月建议：到【大势】经营天下地图，从清河县外拓到府县。"
+        else -> "下月建议：继续围绕当前路线积累资源，准备科举、征伐或统一天下。"
     }
 
     private fun nextAnnualGoal(state: V3GameState, activeGoals: List<V3AnnualGoal>): V3AnnualGoal? {

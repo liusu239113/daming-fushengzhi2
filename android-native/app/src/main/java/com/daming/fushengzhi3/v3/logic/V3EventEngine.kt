@@ -79,7 +79,15 @@ object V3EventEngine {
             }
         }
         val branchNotes = choice.branchImpacts.mapNotNull { it.note.takeIf { note -> note.isNotBlank() } }
-        val log = (listOf("事件【${state.activeEvent?.title ?: "县域抉择"}】选择：${choice.label}。${choice.desc}") + branchNotes).joinToString(" ")
+        val eventTitle = state.activeEvent?.title ?: "县域抉择"
+        val impactLines = eventChoiceImpactLines(state, choice)
+        val report = (listOf(
+            "【抉择结算】",
+            "事件【$eventTitle】",
+            "选择：${choice.label}",
+            choice.desc
+        ) + impactLines + branchNotes).joinToString("\n")
+        val logLine = "事件【$eventTitle】选择：${choice.label}。${impactLines.joinToString("；")}"
         return state.copy(
             silver = state.silver + choice.silverDelta,
             grain = state.grain + choice.grainDelta,
@@ -92,10 +100,51 @@ object V3EventEngine {
             branches = nextBranches,
             routeScores = state.routeScores + (choice.route to routeScore),
             activeEvent = null,
-            pendingReports = listOf(log),
-            eventLog = (listOf("${state.year}年${state.month}月 · $log") + state.eventLog).take(100)
+            pendingReports = listOf(report),
+            eventLog = (listOf("${state.year}年${state.month}月 · $logLine") + state.eventLog).take(100)
         )
     }
+
+    private fun eventChoiceImpactLines(state: V3GameState, choice: V3EventChoice): List<String> {
+        val parts = mutableListOf<String>()
+        fun add(label: String, value: Int) {
+            if (value > 0) parts += "$label+$value"
+            if (value < 0) parts += "$label$value"
+        }
+        add("银两", choice.silverDelta)
+        add("粮食", choice.grainDelta)
+        add("凝聚", choice.cohesionDelta)
+        add("族望", choice.influenceDelta)
+        add("乡勇", choice.militiaDelta)
+        add("官府", choice.yamenDelta)
+        add("士绅", choice.gentryDelta)
+        add("乡民", choice.villagersDelta)
+        add("流寇", choice.banditsDelta)
+        add("商帮", choice.merchantsDelta)
+        add("军镇", choice.garrisonDelta)
+        val siteName = choice.siteId?.let { id -> state.sites.firstOrNull { it.id == id }?.name }
+        if (siteName != null) {
+            if (choice.siteControlDelta != 0) parts += "$siteName 控制${signed(choice.siteControlDelta)}"
+            if (choice.siteRiskDelta != 0) parts += "$siteName 风险${signed(choice.siteRiskDelta)}"
+        } else {
+            add("地点控制", choice.siteControlDelta)
+            add("地点风险", choice.siteRiskDelta)
+        }
+        val personName = choice.personId?.let { id -> state.people.firstOrNull { it.id == id }?.name }
+        if (personName != null) {
+            if (choice.personFatigueDelta != 0) parts += "$personName 疲劳${signed(choice.personFatigueDelta)}"
+            if (choice.personMeritDelta != 0) parts += "$personName 功绩${signed(choice.personMeritDelta)}"
+            if (choice.personLoyaltyDelta != 0) parts += "$personName 忠诚${signed(choice.personLoyaltyDelta)}"
+        } else {
+            add("疲劳", choice.personFatigueDelta)
+            add("功绩", choice.personMeritDelta)
+            add("忠诚", choice.personLoyaltyDelta)
+        }
+        if (choice.routeDelta != 0) parts += "路线【${choice.route.label}】${signed(choice.routeDelta)}"
+        return if (parts.isEmpty()) listOf("结算：局势小幅变化，已记入近事。") else listOf("结算：${parts.joinToString("；")}")
+    }
+
+    private fun signed(value: Int): String = if (value >= 0) "+$value" else value.toString()
 
     private fun shouldRoutineEvent(state: V3GameState, totalRisk: Int): Boolean {
         if (state.month % 4 == 0) return true
