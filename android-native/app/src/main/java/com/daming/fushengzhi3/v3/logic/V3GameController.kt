@@ -23,6 +23,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     var screen by mutableStateOf(V3Screen.County)
         private set
 
+    var timeSpeed by mutableStateOf(1)
+        private set
+
     var latestReport by mutableStateOf<V3MonthlyReport?>(null)
         private set
 
@@ -66,6 +69,31 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun switchScreen(next: V3Screen) {
         if (screen != next) audio.tabSwitch()
         screen = next
+    }
+
+    fun updateTimeSpeed(speed: Int) {
+        audio.select()
+        timeSpeed = speed.coerceIn(0, 3)
+    }
+
+    fun togglePause() {
+        audio.click()
+        timeSpeed = if (timeSpeed == 0) 1 else 0
+    }
+
+    fun shouldAutoTick(): Boolean =
+        timeSpeed > 0 &&
+            latestReport == null &&
+            message == null &&
+            !settingsVisible &&
+            state.finalEnding == null &&
+            state.activeEvent == null &&
+            state.examSession == null &&
+            state.battleState == null &&
+            state.conquestState == null
+
+    fun autoAdvanceTime() {
+        if (shouldAutoTick()) advanceMonth(showReport = false)
     }
 
     fun openSettings() {
@@ -218,7 +246,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
-    fun advanceMonth() {
+    fun advanceMonth(showReport: Boolean = true) {
         audio.monthTick()
         val report = V3GameEngine.advanceMonth(state)
         val withEnding = if (V3GameEngine.shouldAutoEnd(report.nextState)) {
@@ -228,7 +256,11 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         }
         state = withEnding
         saveStore.save(state)
-        latestReport = report.copy(nextState = withEnding)
+        latestReport = if (showReport || withEnding.activeEvent == null && report.lines.any { it.contains("目标达成") || it.contains("添丁") || it.contains("终局") }) {
+            report.copy(nextState = withEnding)
+        } else {
+            null
+        }
     }
 
     fun chooseEvent(choice: V3EventChoice) {

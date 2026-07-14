@@ -847,7 +847,7 @@ object V3GameEngine {
 
     fun siteStatusFor(control: Int, risk: Int): V3SiteStatus = statusFor(control, risk)
 
-    fun shouldAutoEnd(state: V3GameState): Boolean = state.year >= 1644 || state.cohesion <= 0 || state.silver <= -300 || state.grain <= -300
+    fun shouldAutoEnd(state: V3GameState): Boolean = state.year > 1644 || (state.year == 1644 && state.month >= 5) || state.cohesion <= 0 || state.silver <= -300 || state.grain <= -300
 
     fun finalizeEnding(state: V3GameState): V3FinalEnding {
         val preview = endingPreview(state)

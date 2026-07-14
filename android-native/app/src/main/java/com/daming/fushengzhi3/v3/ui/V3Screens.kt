@@ -71,6 +71,7 @@ import com.daming.fushengzhi3.v3.data.V3TrainingType
 import com.daming.fushengzhi3.v3.data.V3WorldRegion
 import com.daming.fushengzhi3.v3.logic.V3GameController
 import com.daming.fushengzhi3.v3.logic.V3GameEngine
+import kotlinx.coroutines.delay
 
 private val V3Ink = Color(0xFFF4E8C6)
 private val V3Paper = Color(0xFF1B1B3A)
@@ -120,6 +121,17 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
 @Composable
 fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, onBackToMenu: () -> Unit) {
     LaunchedEffect(Unit) { controller.ensureV3Bgm() }
+    LaunchedEffect(controller.timeSpeed, controller.state.year, controller.state.month, controller.latestReport, controller.message, controller.state.activeEvent, controller.settingsVisible, controller.state.examSession, controller.state.battleState, controller.state.conquestState) {
+        if (controller.shouldAutoTick()) {
+            val interval = when (controller.timeSpeed) {
+                3 -> 850L
+                2 -> 1400L
+                else -> 2400L
+            }
+            delay(interval)
+            controller.autoAdvanceTime()
+        }
+    }
     val state = controller.state
     V3Background {
         Column(Modifier.fillMaxSize()) {
@@ -191,12 +203,15 @@ private fun V3HomePage(state: V3GameState, controller: V3GameController) {
         }
     }
     V3Panel {
+        Text("时局脉络", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(mingSituationText(state), color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
+    }
+    V3Panel {
         Text("眼前目标", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         state.annualGoals.take(3).forEach { goal -> V3GoalRow(state, goal) }
     }
     V3CountyMapView(state) { selectedSiteId = it }
     V3EstatePanel(state, controller)
-    V3Button("推进一月", Modifier.fillMaxWidth(), onClick = controller::advanceMonth)
     selectedSite?.let { site ->
         V3SiteManageDialog(site = site, state = state, controller = controller, onDismiss = { selectedSiteId = null })
     }
@@ -692,13 +707,14 @@ private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToM
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
                 Text(state.clanName, color = V3Gold, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Text("${state.year}年${state.month}月 · ${V3GameEngine.clanRankName(state)} · ${state.crisis}", color = V3Paper, fontSize = 12.sp)
+                Text("${mingEraLabel(state.year)}${state.month}月 · ${V3GameEngine.clanRankName(state)} · ${state.crisis}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 V3SmallButton("设置", Modifier.width(66.dp)) { controller.openSettings() }
                 V3SmallButton("菜单", Modifier.width(66.dp)) { onBackToMenu() }
             }
         }
+        V3TimeControls(controller)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             V3ResourceMetric(GameImages.V3IconSilver, "银两", state.silver, V3Gold, Modifier.weight(1f))
             V3ResourceMetric(GameImages.V3IconGrain, "粮食", state.grain, V3Green, Modifier.weight(1f))
@@ -706,6 +722,31 @@ private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToM
             V3ResourceMetric(GameImages.V3IconIndustry, "产业", V3GameEngine.builtSiteCount(state), V3Red, Modifier.weight(1f))
         }
     }
+}
+
+@Composable
+private fun V3TimeControls(controller: V3GameController) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        V3SmallButton(if (controller.timeSpeed == 0) "继续" else "暂停", Modifier.weight(1f), selected = controller.timeSpeed == 0) { controller.togglePause() }
+        listOf(1, 2, 3).forEach { speed ->
+            V3SmallButton("${speed}倍", Modifier.weight(1f), selected = controller.timeSpeed == speed) { controller.updateTimeSpeed(speed) }
+        }
+        Text(if (controller.shouldAutoTick()) "时序流动中" else "等待抉择", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.weight(1.4f))
+    }
+}
+
+private fun mingEraLabel(year: Int): String = when {
+    year <= 1619 -> "万历${year - 1572}年 · ${year}年"
+    year <= 1627 -> "天启${year - 1620}年 · ${year}年"
+    else -> "崇祯${year - 1627}年 · ${year}年"
+}
+
+private fun mingSituationText(state: V3GameState): String = when {
+    state.year < 1619 -> "万历末年，矿税、徭役和地方积弊仍在。李氏先要在清河县稳住婚配、田粮、祠产和县衙关系。"
+    state.year < 1628 -> "辽事已急，天启年间党争、边饷、军镇催粮渐入县中。宗族不能只看家账，还要决定勤王、自保或通商。"
+    state.year < 1636 -> "崇祯新政催饷更紧，饥荒与流民开始外溢。李氏若无粮、无勇、无族望，乱世会自然吞没家业。"
+    state.year < 1642 -> "关外势大，流寇四起，地方豪族各谋退路。此时应在书院、商路、寨堡、码头之间定下真正路线。"
+    else -> "甲申将近，天下土崩。李氏必须在勤王、割据、保族、南迁之间作终局选择。"
 }
 
 @Composable
@@ -730,7 +771,7 @@ private fun V3Background(content: @Composable () -> Unit) {
 private fun V3Title(title: String, subtitle: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(title, color = V3Gold, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = V3Paper, fontSize = 15.sp)
+        Text(subtitle, color = Color.White, fontSize = 15.sp)
     }
 }
 
@@ -738,7 +779,7 @@ private fun V3Title(title: String, subtitle: String) {
 private fun V3Section(title: String, subtitle: String) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(title, color = V3Gold, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = V3Paper, fontSize = 13.sp, lineHeight = 19.sp)
+        Text(subtitle, color = Color.White, fontSize = 13.sp, lineHeight = 19.sp)
         Spacer(Modifier.fillMaxWidth().height(1.dp).background(V3Red))
     }
 }

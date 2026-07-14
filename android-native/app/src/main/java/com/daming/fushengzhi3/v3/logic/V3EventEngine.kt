@@ -12,8 +12,9 @@ import kotlin.math.min
 object V3EventEngine {
     fun generateEvent(state: V3GameState): V3ActiveEvent? {
         if (state.activeEvent != null) return state.activeEvent
-        if (V3GameEngine.alivePeople(state).size < 2 && state.year == 1601 && state.month <= 6) return null
+        if (V3GameEngine.alivePeople(state).size < 2 && state.year == 1601 && state.month <= 3) return null
         val totalRisk = state.sites.sumOf { it.risk }
+        historicalEvent(state)?.let { return it }
         val angryBranch = state.branches.maxByOrNull { it.grievance }
         val criticalEvent = when {
             angryBranch != null && angryBranch.grievance >= 48 -> branchDemandEvent(angryBranch.id, angryBranch.name, angryBranch.focus)
@@ -24,6 +25,7 @@ object V3EventEngine {
             else -> null
         }
         if (criticalEvent != null) return criticalEvent
+        if (!shouldRoutineEvent(state, totalRisk)) return null
 
         val weightedPool = V3EventContent.allEvents.filter { event ->
             eventMatchesState(event, state) && run {
@@ -95,6 +97,102 @@ object V3EventEngine {
             pendingReports = listOf(log),
             eventLog = (listOf("${state.year}年${state.month}月 · $log") + state.eventLog).take(100)
         )
+    }
+
+    private fun shouldRoutineEvent(state: V3GameState, totalRisk: Int): Boolean {
+        if (state.month % 4 == 0) return true
+        if (state.month % 3 == 0 && (totalRisk >= 260 || state.silver < 70 || state.grain < 120)) return true
+        if (state.month == 12) return true
+        return false
+    }
+
+    private fun historicalEvent(state: V3GameState): V3ActiveEvent? {
+        val key = state.year to state.month
+        if (state.eventLog.take(30).any { it.contains("史事") && it.contains(state.year.toString()) }) return null
+        return when (key) {
+            1601 to 9 -> V3ActiveEvent(
+                "史事：矿税余波",
+                "万历末年，矿监税使之弊虽稍退，地方仍以旧账追索。清河县衙重翻商税与田税册，李氏若不表态，集市、田庄都会被牵动。",
+                listOf(
+                    V3EventChoice("清账输税", "以银换安，官府关系回暖。", silverDelta = -45, yamenDelta = 10, merchantsDelta = -2, influenceDelta = 2, siteId = "yamen", siteRiskDelta = -8, route = V3Route.Loyalist),
+                    V3EventChoice("联络士绅缓征", "借士绅之力抗税，声名上升但县衙不悦。", silverDelta = -20, gentryDelta = 9, yamenDelta = -6, influenceDelta = 5, route = V3Route.Scholar),
+                    V3EventChoice("暗改账册", "短期保财，但商路和官府风险变高。", silverDelta = 35, yamenDelta = -8, merchantsDelta = 5, siteId = "market", siteRiskDelta = 10, route = V3Route.Merchant)
+                )
+            )
+            1619 to 4 -> V3ActiveEvent(
+                "史事：萨尔浒败闻",
+                "辽东大败的消息顺江而下，军需、辽饷、募兵风声一齐压到县中。宗祠议事不再只是家产，已开始牵连边事。",
+                listOf(
+                    V3EventChoice("输粮勤王", "勤王名声上升，粮仓承压。", grainDelta = -70, yamenDelta = 8, garrisonDelta = 9, influenceDelta = 4, route = V3Route.Loyalist, routeDelta = 9),
+                    V3EventChoice("修寨屯粮", "转向乱世自保。", silverDelta = -35, grainDelta = -25, militiaDelta = 12, siteId = "fort", siteControlDelta = 8, siteRiskDelta = -10, route = V3Route.Fortress, routeDelta = 9),
+                    V3EventChoice("扩大商路备银", "以财应变，商路加强。", silverDelta = 60, merchantsDelta = 7, yamenDelta = -3, route = V3Route.Merchant, routeDelta = 8)
+                )
+            )
+            1621 to 7 -> V3ActiveEvent(
+                "史事：辽事再急",
+                "天启初年，辽东战报频仍，县中军户与商帮都在囤粮避祸。李氏的选择会让家族路线更偏向勤王、自保或逐利。",
+                listOf(
+                    V3EventChoice("募勇入册", "乡勇增加，军镇关系改善。", silverDelta = -40, grainDelta = -25, militiaDelta = 18, garrisonDelta = 10, route = V3Route.Loyalist, routeDelta = 8),
+                    V3EventChoice("堡寨盟约", "自保路线增强，乡民更安。", grainDelta = -35, militiaDelta = 10, villagersDelta = 7, siteId = "fort", siteControlDelta = 10, route = V3Route.Fortress, routeDelta = 9),
+                    V3EventChoice("囤货等价", "银两上涨但民心下降。", silverDelta = 90, villagersDelta = -8, merchantsDelta = 8, route = V3Route.Merchant, routeDelta = 8)
+                )
+            )
+            1627 to 10 -> V3ActiveEvent(
+                "史事：天启崩，崇祯立",
+                "京中传来大行皇帝崩逝、新君即位。清流称新政可期，县衙却催各族重新表忠。李氏该押注朝局，还是守住家业？",
+                listOf(
+                    V3EventChoice("递表称贺", "官府关系提升，花费银两。", silverDelta = -35, yamenDelta = 10, influenceDelta = 3, route = V3Route.Loyalist, routeDelta = 8),
+                    V3EventChoice("资助书院清议", "士林声望上升，党争风险加深。", silverDelta = -45, gentryDelta = 10, yamenDelta = -5, influenceDelta = 6, siteId = "academy", siteRiskDelta = 6, route = V3Route.Scholar, routeDelta = 9),
+                    V3EventChoice("闭祠修谱", "避开朝局，凝聚上升。", grainDelta = -20, cohesionDelta = 7, route = V3Route.Hermit, routeDelta = 7)
+                )
+            )
+            1628 to 6 -> V3ActiveEvent(
+                "史事：崇祯清饷",
+                "新政要清理积弊，却也让地方催饷更急。差役登门，士绅观望，商帮怕税，乡民怕役。",
+                listOf(
+                    V3EventChoice("替民缓饷", "民心大升，县衙不悦。", silverDelta = -30, villagersDelta = 12, yamenDelta = -6, influenceDelta = 5, route = V3Route.Scholar),
+                    V3EventChoice("足额输饷", "官府满意，资源受损。", silverDelta = -75, grainDelta = -35, yamenDelta = 12, garrisonDelta = 4, route = V3Route.Loyalist),
+                    V3EventChoice("以商税抵饷", "商路承压但家业保住。", silverDelta = -35, merchantsDelta = -4, yamenDelta = 5, siteId = "market", siteRiskDelta = 6, route = V3Route.Merchant)
+                )
+            )
+            1630 to 3 -> V3ActiveEvent(
+                "史事：陕北流寇",
+                "西北饥荒与流寇的传闻传入江南，逃户、募兵、粮价一起动荡。李氏需要决定是赈济、练兵，还是趁乱扩财。",
+                listOf(
+                    V3EventChoice("开粥棚收流民", "人口与民心机会增加，粮食下降。", grainDelta = -85, villagersDelta = 14, cohesionDelta = 5, route = V3Route.Hermit, routeDelta = 7),
+                    V3EventChoice("募勇守庄", "乡勇上升，割据伏笔加深。", silverDelta = -45, grainDelta = -25, militiaDelta = 22, siteId = "fort", siteControlDelta = 8, route = V3Route.Fortress, routeDelta = 10),
+                    V3EventChoice("囤粮抬价", "银两大增，民心大跌。", silverDelta = 120, grainDelta = -25, villagersDelta = -14, merchantsDelta = 8, route = V3Route.Merchant, routeDelta = 9)
+                )
+            )
+            1636 to 5 -> V3ActiveEvent(
+                "史事：关外称帝",
+                "关外改号称帝的消息震动南北。朝廷催兵催饷，地方豪族开始各谋退路。李氏已不能只做县中小族。",
+                listOf(
+                    V3EventChoice("响应勤王", "勤王路线大进，军镇关系提升。", silverDelta = -70, grainDelta = -50, militiaDelta = 15, garrisonDelta = 14, influenceDelta = 6, route = V3Route.Loyalist, routeDelta = 12),
+                    V3EventChoice("扩寨藏兵", "割据和自保路线大进，官府猜忌。", silverDelta = -55, grainDelta = -35, militiaDelta = 26, yamenDelta = -8, siteId = "fort", siteControlDelta = 10, route = V3Route.Warlord, routeDelta = 12),
+                    V3EventChoice("筹船留后路", "海外路线增强。", silverDelta = -80, merchantsDelta = 9, siteId = "dock", siteControlDelta = 9, route = V3Route.Overseas, routeDelta = 12)
+                )
+            )
+            1642 to 8 -> V3ActiveEvent(
+                "史事：天下土崩",
+                "北方城池屡陷，逃官、饥民、败兵接连入境。若李氏已有兵粮，此时可争一方；若根基不足，只能求保香火。",
+                listOf(
+                    V3EventChoice("接管县防", "举旗割据的前奏，风险与声望同升。", silverDelta = -60, grainDelta = -60, militiaDelta = 35, yamenDelta = -15, influenceDelta = 12, siteId = "yamen", siteControlDelta = 18, route = V3Route.Warlord, routeDelta = 16),
+                    V3EventChoice("闭境保族", "隐忍自保，凝聚上升。", grainDelta = -45, cohesionDelta = 10, villagersDelta = 6, siteId = "fort", siteRiskDelta = -15, route = V3Route.Hermit, routeDelta = 10),
+                    V3EventChoice("南迁海路", "海外路线强推，家族撕裂。", silverDelta = -120, cohesionDelta = -5, merchantsDelta = 12, route = V3Route.Overseas, routeDelta = 16)
+                )
+            )
+            1644 to 3 -> V3ActiveEvent(
+                "史事：甲申国变",
+                "京师陷落的消息尚未传实，县中已人心惶惶。大明气数将尽，李氏必须选择最后路线：勤王、割据、保族，或远走。",
+                listOf(
+                    V3EventChoice("举族勤王", "忠烈路线终极选择。", silverDelta = -90, grainDelta = -90, militiaDelta = 30, garrisonDelta = 16, influenceDelta = 14, route = V3Route.Loyalist, routeDelta = 20),
+                    V3EventChoice("据县自立", "割据路线终极选择。", silverDelta = -70, grainDelta = -70, militiaDelta = 45, yamenDelta = -20, influenceDelta = 12, route = V3Route.Warlord, routeDelta = 22),
+                    V3EventChoice("保谱南迁", "保住香火，另寻出路。", silverDelta = -120, grainDelta = -60, cohesionDelta = 8, merchantsDelta = 8, route = V3Route.Overseas, routeDelta = 18)
+                )
+            )
+            else -> null
+        }
     }
 
     private fun taxDemandEvent() = V3ActiveEvent(
