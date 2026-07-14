@@ -5,6 +5,7 @@ import com.daming.fushengzhi3.v3.data.V3BranchImpact
 import com.daming.fushengzhi3.v3.data.V3EventContent
 import com.daming.fushengzhi3.v3.data.V3EventChoice
 import com.daming.fushengzhi3.v3.data.V3GameState
+import com.daming.fushengzhi3.v3.data.V3RegionStatus
 import com.daming.fushengzhi3.v3.data.V3Route
 import kotlin.math.max
 import kotlin.math.min
@@ -27,24 +28,21 @@ object V3EventEngine {
         if (criticalEvent != null) return criticalEvent
         if (!shouldRoutineEvent(state, totalRisk)) return null
 
-        val weightedPool = V3EventContent.allEvents.filter { event ->
-            eventMatchesState(event, state) && run {
-                val titleNotRecent = state.eventLog.take(8).none { it.contains(event.title) }
-                val crisisMatched = when (state.crisis) {
-                    "官府催税" -> event.title.contains("县") || event.title.contains("衙") || event.title.contains("辽饷") || event.title.contains("徭役")
-                    "流寇逼近" -> event.title.contains("山") || event.title.contains("寇") || event.title.contains("寨") || event.title.contains("勇")
-                    "饥荒将至" -> event.title.contains("粮") || event.title.contains("田") || event.title.contains("民") || event.title.contains("仓")
-                    "族产争端" -> event.title.contains("房") || event.title.contains("祠") || event.title.contains("账") || event.title.contains("议")
-                    "商路断绝" -> event.title.contains("商") || event.title.contains("市") || event.title.contains("码头") || event.title.contains("船")
-                    "瘟疫初起" -> event.title.contains("医") || event.title.contains("药") || event.title.contains("疫") || event.title.contains("病")
-                    else -> false
-                }
-                titleNotRecent && (crisisMatched || state.month % 3 == 0 || event.choices.any { it.siteId != null && (state.sites.firstOrNull { site -> site.id == it.siteId }?.risk ?: 0) >= 35 })
-            }
+        val staticCandidates = V3EventContent.allEvents.filter { event ->
+            eventMatchesState(event, state) && state.eventLog.take(10).none { it.contains(event.title) }
         }
-        val fallbackPool = V3EventContent.allEvents.filter { eventMatchesState(it, state) }
-        val pool = if (weightedPool.isNotEmpty()) weightedPool else fallbackPool
-        if (pool.isEmpty()) return null
+        val dynamicCandidates = dynamicProgressEvents(state, totalRisk)
+        val ranked = (staticCandidates + dynamicCandidates)
+            .map { it to eventFitScore(it, state, totalRisk) }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.second }
+        if (ranked.isEmpty()) return null
+        val topScore = ranked.first().second
+        val pool = ranked
+            .takeWhile { topScore - it.second <= 12 }
+            .take(12)
+            .map { it.first }
+        if (pool.isEmpty()) return ranked.first().first
         val index = ((state.year * 12 + state.month + totalRisk + state.routeScores.values.sum()) % pool.size).coerceAtLeast(0)
         return pool[index]
     }
@@ -105,6 +103,215 @@ object V3EventEngine {
         if (state.month == 12) return true
         return false
     }
+
+    private fun eventFitScore(event: V3ActiveEvent, state: V3GameState, totalRisk: Int): Int {
+        if (!eventMatchesState(event, state)) return 0
+        var score = 8
+        val title = event.title
+        val body = event.body
+        val bestRoute = state.routeScores.maxByOrNull { it.value }?.key
+        val peopleCount = V3GameEngine.alivePeople(state).size
+        val builtSites = V3GameEngine.builtSiteCount(state)
+        val estateLevel = V3GameEngine.estateLevelTotal(state)
+        val controlledRegions = V3GameEngine.controlledRegionCount(state)
+        val highRiskSites = state.sites.filter { it.risk >= 45 }.map { it.id }.toSet()
+        val lowControlSites = state.sites.filter { it.control < 35 }.map { it.id }.toSet()
+
+        event.choices.forEach { choice ->
+            if (choice.route == bestRoute) score += 11
+            if ((state.routeScores[choice.route] ?: 0) >= 35) score += 6
+            if (choice.siteId != null && choice.siteId in highRiskSites) score += 14
+            if (choice.siteId != null && choice.siteId in lowControlSites) score += 8
+            if (choice.siteId != null && state.sites.firstOrNull { it.id == choice.siteId }?.level == 0) score += 4
+            if (choice.branchImpacts.isNotEmpty() && state.branches.any { it.grievance >= 30 }) score += 8
+            if (choice.personId != null && peopleCount >= 3) score += 7
+        }
+
+        if (state.crisis == "官府催税" && anyText(title, body, "县", "衙", "税", "饷", "徭")) score += 18
+        if (state.crisis == "流寇逼近" && anyText(title, body, "山", "寇", "寨", "勇", "兵")) score += 18
+        if (state.crisis == "饥荒将至" && anyText(title, body, "粮", "田", "民", "仓", "荒")) score += 18
+        if (state.crisis == "族产争端" && anyText(title, body, "房", "祠", "账", "谱", "族")) score += 18
+        if (state.crisis == "商路断绝" && anyText(title, body, "商", "市", "码头", "船", "货")) score += 18
+        if (state.crisis == "瘟疫初起" && anyText(title, body, "医", "药", "疫", "病")) score += 18
+
+        if (state.year >= 1619 && anyText(title, body, "辽", "勤王", "军", "饷")) score += 12
+        if (state.year >= 1628 && anyText(title, body, "崇祯", "流民", "饥", "税", "灾")) score += 12
+        if (state.year >= 1636 && anyText(title, body, "关外", "清军", "寨", "海", "割据")) score += 12
+        if (state.year >= 1642 && anyText(title, body, "甲申", "天下", "城", "南迁", "勤王")) score += 14
+
+        if (peopleCount <= 2 && anyText(title, body, "婚", "添丁", "子", "嗣", "族谱")) score += 16
+        if (peopleCount >= 6 && anyText(title, body, "房", "分粮", "私塾", "席位", "族规")) score += 12
+        if (builtSites <= 1 && anyText(title, body, "田", "铺", "仓", "田契", "集市")) score += 12
+        if (builtSites >= 4 && anyText(title, body, "总号", "审计", "扩铺", "合股", "商号")) score += 12
+        if (estateLevel >= 5 && anyText(title, body, "家产", "账", "分润", "祠产", "铺")) score += 11
+        if (state.militia >= 80 && anyText(title, body, "乡勇", "寨", "兵", "军械", "点验")) score += 12
+        if (state.silver < 80 && anyText(title, body, "借", "账", "税", "商", "银")) score += 12
+        if (state.grain < 140 && anyText(title, body, "粮", "仓", "荒", "民", "赈")) score += 12
+        if (totalRisk >= 280 && anyText(title, body, "风险", "盗", "寇", "疫", "戒严", "塌方")) score += 10
+        if (controlledRegions >= 2 && anyText(title, body, "府", "省", "会盟", "天下", "军议")) score += 14
+        if (state.unificationProgress >= 45 && anyText(title, body, "统一", "京畿", "城门", "盟主", "勤王")) score += 16
+        return score
+    }
+
+    private fun anyText(title: String, body: String, vararg words: String): Boolean = words.any { title.contains(it) || body.contains(it) }
+
+    private fun dynamicProgressEvents(state: V3GameState, totalRisk: Int): List<V3ActiveEvent> {
+        val events = mutableListOf<V3ActiveEvent>()
+        events += dynamicResourceEvents(state)
+        events += dynamicSiteEvents(state)
+        events += dynamicClanEvents(state)
+        events += dynamicRouteEvents(state)
+        events += dynamicWorldEvents(state)
+        events += dynamicEraEvents(state, totalRisk)
+        return events.filter { state.eventLog.take(10).none { log -> log.contains(it.title) } }
+    }
+
+    private fun dynamicResourceEvents(state: V3GameState): List<V3ActiveEvent> {
+        val events = mutableListOf<V3ActiveEvent>()
+        if (state.silver < 80) events += V3ActiveEvent("银库见底", "账房报称银库将空，婚配、修产、打点县衙都可能停滞。商支建议借贷，族老主张缩支。", listOf(
+            V3EventChoice("向商帮借银", "立刻补银，但商帮影响扩大。", silverDelta = 120, merchantsDelta = 8, cohesionDelta = -2, route = V3Route.Merchant, routeDelta = 7),
+            V3EventChoice("削减用度", "凝聚略伤，保住自主。", silverDelta = 45, cohesionDelta = -3, route = V3Route.Hermit, routeDelta = 5)
+        ))
+        if (state.grain < 140) events += V3ActiveEvent("粮仓告急", "粮仓余粮不足，佃户与族人都在看宗祠如何分配口粮。", listOf(
+            V3EventChoice("开仓均粜", "粮更少，但民心与凝聚上升。", grainDelta = -35, villagersDelta = 10, cohesionDelta = 5, route = V3Route.Hermit, routeDelta = 6),
+            V3EventChoice("高价购粮", "用银换粮。", silverDelta = -70, grainDelta = 120, merchantsDelta = 4, route = V3Route.Merchant, routeDelta = 5)
+        ))
+        if (state.silver > 700) events += V3ActiveEvent("巨银入库", "族中银两充盈，诸房都盯着这笔钱：修祠、买田、扩铺、练勇，各有主张。", listOf(
+            V3EventChoice("扩买族田", "粮食根基增强。", silverDelta = -180, grainDelta = 130, cohesionDelta = 4, route = V3Route.Hermit, routeDelta = 6),
+            V3EventChoice("投向商号", "商业路线推进。", silverDelta = -140, merchantsDelta = 10, influenceDelta = 5, route = V3Route.Merchant, routeDelta = 8)
+        ))
+        if (state.grain > 900) events += V3ActiveEvent("积谷成仓", "粮仓充盈，邻村与县衙都想借李氏粮力。", listOf(
+            V3EventChoice("赈济邻里", "民心与声望提升。", grainDelta = -160, villagersDelta = 14, influenceDelta = 7, route = V3Route.Hermit, routeDelta = 6),
+            V3EventChoice("换取兵械", "以粮换军备。", grainDelta = -150, militiaDelta = 25, garrisonDelta = 5, route = V3Route.Fortress, routeDelta = 8)
+        ))
+        return events
+    }
+
+    private fun dynamicSiteEvents(state: V3GameState): List<V3ActiveEvent> {
+        val events = mutableListOf<V3ActiveEvent>()
+        state.sites.filter { it.risk >= 55 }.forEach { site ->
+            events += V3ActiveEvent("${site.name}危局", "${site.name}风险已高，地方传言、差役盘剥、流寇窥伺都可能由此爆发。", listOf(
+                V3EventChoice("派人整顿", "压低风险，花费银粮。", silverDelta = -28, grainDelta = -12, siteId = site.id, siteControlDelta = 7, siteRiskDelta = -18, route = routeForSite(site.id), routeDelta = 7),
+                V3EventChoice("借势立威", "控制上升，但关系更紧。", influenceDelta = 4, siteId = site.id, siteControlDelta = 12, siteRiskDelta = 4, route = V3Route.Warlord, routeDelta = 7)
+            ))
+        }
+        state.sites.filter { it.control < 28 }.forEach { site ->
+            events += V3ActiveEvent("${site.name}旁落", "${site.name}仍不在李氏掌握中，地方小吏、商帮或外族正填补空位。", listOf(
+                V3EventChoice("出资经营", "提高控制。", silverDelta = -42, siteId = site.id, siteControlDelta = 15, siteRiskDelta = -4, route = routeForSite(site.id), routeDelta = 6),
+                V3EventChoice("扶植本地人", "花费较少，推进较慢。", silverDelta = -18, villagersDelta = 4, siteId = site.id, siteControlDelta = 8, route = V3Route.Hermit, routeDelta = 4)
+            ))
+        }
+        state.sites.filter { it.level >= 2 && it.control >= 65 }.forEach { site ->
+            events += V3ActiveEvent("${site.name}成势", "${site.name}已成李氏根基，族人提议借此向外扩张影响。", listOf(
+                V3EventChoice("借势扩名", "声望上升。", silverDelta = -25, influenceDelta = 8, siteId = site.id, siteControlDelta = 4, route = routeForSite(site.id), routeDelta = 7),
+                V3EventChoice("厚积不张", "凝聚稳定，风险下降。", cohesionDelta = 4, siteId = site.id, siteRiskDelta = -8, route = V3Route.Hermit, routeDelta = 5)
+            ))
+        }
+        return events
+    }
+
+    private fun dynamicClanEvents(state: V3GameState): List<V3ActiveEvent> {
+        val events = mutableListOf<V3ActiveEvent>()
+        val people = V3GameEngine.alivePeople(state)
+        if (people.size <= 2) events += V3ActiveEvent("香火单薄", "族谱上人丁仍少，族老催促早定婚配与子嗣，否则家业虽起也无人承继。", listOf(
+            V3EventChoice("重礼求亲", "花费银粮，提升声望。", silverDelta = -55, grainDelta = -25, influenceDelta = 5, cohesionDelta = 3, route = V3Route.Hermit, routeDelta = 6),
+            V3EventChoice("先稳家产", "暂缓婚育，家业优先。", silverDelta = 25, cohesionDelta = -2, route = V3Route.Merchant, routeDelta = 4)
+        ))
+        if (people.size >= 6) events += V3ActiveEvent("人丁渐盛", "族人增多后，学业、婚配、分房、职司都要重新安排。", listOf(
+            V3EventChoice("分设房支职司", "凝聚和治理上升。", silverDelta = -25, cohesionDelta = 7, influenceDelta = 4, route = V3Route.Hermit, routeDelta = 7),
+            V3EventChoice("择优重点培养", "路线推进，但部分族人不满。", silverDelta = -35, cohesionDelta = -2, influenceDelta = 8, route = bestRoute(state), routeDelta = 8)
+        ))
+        state.branches.filter { it.grievance >= 30 }.forEach { branch ->
+            events += V3ActiveEvent("${branch.name}怨言", "${branch.name}近来怨气渐重，认为宗祠分配不公。若不处理，日后会牵动族产争端。", listOf(
+                V3EventChoice("开祠安抚", "消怨但耗资源。", silverDelta = -30, grainDelta = -20, cohesionDelta = 5, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact(branch.id, loyaltyDelta = 4, grievanceDelta = -10))),
+                V3EventChoice("以规压下", "主房权威上升，怨气未消。", influenceDelta = 4, cohesionDelta = -3, route = V3Route.Warlord, branchImpacts = listOf(V3BranchImpact(branch.id, grievanceDelta = 5), V3BranchImpact("main", influenceDelta = 3)))
+            ))
+        }
+        people.filter { it.fatigue >= 60 }.forEach { person ->
+            events += V3ActiveEvent("${person.name}积劳", "${person.name}连月奔走，疲惫已深。若继续压担，或伤身体与忠心。", listOf(
+                V3EventChoice("令其休养", "疲劳下降，进度放慢。", cohesionDelta = 2, personId = person.id, personFatigueDelta = -24, personLoyaltyDelta = 3, route = V3Route.Hermit, routeDelta = 4),
+                V3EventChoice("加派帮手", "花费银两保住进度。", silverDelta = -25, personId = person.id, personFatigueDelta = -10, personMeritDelta = 2, route = bestRoute(state), routeDelta = 5)
+            ))
+        }
+        return events
+    }
+
+    private fun dynamicRouteEvents(state: V3GameState): List<V3ActiveEvent> {
+        val route = bestRoute(state)
+        return when (route) {
+            V3Route.Scholar -> listOf(V3ActiveEvent("士林邀约", "李氏耕读名声渐起，邻县士林邀族人讲学。", listOf(
+                V3EventChoice("赴会讲学", "士绅与声望上升。", silverDelta = -35, gentryDelta = 10, influenceDelta = 7, route = V3Route.Scholar, routeDelta = 9),
+                V3EventChoice("闭门读书", "避开党争。", cohesionDelta = 4, yamenDelta = 2, route = V3Route.Hermit, routeDelta = 5)
+            )))
+            V3Route.Merchant -> listOf(V3ActiveEvent("商路分润", "商支声势日盛，商帮要求重新议定集市和码头分润。", listOf(
+                V3EventChoice("扩大合股", "银两与商帮关系提升。", silverDelta = 90, merchantsDelta = 9, cohesionDelta = -2, route = V3Route.Merchant, routeDelta = 9),
+                V3EventChoice("收回宗祠账权", "凝聚上升，商支不满。", influenceDelta = 5, merchantsDelta = -5, route = V3Route.Hermit, routeDelta = 5)
+            )))
+            V3Route.Fortress -> listOf(V3ActiveEvent("堡寨军议", "北山寨堡已成自保根基，邻村请求共立守望盟。", listOf(
+                V3EventChoice("共立守望", "乡勇与民心上升。", silverDelta = -45, grainDelta = -30, militiaDelta = 22, villagersDelta = 8, route = V3Route.Fortress, routeDelta = 10),
+                V3EventChoice("只守本族", "凝聚稳定，地方声望有限。", cohesionDelta = 5, villagersDelta = -2, route = V3Route.Hermit, routeDelta = 5)
+            )))
+            V3Route.Loyalist -> listOf(V3ActiveEvent("勤王名帖", "军镇与县衙联名送帖，希望李氏输粮募勇入册。", listOf(
+                V3EventChoice("入册勤王", "勤王路线推进。", grainDelta = -80, militiaDelta = 15, yamenDelta = 10, garrisonDelta = 10, route = V3Route.Loyalist, routeDelta = 10),
+                V3EventChoice("只献粮草", "少涉兵事。", grainDelta = -45, yamenDelta = 5, route = V3Route.Hermit, routeDelta = 5)
+            )))
+            V3Route.Warlord -> listOf(V3ActiveEvent("地方推戴", "县中小族见官府式微，私下请李氏主持城防与粮价。", listOf(
+                V3EventChoice("接掌城防", "割据路线推进，官府关系下降。", silverDelta = -55, militiaDelta = 28, yamenDelta = -12, influenceDelta = 10, route = V3Route.Warlord, routeDelta = 12),
+                V3EventChoice("仍尊县印", "保留名义秩序。", yamenDelta = 8, cohesionDelta = 4, route = V3Route.Loyalist, routeDelta = 6)
+            )))
+            V3Route.Overseas -> listOf(V3ActiveEvent("海路暗约", "码头商人愿替李氏安排南洋船位，但索价极高。", listOf(
+                V3EventChoice("预订船位", "海外路线推进。", silverDelta = -120, merchantsDelta = 10, route = V3Route.Overseas, routeDelta = 12),
+                V3EventChoice("只走货不迁人", "商利提升，风险较低。", silverDelta = 55, merchantsDelta = 5, route = V3Route.Merchant, routeDelta = 5)
+            )))
+            V3Route.Hermit -> listOf(V3ActiveEvent("闭乡族约", "族老提议重申闭乡、屯粮、禁奢、互保四约。", listOf(
+                V3EventChoice("颁行族约", "凝聚与粮食安全提升。", grainDelta = 35, cohesionDelta = 9, villagersDelta = 5, route = V3Route.Hermit, routeDelta = 9),
+                V3EventChoice("从宽执行", "各房自在，凝聚提升较少。", cohesionDelta = 3, route = V3Route.Hermit, routeDelta = 4)
+            )))
+        }
+    }
+
+    private fun dynamicWorldEvents(state: V3GameState): List<V3ActiveEvent> {
+        val events = mutableListOf<V3ActiveEvent>()
+        state.worldRegions.filter { it.status == V3RegionStatus.Contacted || it.status == V3RegionStatus.Influenced }.forEach { region ->
+            events += V3ActiveEvent("${region.name}来使", "${region.name}已有李氏声望，对方遣人来谈粮、兵、商路与归附条件。", listOf(
+                V3EventChoice("厚礼结交", "提升天下路线声望。", silverDelta = -80, influenceDelta = 8, merchantsDelta = 4, route = V3Route.Merchant, routeDelta = 7),
+                V3EventChoice("示以兵威", "割据和统一路线推进。", grainDelta = -40, militiaDelta = 18, influenceDelta = 6, route = V3Route.Warlord, routeDelta = 9)
+            ))
+        }
+        if (V3GameEngine.controlledRegionCount(state) >= 2) events += V3ActiveEvent("跨府声势", "李氏已不止一县之族，府县士绅开始权衡是否依附。", listOf(
+            V3EventChoice("设跨府公议", "声望与士绅关系上升。", silverDelta = -90, gentryDelta = 12, influenceDelta = 12, route = V3Route.Scholar, routeDelta = 10),
+            V3EventChoice("立盟主旗号", "统一路线推进。", silverDelta = -70, grainDelta = -50, militiaDelta = 30, influenceDelta = 10, route = V3Route.Warlord, routeDelta = 12)
+        ))
+        return events
+    }
+
+    private fun dynamicEraEvents(state: V3GameState, totalRisk: Int): List<V3ActiveEvent> {
+        val events = mutableListOf<V3ActiveEvent>()
+        if (state.year >= 1619) events += V3ActiveEvent("辽饷阴影", "辽东战事之后，县中催饷越来越急。李氏的粮银账本难再只为族内服务。", listOf(
+            V3EventChoice("先输小饷", "官府关系提升。", silverDelta = -45, grainDelta = -25, yamenDelta = 8, route = V3Route.Loyalist, routeDelta = 7),
+            V3EventChoice("称灾缓缴", "保住资源，官府不满。", grainDelta = -10, yamenDelta = -8, villagersDelta = 5, route = V3Route.Hermit, routeDelta = 5)
+        ))
+        if (state.year >= 1628) events += V3ActiveEvent("崇祯催科", "新政要清积弊，地方催科反而更急。差役到村，乡民怨声载道。", listOf(
+            V3EventChoice("代民出银", "民心上升，银两下降。", silverDelta = -75, villagersDelta = 12, yamenDelta = 3, route = V3Route.Hermit, routeDelta = 7),
+            V3EventChoice("严按户籍", "官府满意，民心下降。", yamenDelta = 10, villagersDelta = -8, influenceDelta = 3, route = V3Route.Loyalist, routeDelta = 7)
+        ))
+        if (state.year >= 1636 || totalRisk >= 360) events += V3ActiveEvent("乱世逼近", "关外、流寇、饥荒与苛派一齐压来，县中人人都在问李氏到底站哪边。", listOf(
+            V3EventChoice("扩寨练勇", "武备和割据路线推进。", silverDelta = -60, grainDelta = -45, militiaDelta = 30, route = V3Route.Warlord, routeDelta = 12),
+            V3EventChoice("修谱保族", "保族路线推进。", grainDelta = -25, cohesionDelta = 10, route = V3Route.Hermit, routeDelta = 9)
+        ))
+        return events
+    }
+
+    private fun routeForSite(siteId: String): V3Route = when (siteId) {
+        "academy" -> V3Route.Scholar
+        "market" -> V3Route.Merchant
+        "dock" -> V3Route.Overseas
+        "fort", "mountain_pass" -> V3Route.Fortress
+        "yamen" -> V3Route.Loyalist
+        else -> V3Route.Hermit
+    }
+
+    private fun bestRoute(state: V3GameState): V3Route = state.routeScores.maxByOrNull { it.value }?.key ?: V3Route.Hermit
 
     private fun historicalEvent(state: V3GameState): V3ActiveEvent? {
         val key = state.year to state.month

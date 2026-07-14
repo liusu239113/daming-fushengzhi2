@@ -473,5 +473,80 @@ object V3EventContent {
         ))
     )
 
-    val allEvents = siteEvents + advancedSiteEvents + personEvents + advancedPersonEvents + branchEvents + strategyEvents + advancedStrategyEvents + routeEvents + crisisRouteEvents
+    val progressEvents = listOf(
+        V3ActiveEvent("初立家门", "开局未久，邻里仍把李氏看作一户小家。若此时不立规矩，后续产业、人丁、婚配都会散乱。", listOf(
+            V3EventChoice("立家规三条", "凝聚提升，主房立威。", cohesionDelta = 6, influenceDelta = 2, route = V3Route.Hermit),
+            V3EventChoice("先求温饱", "获得粮食，暂缓立规。", grainDelta = 45, cohesionDelta = -1, route = V3Route.Hermit)
+        )),
+        V3ActiveEvent("媒人探门", "媒人到祠前打听李氏家底。若礼数周全，可为成家开路；若敷衍，婚事会迟。", listOf(
+            V3EventChoice("备礼迎媒", "声望与婚配机会提升。", silverDelta = -35, grainDelta = -15, influenceDelta = 4, route = V3Route.Hermit),
+            V3EventChoice("只问家世", "节省礼金，但显得寒酸。", silverDelta = -8, influenceDelta = -1, route = V3Route.Hermit)
+        )),
+        V3ActiveEvent("添丁议名", "新生儿或族中幼童渐多，族老请按辈分排字，以免日后谱牒混乱。", listOf(
+            V3EventChoice("定下字辈", "族谱秩序提升。", silverDelta = -12, cohesionDelta = 6, influenceDelta = 2, route = V3Route.Hermit),
+            V3EventChoice("各房自定", "省事但埋下分房隐患。", cohesionDelta = -3, route = V3Route.Hermit)
+        )),
+        V3ActiveEvent("童蒙入塾", "族中孩童到了启蒙年纪，书香支建议请塾师，商支认为先学算盘更实用。", listOf(
+            V3EventChoice("请塾师启蒙", "耕读路线推进。", silverDelta = -42, gentryDelta = 4, influenceDelta = 3, route = V3Route.Scholar, routeDelta = 8),
+            V3EventChoice("先学账房", "商业路线推进。", silverDelta = -24, merchantsDelta = 5, route = V3Route.Merchant, routeDelta = 7)
+        )),
+        V3ActiveEvent("第一处铺面", "集市有小铺转让，若买下可补银入账；若错过，商路仍弱。", listOf(
+            V3EventChoice("买下铺面", "商业根基提升。", silverDelta = -85, merchantsDelta = 8, siteId = "market", siteControlDelta = 9, route = V3Route.Merchant, routeDelta = 8),
+            V3EventChoice("租摊试水", "花费较少，推进有限。", silverDelta = -25, merchantsDelta = 3, siteId = "market", siteControlDelta = 4, route = V3Route.Merchant)
+        )),
+        V3ActiveEvent("粮仓扩建", "田庄已有余粮，族老提议扩建粮仓，以备灾荒和兵乱。", listOf(
+            V3EventChoice("扩建粮仓", "粮食安全提升。", silverDelta = -70, grainDelta = -30, cohesionDelta = 4, siteId = "farmland", siteRiskDelta = -10, route = V3Route.Hermit, routeDelta = 7),
+            V3EventChoice("卖粮换银", "银两增加，抗灾下降。", silverDelta = 95, grainDelta = -120, merchantsDelta = 4, route = V3Route.Merchant, routeDelta = 6)
+        )),
+        V3ActiveEvent("族产成局", "田、铺、仓渐成体系，各房开始关心账权归谁。", listOf(
+            V3EventChoice("宗祠统账", "凝聚和主房权威上升。", silverDelta = -20, cohesionDelta = 6, influenceDelta = 4, route = V3Route.Hermit),
+            V3EventChoice("各房分账", "效率提高，凝聚下降。", silverDelta = 70, cohesionDelta = -4, route = V3Route.Merchant, branchImpacts = listOf(V3BranchImpact("merchant", wealthDelta = 5, influenceDelta = 3)))
+        )),
+        V3ActiveEvent("产业雇工", "产业渐多，族人不够用，需要雇外姓工匠和佃户。", listOf(
+            V3EventChoice("按契雇工", "产业运转更稳。", silverDelta = -45, villagersDelta = 5, siteId = "market", siteControlDelta = 5, route = V3Route.Merchant),
+            V3EventChoice("只用族人", "凝聚提升但扩张变慢。", cohesionDelta = 4, silverDelta = -10, route = V3Route.Hermit)
+        )),
+        V3ActiveEvent("宗祠大修", "族望渐起后，旧祠显得寒酸。修祠可聚族，也会消耗大量银粮。", listOf(
+            V3EventChoice("大修宗祠", "凝聚与声望提升。", silverDelta = -120, grainDelta = -40, cohesionDelta = 10, influenceDelta = 8, siteId = "shrine", siteControlDelta = 10, route = V3Route.Hermit, routeDelta = 8),
+            V3EventChoice("小修门面", "少花资源。", silverDelta = -35, cohesionDelta = 3, siteId = "shrine", siteControlDelta = 4, route = V3Route.Hermit)
+        )),
+        V3ActiveEvent("家丁成队", "乡勇已有规模，武支建议编为常备家丁，书香支担心犯忌。", listOf(
+            V3EventChoice("编练家丁", "武备提升，官府猜忌。", silverDelta = -75, grainDelta = -45, militiaDelta = 28, yamenDelta = -8, route = V3Route.Warlord, routeDelta = 10),
+            V3EventChoice("报备乡勇", "官府关系稳定。", silverDelta = -35, militiaDelta = 10, yamenDelta = 7, route = V3Route.Loyalist, routeDelta = 7)
+        )),
+        V3ActiveEvent("县中称族", "李氏人口、产业、声望已非小户，县中开始称其为一族。", listOf(
+            V3EventChoice("设族长议事", "宗族治理提升。", silverDelta = -45, cohesionDelta = 8, influenceDelta = 6, route = V3Route.Hermit, routeDelta = 8),
+            V3EventChoice("广交地方", "对外声望提升。", silverDelta = -65, gentryDelta = 7, merchantsDelta = 5, influenceDelta = 7, route = V3Route.Scholar, routeDelta = 7)
+        )),
+        V3ActiveEvent("府城来帖", "李氏名声传至府城，有人请你参与府城粮价与治安公议。", listOf(
+            V3EventChoice("赴府公议", "府城影响力上升。", silverDelta = -80, influenceDelta = 10, gentryDelta = 8, route = V3Route.Scholar, routeDelta = 9),
+            V3EventChoice("遣商支探路", "商路与府城关系推进。", silverDelta = -55, merchantsDelta = 9, influenceDelta = 5, route = V3Route.Merchant, routeDelta = 8)
+        )),
+        V3ActiveEvent("跨县置产", "邻县有人愿低价出让田铺，但当地宗族未必服李氏。", listOf(
+            V3EventChoice("买田入县", "跨县根基提升。", silverDelta = -150, grainDelta = 80, influenceDelta = 8, route = V3Route.Merchant, routeDelta = 8),
+            V3EventChoice("先结乡绅", "稳妥扩张。", silverDelta = -70, gentryDelta = 9, influenceDelta = 6, route = V3Route.Scholar, routeDelta = 7)
+        )),
+        V3ActiveEvent("府县会防", "流寇逼近，府县豪族议定共同守望。李氏若参加，便不再只是本县宗族。", listOf(
+            V3EventChoice("出勇会防", "武备和跨县声望提升。", grainDelta = -65, militiaDelta = 22, influenceDelta = 9, route = V3Route.Fortress, routeDelta = 9),
+            V3EventChoice("出粮不出人", "保住族人，声望有限。", grainDelta = -90, yamenDelta = 5, route = V3Route.Loyalist, routeDelta = 6)
+        )),
+        V3ActiveEvent("省城商约", "省城大商号愿与李氏合约，要求稳定供粮和码头份额。", listOf(
+            V3EventChoice("签省城商约", "商业路线大进。", silverDelta = 160, grainDelta = -80, merchantsDelta = 12, route = V3Route.Merchant, routeDelta = 12),
+            V3EventChoice("保留本县份额", "较稳但错失扩张。", silverDelta = 45, cohesionDelta = 3, route = V3Route.Hermit)
+        )),
+        V3ActiveEvent("一方豪强", "李氏已能左右府县粮价和治安，小族前来投靠，大族暗中试探。", listOf(
+            V3EventChoice("收纳附族", "人口与声望提升，治理压力增加。", grainDelta = -80, cohesionDelta = -2, influenceDelta = 14, route = V3Route.Warlord, routeDelta = 12),
+            V3EventChoice("结盟不并族", "风险较低，声望提升。", silverDelta = -60, influenceDelta = 8, gentryDelta = 6, route = V3Route.Scholar, routeDelta = 8)
+        )),
+        V3ActiveEvent("京畿风声", "京畿动荡传来，士绅问李氏是否仍奉朝廷，武支则言应自立旗号。", listOf(
+            V3EventChoice("奉明勤王", "勤王路线大进。", silverDelta = -120, grainDelta = -120, militiaDelta = 35, yamenDelta = 12, garrisonDelta = 14, route = V3Route.Loyalist, routeDelta = 16),
+            V3EventChoice("自保待变", "割据路线推进。", silverDelta = -70, grainDelta = -70, militiaDelta = 45, influenceDelta = 12, route = V3Route.Warlord, routeDelta = 16)
+        )),
+        V3ActiveEvent("天下邀盟", "各地豪族、商帮、军镇都在寻找可依附的新秩序，李氏已被推上牌桌。", listOf(
+            V3EventChoice("立天下盟约", "统一路线推进。", silverDelta = -180, grainDelta = -160, militiaDelta = 60, influenceDelta = 18, route = V3Route.Warlord, routeDelta = 18),
+            V3EventChoice("以商粮控局", "商业和统一路线并进。", silverDelta = -100, grainDelta = -220, merchantsDelta = 14, influenceDelta = 14, route = V3Route.Merchant, routeDelta = 14)
+        ))
+    )
+
+    val allEvents = siteEvents + advancedSiteEvents + personEvents + advancedPersonEvents + branchEvents + strategyEvents + advancedStrategyEvents + routeEvents + crisisRouteEvents + progressEvents
 }
