@@ -11,13 +11,17 @@ import java.io.File
 
 class GameAudio(context: Context) {
     private val appContext = context.applicationContext
-    private val audioAttributes = AudioAttributes.Builder()
+    private val bgmAudioAttributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_GAME)
         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
         .build()
+    private val sfxAudioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_GAME)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
     private val soundPool = SoundPool.Builder()
         .setMaxStreams(8)
-        .setAudioAttributes(audioAttributes)
+        .setAudioAttributes(sfxAudioAttributes)
         .build()
     private val sfxIds = mutableMapOf<SfxKey, Int>()
     private val prefs = appContext.getSharedPreferences("game_audio", Context.MODE_PRIVATE)
@@ -54,7 +58,7 @@ class GameAudio(context: Context) {
         val player = MediaPlayer()
         runCatching {
             player.setDataSource(materialize(path).absolutePath)
-            player.setAudioAttributes(audioAttributes)
+            player.setAudioAttributes(bgmAudioAttributes)
             player.isLooping = true
             player.setVolume(bgmVolume, bgmVolume)
             player.prepare()

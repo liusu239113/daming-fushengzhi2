@@ -133,9 +133,10 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         }
     }
     val state = controller.state
+    var confirmBackToMenu by remember { mutableStateOf(false) }
     V3Background {
         Column(Modifier.fillMaxSize()) {
-            V3TopBar(state, controller, onBackToMenu)
+            V3TopBar(state, controller, onRequestBackToMenu = { confirmBackToMenu = true })
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(10.dp).widthIn(max = 760.dp).align(Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -172,7 +173,17 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         }
     }
     if (controller.settingsVisible) {
-        V3SettingsDialog(controller = controller, fontPreference = fontPreference, onBackToMenu = onBackToMenu)
+        V3SettingsDialog(controller = controller, fontPreference = fontPreference, onRequestBackToMenu = { confirmBackToMenu = true })
+    }
+    if (confirmBackToMenu) {
+        V3ConfirmBackToMenuDialog(
+            onConfirm = {
+                confirmBackToMenu = false
+                controller.closeSettings()
+                onBackToMenu()
+            },
+            onCancel = { confirmBackToMenu = false }
+        )
     }
     controller.state.examSession?.let { session ->
         V3ExamDialog(session = session, controller = controller)
@@ -702,7 +713,7 @@ private fun V3EndingPage(ending: V3FinalEnding, controller: V3GameController, on
 }
 
 @Composable
-private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToMenu: () -> Unit) {
+private fun V3TopBar(state: V3GameState, controller: V3GameController, onRequestBackToMenu: () -> Unit) {
     Column(Modifier.fillMaxWidth().background(Color(0xEE1F1712)).padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
@@ -711,7 +722,7 @@ private fun V3TopBar(state: V3GameState, controller: V3GameController, onBackToM
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 V3SmallButton("设置", Modifier.width(66.dp)) { controller.openSettings() }
-                V3SmallButton("菜单", Modifier.width(66.dp)) { onBackToMenu() }
+                V3SmallButton("菜单", Modifier.width(66.dp)) { onRequestBackToMenu() }
             }
         }
         V3TimeControls(controller)
@@ -972,7 +983,7 @@ private fun V3ConquestDialog(target: String, enemyPower: Int, scale: String, con
 }
 
 @Composable
-private fun V3SettingsDialog(controller: V3GameController, fontPreference: FontPreference, onBackToMenu: () -> Unit) {
+private fun V3SettingsDialog(controller: V3GameController, fontPreference: FontPreference, onRequestBackToMenu: () -> Unit) {
     Dialog(onDismissRequest = controller::closeSettings) {
         V3ImagePanel(GameImages.V3UiSettingsScroll, Modifier.widthIn(max = 460.dp)) {
             Text("游戏设置", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -994,10 +1005,23 @@ private fun V3SettingsDialog(controller: V3GameController, fontPreference: FontP
             V3VolumeRow("音效", controller.sfxVolume, controller::updateSfxVolume)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 V3SmallButton("返回主菜单", Modifier.weight(1f)) {
-                    controller.closeSettings()
-                    onBackToMenu()
+                    onRequestBackToMenu()
                 }
                 V3SmallButton("关闭", Modifier.weight(1f), selected = true) { controller.closeSettings() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V3ConfirmBackToMenuDialog(onConfirm: () -> Unit, onCancel: () -> Unit) {
+    Dialog(onDismissRequest = onCancel) {
+        V3ImagePanel(GameImages.V3UiSettingsScroll, Modifier.widthIn(max = 430.dp)) {
+            Text("返回主菜单？", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("当前宗族进度已自动存档。返回主菜单会中断当前查看流程，但不会删除存档。", color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                V3SmallButton("继续游戏", Modifier.weight(1f), selected = true, onClick = onCancel)
+                V3SmallButton("返回菜单", Modifier.weight(1f), onClick = onConfirm)
             }
         }
     }
