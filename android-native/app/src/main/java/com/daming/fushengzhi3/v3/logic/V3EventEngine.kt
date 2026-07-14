@@ -568,7 +568,50 @@ object V3EventEngine {
         val siteOk = event.choices.all { choice -> choice.siteId == null || state.sites.any { it.id == choice.siteId } }
         val branchIds = state.branches.map { it.id }.toSet()
         val branchOk = event.choices.flatMap { it.branchImpacts }.all { impact -> impact.branchId == "main" || impact.branchId in branchIds }
-        return personOk && siteOk && branchOk
+        return personOk && siteOk && branchOk && eventTimeMatches(event, state) && eventProgressMatches(event, state)
+    }
+
+    private fun eventTimeMatches(event: V3ActiveEvent, state: V3GameState): Boolean {
+        val title = event.title
+        val monthWords = mapOf(
+            1 to listOf("正月"),
+            2 to listOf("二月"),
+            3 to listOf("三月", "清明"),
+            4 to listOf("四月"),
+            5 to listOf("五月", "端午"),
+            6 to listOf("六月"),
+            7 to listOf("七月", "鬼节"),
+            8 to listOf("八月", "秋税", "商会"),
+            9 to listOf("九月", "重阳"),
+            10 to listOf("十月"),
+            11 to listOf("冬月"),
+            12 to listOf("腊月")
+        )
+        val allMonthWords = monthWords.values.flatten()
+        if (allMonthWords.any { title.contains(it) }) {
+            return monthWords[state.month].orEmpty().any { title.contains(it) }
+        }
+        if (title.contains("万历末") && state.year > 1620) return false
+        if (title.contains("天启") && state.year !in 1621..1627) return false
+        if (title.contains("崇祯") && state.year < 1628) return false
+        if ((title.contains("关外") || title.contains("流寇转战")) && state.year < 1630) return false
+        if ((title.contains("甲申") || title.contains("南迁")) && state.year < 1640) return false
+        return true
+    }
+
+    private fun eventProgressMatches(event: V3ActiveEvent, state: V3GameState): Boolean {
+        val title = event.title
+        val builtSites = V3GameEngine.builtSiteCount(state)
+        val people = V3GameEngine.alivePeople(state).size
+        val controlledRegions = V3GameEngine.controlledRegionCount(state)
+        val routeScore = event.choices.maxOfOrNull { state.routeScores[it.route] ?: 0 } ?: 0
+        if ((title.contains("成局") || title.contains("声名") || title.contains("荐才") || title.contains("议纲") || title.contains("据点") || title.contains("分歧")) && routeScore < 18) return false
+        if ((title.contains("府城") || title.contains("跨县") || title.contains("省城")) && state.clanRank < 2) return false
+        if ((title.contains("一方豪强") || title.contains("京畿") || title.contains("天下")) && (state.clanRank < 3 || controlledRegions < 1)) return false
+        if ((title.contains("家丁成队") || title.contains("堡寨") || title.contains("练勇")) && state.militia < 35) return false
+        if ((title.contains("人丁") || title.contains("添役") || title.contains("分房")) && people < 3) return false
+        if ((title.contains("产业") || title.contains("商号") || title.contains("铺")) && builtSites < 1) return false
+        return true
     }
 
     private fun applyBranchImpacts(state: V3GameState, impacts: List<V3BranchImpact>) = if (impacts.isEmpty()) {

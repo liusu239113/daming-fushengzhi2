@@ -548,5 +548,164 @@ object V3EventContent {
         ))
     )
 
-    val allEvents = siteEvents + advancedSiteEvents + personEvents + advancedPersonEvents + branchEvents + strategyEvents + advancedStrategyEvents + routeEvents + crisisRouteEvents + progressEvents
+    private data class SeasonalEventSeed(
+        val titleA: String,
+        val bodyA: String,
+        val titleB: String,
+        val bodyB: String,
+        val siteId: String,
+        val route: V3Route
+    )
+
+    private val seasonalEventSeeds = listOf(
+        SeasonalEventSeed("正月开祠", "正月祠门重开，各房上香点名。族老提醒：新岁若没有章程，婚配、田租、用工都会各行其是。", "正月灯市", "县中灯市开张，商帮、士绅与差役都在街上看李氏如何露面。", "shrine", V3Route.Hermit),
+        SeasonalEventSeed("二月春耕", "二月水暖，南乡田庄要定佃约、修沟渠。若误了农时，全年粮仓都会受损。", "二月社约", "乡民请李氏出面重申春社旧约，约束盗砍、争水和偷牛。", "farmland", V3Route.Hermit),
+        SeasonalEventSeed("三月清明", "清明祭祖，各房都带着账本和怨气回祠。祭礼既是团聚，也是一次无声审计。", "三月讲会", "书院春讲开场，士子谈辽饷、田赋与宗法。李氏若参与，名声会更响。", "academy", V3Route.Scholar),
+        SeasonalEventSeed("四月插秧", "插秧时节，佃户缺人缺牛，田庄管事请求宗祠协调劳力。", "四月药市", "药材上市，医馆可趁价低备药，也可把银两留给营建。", "clinic", V3Route.Hermit),
+        SeasonalEventSeed("五月端午", "端午龙舟聚众，县衙担心借赛生乱，商帮却想借机招揽客货。", "五月巡堤", "梅雨将至，河堤和码头都要巡检；一旦决口，田庄与集市都会遭殃。", "dock", V3Route.Merchant),
+        SeasonalEventSeed("六月暑疫", "暑气蒸腾，医馆外咳喘者增多。若此时不备药，秋前恐成疫势。", "六月晒书", "书院晒书，旧卷中翻出族中先人批注，可借此兴学，也可能牵出旧案。", "academy", V3Route.Scholar),
+        SeasonalEventSeed("七月鬼节", "中元施食，流民与乞丐聚在祠外。二房主张施粥，商支担心开了口子。", "七月夜巡", "暑夜盗影频繁，北山寨堡请求加派夜巡和火把。", "fort", V3Route.Fortress),
+        SeasonalEventSeed("八月秋税", "秋粮将收，县衙已派书吏下乡估亩。田庄丰歉尚未定，税册先到。", "八月商会", "中秋前后商路最旺，西河集市请李氏定价、护货、平争。", "market", V3Route.Merchant),
+        SeasonalEventSeed("九月登高", "重阳登高，族中老人谈及避乱旧事，建议早备山中退路。", "九月练勇", "秋高马肥，武支请趁农闲操练乡勇，以防冬前盗起。", "mountain_pass", V3Route.Fortress),
+        SeasonalEventSeed("十月修仓", "霜降后粮仓入满，旧仓板缝、鼠患和账目都要清点。", "十月冬衣", "寒衣未备，佃户与乡勇都在等宗祠发放布棉。", "farmland", V3Route.Hermit),
+        SeasonalEventSeed("冬月封河", "河道将封，码头货物若不及时转运，银货都要压到来年。", "冬月县帖", "年关将近，县衙递来催科帖，措辞比往年更急。", "yamen", V3Route.Loyalist),
+        SeasonalEventSeed("腊月结账", "腊月封账，各房账册齐聚宗祠。谁多拿一分，谁少出一石，都可能成为来年隐患。", "腊月祭灶", "祭灶之后便是岁末，族人盼赏、佃户盼粮、乡勇盼饷。", "shrine", V3Route.Hermit)
+    )
+
+    val seasonalEvents = seasonalEventSeeds.flatMap { seed ->
+        listOf(
+            V3ActiveEvent(seed.titleA, seed.bodyA, listOf(
+                V3EventChoice("主动操持", "花费资源换取本季主动权。", silverDelta = -22, grainDelta = -12, cohesionDelta = 3, influenceDelta = 2, siteId = seed.siteId, siteControlDelta = 7, siteRiskDelta = -6, route = seed.route, routeDelta = 6),
+                V3EventChoice("节用观望", "少花资源，但只求不出乱子。", silverDelta = 10, cohesionDelta = 1, siteId = seed.siteId, siteControlDelta = 2, siteRiskDelta = 2, route = V3Route.Hermit, routeDelta = 3)
+            )),
+            V3ActiveEvent(seed.titleB, seed.bodyB, listOf(
+                V3EventChoice("借机扩名", "用银粮换声望与路线推进。", silverDelta = -30, grainDelta = -10, influenceDelta = 4, siteId = seed.siteId, siteControlDelta = 5, route = seed.route, routeDelta = 7),
+                V3EventChoice("只守家计", "保住家底，路线推进较慢。", grainDelta = 15, cohesionDelta = 2, siteId = seed.siteId, siteRiskDelta = -2, route = V3Route.Hermit, routeDelta = 3)
+            ))
+        )
+    }
+
+    private data class CountyManagementSeed(
+        val siteId: String,
+        val siteName: String,
+        val route: V3Route,
+        val pressure: String,
+        val ally: String
+    )
+
+    private val countyManagementSeeds = listOf(
+        CountyManagementSeed("shrine", "李氏宗祠", V3Route.Hermit, "谱牒、祭田与房支席位交缠", "族老"),
+        CountyManagementSeed("farmland", "南乡田庄", V3Route.Hermit, "佃约、水利与秋粮估产难以两全", "佃户"),
+        CountyManagementSeed("market", "西河集市", V3Route.Merchant, "货价、牙行与商帮分润不断起争", "商帮"),
+        CountyManagementSeed("yamen", "清河县衙", V3Route.Loyalist, "税册、徭役和差役勒索压到乡里", "书吏"),
+        CountyManagementSeed("academy", "东林书院", V3Route.Scholar, "讲会、束脩和党争清议暗流涌动", "士子"),
+        CountyManagementSeed("clinic", "仁心医馆", V3Route.Hermit, "药材、病患和义诊开支日日紧逼", "郎中"),
+        CountyManagementSeed("fort", "北山寨堡", V3Route.Fortress, "墙垣、哨探和乡勇粮饷都要补足", "武支"),
+        CountyManagementSeed("dock", "三江码头", V3Route.Overseas, "船税、海货和巡查风声互相牵扯", "海商"),
+        CountyManagementSeed("mountain_pass", "黑松山道", V3Route.Warlord, "塌方、私盐、流寇斥候都从此处冒头", "山民")
+    )
+
+    val countyManagementEvents = countyManagementSeeds.flatMap { seed ->
+        listOf(
+            V3ActiveEvent("${seed.siteName}月课", "${seed.siteName}本月事务繁杂：${seed.pressure}。${seed.ally}请李氏尽快定下月课，否则人心易散。", listOf(
+                V3EventChoice("定月课", "地点秩序提升，路线更清楚。", silverDelta = -24, cohesionDelta = 2, siteId = seed.siteId, siteControlDelta = 9, siteRiskDelta = -5, route = seed.route, routeDelta = 6),
+                V3EventChoice("缓一月", "暂省开销，但地点风险上升。", silverDelta = 12, siteId = seed.siteId, siteRiskDelta = 6, route = V3Route.Hermit, routeDelta = 2)
+            )),
+            V3ActiveEvent("${seed.siteName}旧账", "${seed.siteName}翻出一笔旧账，牵涉${seed.ally}与宗祠用度。若公开查账，可能得罪人；若不查，隐患会留到后面。", listOf(
+                V3EventChoice("公开清账", "追回银粮，地点控制上升。", silverDelta = 38, grainDelta = 16, influenceDelta = 2, siteId = seed.siteId, siteControlDelta = 7, route = seed.route, routeDelta = 5),
+                V3EventChoice("私下抹平", "凝聚暂稳，少得收益。", silverDelta = -16, cohesionDelta = 4, siteId = seed.siteId, siteRiskDelta = -3, route = V3Route.Hermit, routeDelta = 3)
+            )),
+            V3ActiveEvent("${seed.siteName}添役", "${seed.siteName}要继续运转，必须添人添役。${seed.ally}愿出面帮忙，但要宗祠给出名分和口粮。", listOf(
+                V3EventChoice("添役办事", "花粮换效率。", grainDelta = -28, siteId = seed.siteId, siteControlDelta = 10, siteRiskDelta = -7, route = seed.route, routeDelta = 6),
+                V3EventChoice("仍用旧人", "省粮但效率有限。", cohesionDelta = 1, siteId = seed.siteId, siteControlDelta = 3, siteRiskDelta = 3, route = V3Route.Hermit, routeDelta = 2)
+            )),
+            V3ActiveEvent("${seed.siteName}外争", "外族或小吏开始插手${seed.siteName}，试探李氏底线。若退让，日后更难收回；若强硬，局势会紧。", listOf(
+                V3EventChoice("强硬收回", "控制大升，但风险也抬头。", influenceDelta = 4, siteId = seed.siteId, siteControlDelta = 14, siteRiskDelta = 5, route = V3Route.Warlord, routeDelta = 6),
+                V3EventChoice("请人调停", "稳妥降险。", silverDelta = -26, siteId = seed.siteId, siteControlDelta = 6, siteRiskDelta = -9, route = seed.route, routeDelta = 5)
+            ))
+        )
+    }
+
+    private data class RouteMilestoneSeed(
+        val route: V3Route,
+        val label: String,
+        val symbol: String,
+        val ally: String,
+        val costSite: String
+    )
+
+    private val routeMilestoneSeeds = listOf(
+        RouteMilestoneSeed(V3Route.Scholar, "耕读", "族学、科举与士林清名", "士绅", "academy"),
+        RouteMilestoneSeed(V3Route.Merchant, "商族", "铺面、商号与码头货路", "商帮", "market"),
+        RouteMilestoneSeed(V3Route.Fortress, "堡寨", "寨墙、乡勇与守望盟约", "乡民", "fort"),
+        RouteMilestoneSeed(V3Route.Loyalist, "勤王", "县衙、军镇与输饷名册", "军镇", "yamen"),
+        RouteMilestoneSeed(V3Route.Warlord, "割据", "城防、粮仓与地方兵权", "豪族", "mountain_pass"),
+        RouteMilestoneSeed(V3Route.Overseas, "海路", "码头、船位与南洋退路", "海商", "dock"),
+        RouteMilestoneSeed(V3Route.Hermit, "保族", "宗祠、粮仓与闭乡族约", "族老", "shrine")
+    )
+
+    val routeMilestoneEvents = routeMilestoneSeeds.flatMap { seed ->
+        listOf(
+            V3ActiveEvent("${seed.label}议纲", "${seed.ally}认为李氏已可把${seed.symbol}写入族中长期议纲。若定纲，路线会更稳；若不定，各房还会摇摆。", listOf(
+                V3EventChoice("写入议纲", "路线明确推进。", silverDelta = -36, influenceDelta = 5, siteId = seed.costSite, siteControlDelta = 5, route = seed.route, routeDelta = 10),
+                V3EventChoice("暂不定纲", "保持灵活，凝聚略升。", cohesionDelta = 3, route = V3Route.Hermit, routeDelta = 3)
+            )),
+            V3ActiveEvent("${seed.label}荐才", "有人推荐一批适合${seed.label}路线的人手。收下要花银粮，不收则错过扩张时机。", listOf(
+                V3EventChoice("收纳荐才", "路线人才入局。", silverDelta = -42, grainDelta = -22, influenceDelta = 4, route = seed.route, routeDelta = 9),
+                V3EventChoice("只留名册", "花费较少，推进有限。", silverDelta = -12, route = seed.route, routeDelta = 4)
+            )),
+            V3ActiveEvent("${seed.label}据点", "${seed.costSite}一带可成为${seed.label}路线据点。若集中投入，后续事件会更偏向此路。", listOf(
+                V3EventChoice("集中投入", "据点控制提高。", silverDelta = -58, grainDelta = -28, siteId = seed.costSite, siteControlDelta = 13, siteRiskDelta = -6, route = seed.route, routeDelta = 11),
+                V3EventChoice("分散投入", "稳健但不突出。", silverDelta = -24, cohesionDelta = 2, siteId = seed.costSite, siteControlDelta = 5, route = V3Route.Hermit, routeDelta = 4)
+            )),
+            V3ActiveEvent("${seed.label}声名", "外界已开始用${seed.label}二字评价李氏。此时若顺势造势，可快速抬高名望。", listOf(
+                V3EventChoice("顺势造势", "声望和路线大进。", silverDelta = -50, influenceDelta = 9, route = seed.route, routeDelta = 12),
+                V3EventChoice("低调蓄势", "少花银两，风险更低。", cohesionDelta = 4, route = V3Route.Hermit, routeDelta = 4)
+            )),
+            V3ActiveEvent("${seed.label}分歧", "族中有人质疑继续押注${seed.label}路线会拖累家业，要求回到田粮和香火本位。", listOf(
+                V3EventChoice("坚持此路", "路线更强，凝聚略损。", cohesionDelta = -2, influenceDelta = 4, route = seed.route, routeDelta = 12),
+                V3EventChoice("兼顾保族", "凝聚恢复，路线放缓。", grainDelta = -16, cohesionDelta = 6, route = V3Route.Hermit, routeDelta = 5)
+            )),
+            V3ActiveEvent("${seed.label}成局", "多年经营后，${seed.symbol}已不是口号，而是李氏真正的活路。下一步要决定是扩张还是守成。", listOf(
+                V3EventChoice("继续扩张", "路线终局伏笔增强。", silverDelta = -85, grainDelta = -45, influenceDelta = 10, route = seed.route, routeDelta = 16),
+                V3EventChoice("转入守成", "资源压力下降，保族路线增强。", grainDelta = 35, cohesionDelta = 7, route = V3Route.Hermit, routeDelta = 6)
+            ))
+        )
+    }
+
+    private data class EraEventSeed(
+        val title: String,
+        val body: String,
+        val routeA: V3Route,
+        val routeB: V3Route,
+        val siteId: String
+    )
+
+    private val eraEventSeeds = listOf(
+        EraEventSeed("万历末税册", "万历末年旧税未清，县衙拿着多年积欠催到宗祠。商路、田庄和族产都被翻上账面。", V3Route.Loyalist, V3Route.Scholar, "yamen"),
+        EraEventSeed("万历末矿税", "矿税余波仍在，差役借旧名目盘剥集市。李氏若不出面，商路会被一点点勒住。", V3Route.Merchant, V3Route.Hermit, "market"),
+        EraEventSeed("天启党议", "天启年间党争波及书院，讲会名单成了县中暗账。李氏的清名与安全难以两全。", V3Route.Scholar, V3Route.Hermit, "academy"),
+        EraEventSeed("天启工役", "魏阉余威下，地方工役名目繁多。县衙要人，军镇要粮，乡民要活路。", V3Route.Loyalist, V3Route.Fortress, "yamen"),
+        EraEventSeed("崇祯催科", "崇祯新政清弊，清到县里却变成更急的催科。差役上门，乡民哭诉，士绅观望。", V3Route.Loyalist, V3Route.Hermit, "farmland"),
+        EraEventSeed("崇祯灾荒", "连年灾荒让流民渐多，田庄外的求粮声一日比一日近。", V3Route.Hermit, V3Route.Fortress, "clinic"),
+        EraEventSeed("关外警讯", "关外消息越来越坏，军镇索饷索勇，县中豪族开始私筑寨堡。", V3Route.Loyalist, V3Route.Warlord, "fort"),
+        EraEventSeed("流寇转战", "流寇转战的风声传来，山道商旅骤减，米价却一日数变。", V3Route.Fortress, V3Route.Merchant, "mountain_pass"),
+        EraEventSeed("甲申前夜", "京畿震动的消息真假难辨，族人都在问：若朝廷真崩，李氏靠谁活？", V3Route.Warlord, V3Route.Hermit, "shrine"),
+        EraEventSeed("南迁风声", "有败兵与商旅南下，说江北不可久留。码头船价暴涨，海路支趁机请命。", V3Route.Overseas, V3Route.Merchant, "dock")
+    )
+
+    val eraPressureEvents = eraEventSeeds.flatMap { seed ->
+        listOf(
+            V3ActiveEvent(seed.title, seed.body, listOf(
+                V3EventChoice("顺势应对", "正面处理时代压力。", silverDelta = -48, grainDelta = -28, influenceDelta = 5, siteId = seed.siteId, siteControlDelta = 8, siteRiskDelta = -5, route = seed.routeA, routeDelta = 9),
+                V3EventChoice("保族缓冲", "减少冲击，转向守成。", grainDelta = -18, cohesionDelta = 5, siteId = seed.siteId, siteRiskDelta = -3, route = seed.routeB, routeDelta = 6)
+            )),
+            V3ActiveEvent("${seed.title}余波", "${seed.body} 此事虽暂歇，余波仍在县中发酵，各房都要求宗祠给出后续章程。", listOf(
+                V3EventChoice("定后续章程", "长期路线更清楚。", silverDelta = -30, cohesionDelta = 3, influenceDelta = 4, route = seed.routeA, routeDelta = 8),
+                V3EventChoice("只补眼前缺口", "资源压力较小。", silverDelta = -8, grainDelta = 18, route = V3Route.Hermit, routeDelta = 4)
+            ))
+        )
+    }
+
+    val allEvents = siteEvents + advancedSiteEvents + seasonalEvents + countyManagementEvents + personEvents + advancedPersonEvents + branchEvents + strategyEvents + advancedStrategyEvents + routeEvents + routeMilestoneEvents + crisisRouteEvents + eraPressureEvents + progressEvents
 }
