@@ -275,7 +275,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
         val shouldShowReport = showReport || report.nextState.month == 1 || report.lines.any { it.contains("目标达成") || it.contains("添丁") || it.contains("终局") || it.contains("岁末") }
         latestReport = if (shouldShowReport) report.copy(nextState = withEnding) else null
-        if (withEnding.activeEvent \!= null || latestReport \!= null) timeSpeed = 0
+        if (withEnding.activeEvent != null || latestReport != null) timeSpeed = 0
     }
 
     fun chooseEvent(choice: V3EventChoice) {
