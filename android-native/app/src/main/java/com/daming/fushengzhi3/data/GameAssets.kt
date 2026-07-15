@@ -5,8 +5,10 @@ object GameImages {
     const val V3MainLogo = "image/v3_main_logo.png"
     const val V3DossierBg = "image/v3_dossier_bg.png"
     const val V3CountyMap = "image/v3_county_map.png"
+    const val V3WorldMap = "image/v3_world_map_scroll.png"
+    const val V3GenealogyBg = "image/v3_genealogy_light_bg.png"
     const val V3Icon = "image/v3_icon.png"
-    const val V3MapBgPlain = V3CountyMap
+    const val V3MapBgPlain = "image/v3_map_bg_plain.png"
     const val V3IconSilver = "image/v3_icon_silver.png"
     const val V3IconGrain = "image/v3_icon_grain.png"
     const val V3IconPopulation = "image/v3_icon_population.png"
@@ -54,7 +56,11 @@ enum class SfxKey {
     V3PageTurn,
     V3SpecialAction,
     V3Success,
-    V3Failure
+    V3Failure,
+    V3ScrollOpen,
+    V3YearSummary,
+    V3Warning,
+    V3ResourceSettle
 }
 
 object GameAudioAssets {
@@ -63,17 +69,21 @@ object GameAudioAssets {
     )
 
     val sfx = mapOf(
-        SfxKey.UiClick to "audio/sfx/ui_click.ogg",
-        SfxKey.UiSelect to "audio/sfx/ui_select.ogg",
-        SfxKey.UiTabSwitch to "audio/sfx/ui_tab_switch.ogg",
-        SfxKey.MonthAdvance to "audio/sfx/month_advance.ogg",
+        SfxKey.UiClick to "audio/sfx/v3_woodblock_click.ogg",
+        SfxKey.UiSelect to "audio/sfx/v3_brush_select.ogg",
+        SfxKey.UiTabSwitch to "audio/sfx/v3_scroll_open.ogg",
+        SfxKey.MonthAdvance to "audio/sfx/v3_coin_grain_settle.ogg",
         SfxKey.V3Edict to "audio/sfx/v3_official_edict_stamp.ogg",
         SfxKey.V3Build to "audio/sfx/v3_county_build.ogg",
         SfxKey.V3Dispute to "audio/sfx/v3_branch_dispute.ogg",
         SfxKey.V3Finale to "audio/sfx/v3_final_chronicle.ogg",
         SfxKey.V3PageTurn to "audio/sfx/v3_page_turn_genealogy.ogg",
-        SfxKey.V3SpecialAction to "audio/sfx/v3_county_build.ogg",
-        SfxKey.V3Success to "audio/sfx/v3_official_edict_stamp.ogg",
-        SfxKey.V3Failure to "audio/sfx/v3_branch_dispute.ogg"
+        SfxKey.V3SpecialAction to "audio/sfx/v3_scroll_open.ogg",
+        SfxKey.V3Success to "audio/sfx/v3_year_summary_chime.ogg",
+        SfxKey.V3Failure to "audio/sfx/v3_warning_drum.ogg",
+        SfxKey.V3ScrollOpen to "audio/sfx/v3_scroll_open.ogg",
+        SfxKey.V3YearSummary to "audio/sfx/v3_year_summary_chime.ogg",
+        SfxKey.V3Warning to "audio/sfx/v3_warning_drum.ogg",
+        SfxKey.V3ResourceSettle to "audio/sfx/v3_coin_grain_settle.ogg"
     )
 }

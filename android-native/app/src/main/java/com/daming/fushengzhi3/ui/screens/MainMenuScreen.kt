@@ -35,14 +35,14 @@ import com.daming.fushengzhi3.ui.theme.FontPreference
 import com.daming.fushengzhi3.ui.theme.FontStyleKey
 import com.daming.fushengzhi3.v3.logic.V3GameController
 
-private val MenuBg = Color(0xFF0F0F23)
-private val MenuSurface = Color(0xFF1B1B3A)
-private val MenuSurface2 = Color(0xFF252550)
-private val MenuInk = Color(0xFFF3E7C7)
-private val MenuMuted = Color(0xFFAFA6C8)
-private val MenuGold = Color(0xFFE0B85A)
-private val MenuRed = Color(0xFFB9352B)
-private val MenuCyan = Color(0xFF21BDAE)
+private val MenuBg = Color(0xFFB98E59)
+private val MenuSurface = Color(0xFFF4E7C7)
+private val MenuSurface2 = Color(0xFFE6D2A4)
+private val MenuInk = Color(0xFF2B2016)
+private val MenuMuted = Color(0xFF6E5D46)
+private val MenuGold = Color(0xFF8A5A19)
+private val MenuRed = Color(0xFFA83224)
+private val MenuCyan = Color(0xFF426B67)
 
 @Composable
 fun MainMenuScreen(
@@ -55,7 +55,7 @@ fun MainMenuScreen(
 
     Box(Modifier.fillMaxSize().background(MenuBg)) {
         AssetImage(GameImages.V3MainMenuBg, null, Modifier.fillMaxSize(), ContentScale.Crop, alpha = 1f)
-        Box(Modifier.fillMaxSize().background(Color(0x9F0B0B18)))
+        Box(Modifier.fillMaxSize().background(Color(0x88F4E0B5)))
         Column(
             modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.9f).widthIn(max = 560.dp).padding(top = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -64,7 +64,11 @@ fun MainMenuScreen(
             AssetImage(GameImages.V3MainLogo, "大明浮生志3", Modifier.fillMaxWidth().height(156.dp), ContentScale.Fit)
             Text("一户起家 · 娶妻生子 · 经营宗族 · 举旗定鼎", color = MenuInk, fontSize = 16.sp, textAlign = TextAlign.Center)
             Spacer(Modifier.height(22.dp))
-            MenuButton("开始新局", "从一人一户重立族谱", primary = true, onClick = onNewGame)
+            MenuButton("开始新局", "从一人一户重立族谱", primary = true) {
+                v3Controller.pauseForPlayerAction()
+                v3Controller.pageTurn()
+                onNewGame()
+            }
             MenuButton(
                 "继续游戏",
                 if (v3Controller.hasSave()) "读取已有宗族案卷" else "暂无存档",

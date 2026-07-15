@@ -23,7 +23,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     var screen by mutableStateOf(V3Screen.County)
         private set
 
-    var timeSpeed by mutableStateOf(1)
+    var timeSpeed by mutableStateOf(0)
         private set
 
     var latestReport by mutableStateOf<V3MonthlyReport?>(null)
@@ -45,14 +45,15 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playBgm(BgmKey.V3County)
     }
 
-    fun newGame(root: String, county: String, creed: String, crisis: String) {
-        audio.click()
+    fun newGame(root: String, county: String, creed: String, crisis: String, clanName: String = "李氏宗族") {
+        audio.playSfx(SfxKey.V3ScrollOpen)
         ensureV3Bgm()
-        state = V3Content.newGame(root, county, creed, crisis)
+        state = V3Content.newGame(root, county, creed, crisis, clanName)
         saveStore.save(state)
         screen = V3Screen.County
+        timeSpeed = 0
         latestReport = null
-        message = "你从一户起家。先娶妻成家，再置产业、养子嗣、派族人经营，逐步把小户养成大族。"
+        message = "你从一户起家。先娶妻成家，再置产业、养子嗣、派族人经营。时间默认暂停，处理完家业后再点继续。"
     }
 
     fun hasSave(): Boolean = saveStore.hasSave()
@@ -81,6 +82,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         timeSpeed = if (timeSpeed == 0) 1 else 0
     }
 
+    fun pauseForPlayerAction() {
+        timeSpeed = 0
+    }
+
     fun shouldAutoTick(): Boolean =
         timeSpeed > 0 &&
             latestReport == null &&
@@ -98,6 +103,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun openSettings() {
         audio.click()
+        timeSpeed = 0
         settingsVisible = true
     }
 
@@ -257,24 +263,24 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     fun advanceMonth(showReport: Boolean = true) {
-        audio.monthTick()
+        audio.playSfx(SfxKey.V3ResourceSettle)
         val report = V3GameEngine.advanceMonth(state)
+        val generatedEvent = if (shouldGenerateEventThisMonth(report.nextState)) V3EventEngine.generateEvent(report.nextState) else null
         val withEnding = if (V3GameEngine.shouldAutoEnd(report.nextState)) {
             report.nextState.copy(finalEnding = V3GameEngine.finalizeEnding(report.nextState), activeEvent = null)
         } else {
-            report.nextState.copy(activeEvent = V3EventEngine.generateEvent(report.nextState))
+            report.nextState.copy(activeEvent = generatedEvent)
         }
         state = withEnding
         saveStore.save(state)
-        latestReport = if (showReport || withEnding.activeEvent == null && report.lines.any { it.contains("目标达成") || it.contains("添丁") || it.contains("终局") }) {
-            report.copy(nextState = withEnding)
-        } else {
-            null
-        }
+        val shouldShowReport = showReport || report.nextState.month == 1 || report.lines.any { it.contains("目标达成") || it.contains("添丁") || it.contains("终局") || it.contains("岁末") }
+        latestReport = if (shouldShowReport) report.copy(nextState = withEnding) else null
+        if (withEnding.activeEvent \!= null || latestReport \!= null) timeSpeed = 0
     }
 
     fun chooseEvent(choice: V3EventChoice) {
         audio.playSfx(SfxKey.V3Edict)
+        timeSpeed = 0
         state = V3EventEngine.choose(state, choice)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
@@ -288,7 +294,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun restartAfterEnding() {
         audio.click()
-        state = V3Content.newGame(state.root, state.county, state.creed, state.crisis)
+        state = V3Content.newGame(state.root, state.county, state.creed, state.crisis, state.clanName)
         saveStore.save(state)
         latestReport = null
         message = "新一轮县域宗族沙盘已重开。"
@@ -296,11 +302,19 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     fun clearReport() {
+        audio.click()
         latestReport = null
     }
 
     fun clearMessage() {
+        audio.click()
         message = null
+    }
+
+    private fun shouldGenerateEventThisMonth(nextState: V3GameState): Boolean {
+        if (nextState.month \!in listOf(2, 5, 8, 11)) return false
+        if (nextState.eventLog.take(2).any { it.contains("事件【") || it.contains("抉择") }) return false
+        return true
     }
 
     fun openPlayGuide() {

@@ -845,6 +845,9 @@ object V3GameEngine {
 
         val silverExpense = monthlySilverExpense(state)
         val grainExpense = monthlyGrainExpense(state)
+        val peopleFood = alivePeople(state).sumOf { if (it.age < 12) 1 else 3 }
+        val militiaFood = state.militia / 8
+        val taxSilver = silverExpense
         silverDelta -= silverExpense
         grainDelta -= grainExpense
 
@@ -877,9 +880,12 @@ object V3GameEngine {
         settledState = maybeAddChild(settledState, detailLines)
 
         val summary = mutableListOf<String>()
-        summary += "本月收支：银${signed(silverDelta)}，粮${signed(grainDelta)}，族望${signed(influenceDelta)}，凝聚${signed(cohesionDelta)}，乡勇${signed(militiaDelta)}。"
+        if (state.month == 12) {
+            summary += "年度汇总：${state.year}年收束，家族进入${nextYear}年。下面是全年最后一月结算和新目标。"
+        }
+        summary += "本月账本：银${signed(silverDelta)}，粮${signed(grainDelta)}，族望${signed(influenceDelta)}，凝聚${signed(cohesionDelta)}，乡勇${signed(militiaDelta)}。"
         if (incomeParts.isNotEmpty()) summary += "产业进项：${incomeParts.take(4).joinToString("；")}${if (incomeParts.size > 4) "等" else ""}。"
-        summary += "固定消耗：赋役银-$silverExpense，人丁与乡勇粮-$grainExpense。"
+        summary += "生活消耗：人口吃粮-$peopleFood，乡勇耗粮-$militiaFood，赋役杂费银-$taxSilver。人口越多越能办事，但粮仓压力也会更大。"
         summary += detailLines.take(6)
 
         val nextState = evaluateAnnualGoals(

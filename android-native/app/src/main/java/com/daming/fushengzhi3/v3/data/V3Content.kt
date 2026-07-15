@@ -268,7 +268,10 @@ object V3Content {
         V3Route.Hermit to 5
     )
 
-    fun newGame(root: String, county: String, creed: String, crisis: String): V3GameState {
+    fun newGame(root: String, county: String, creed: String, crisis: String, clanNameInput: String = "李氏宗族"): V3GameState {
+        val cleanedClanName = clanNameInput.trim().ifBlank { "李氏宗族" }.take(8)
+        val clanSurname = cleanedClanName.firstOrNull()?.toString()?.takeIf { it.isNotBlank() } ?: "李"
+        val founderName = "${clanSurname}慎行"
         val base = V3GameState(root = root, county = county, creed = creed, crisis = crisis)
         val routeBoost = when (creed) {
             "耕读传家" -> V3Route.Scholar
@@ -279,12 +282,7 @@ object V3Content {
             else -> V3Route.Hermit
         }
         return base.copy(
-            clanName = when (root) {
-                "江南商族" -> "李氏商族"
-                "边地军户" -> "李氏军户"
-                "山中堡寨" -> "李氏寨族"
-                else -> "李氏宗族"
-            },
+            clanName = cleanedClanName,
             silver = when (root) {
                 "寒门佃户" -> 58
                 "没落士族" -> 76
@@ -308,6 +306,9 @@ object V3Content {
             },
             cohesion = 62,
             militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3,
+            people = initialPeople.map { if (it.id == 1) it.copy(name = founderName) else it },
+            branches = initialBranches.map { if (it.id == "main") it.copy(leaderName = founderName, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。") else it },
+            sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${clanSurname}氏宗祠") else it },
             annualGoals = goalsFor(creed, crisis),
             routeScores = base.routeScores + (routeBoost to ((base.routeScores[routeBoost] ?: 0) + 12)),
             pendingReports = listOf("${county}局势未稳，${crisis}已成眼前第一患。"),

@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
 class FontPreference(context: Context) {
     private val prefs = context.getSharedPreferences("ui_font_pref", Context.MODE_PRIVATE)
 
-    var style by mutableStateOf(FontStyleKey.fromId(prefs.getString("style", FontStyleKey.Pixel.id)))
+    var style by mutableStateOf(FontStyleKey.fromId(prefs.getString("style", FontStyleKey.Hei.id)))
         private set
 
     fun updateStyle(next: FontStyleKey) {
@@ -24,6 +24,6 @@ enum class FontStyleKey(val id: String, val label: String, val desc: String) {
     Mono("mono", "匠作等宽", "数字清楚，适合账本和数值");
 
     companion object {
-        fun fromId(id: String?): FontStyleKey = entries.firstOrNull { it.id == id } ?: Pixel
+        fun fromId(id: String?): FontStyleKey = entries.firstOrNull { it.id == id } ?: Hei
     }
 }

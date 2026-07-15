@@ -72,6 +72,6 @@ private fun typographyFor(style: FontStyleKey): Typography {
 }
 
 @Composable
-fun MingTheme(fontStyle: FontStyleKey = FontStyleKey.Pixel, content: @Composable () -> Unit) {
+fun MingTheme(fontStyle: FontStyleKey = FontStyleKey.Hei, content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = Scheme, typography = typographyFor(fontStyle), content = content)
 }
