@@ -373,6 +373,105 @@ object V3GameEngine {
         )
     }
 
+    fun siteSpecialAction(state: V3GameState, siteId: String): V3GameState {
+        val site = state.sites.firstOrNull { it.id == siteId } ?: return state
+        if (site.level <= 0) return state.copy(pendingReports = listOf("【${site.name}】尚未建成，先营建后才能执行专属事务。"))
+        var silver = state.silver
+        var grain = state.grain
+        var influence = state.influence
+        var cohesion = state.cohesion
+        var militia = state.militia
+        var relations = state.relations
+        var route = routeForSite(site)
+        var routeGain = 6
+        var siteControl = 5
+        var siteRisk = -5
+        val message = when (site.type) {
+            V3CountySiteType.Shrine -> {
+                grain -= 18
+                cohesion += 7
+                influence += 2
+                route = V3Route.Hermit
+                "宗祠开祠修谱，各房重新按名入册。粮-18，凝聚+7，族望+2。"
+            }
+            V3CountySiteType.Farmland -> {
+                silver -= 16
+                grain += 70
+                cohesion += 2
+                route = V3Route.Hermit
+                "田庄组织抢修水渠，秋粮预期大增。银-16，粮+70，凝聚+2。"
+            }
+            V3CountySiteType.Market -> {
+                grain -= 20
+                silver += 82
+                relations = relations.copy(merchants = clamp(relations.merchants + 7), yamen = clamp(relations.yamen - 2))
+                route = V3Route.Merchant
+                "集市开临时牙行，货路转活。粮-20，银+82，商帮+7，官府-2。"
+            }
+            V3CountySiteType.Yamen -> {
+                silver -= 38
+                influence += 5
+                relations = relations.copy(yamen = clamp(relations.yamen + 9), villagers = clamp(relations.villagers - 2))
+                route = V3Route.Loyalist
+                "县衙打点书吏，税册暂缓。银-38，族望+5，官府+9，乡民-2。"
+            }
+            V3CountySiteType.Academy -> {
+                silver -= 28
+                influence += 7
+                cohesion += 2
+                relations = relations.copy(gentry = clamp(relations.gentry + 8))
+                route = V3Route.Scholar
+                "书院开讲会，士子齐聚。银-28，族望+7，凝聚+2，士绅+8。"
+            }
+            V3CountySiteType.Clinic -> {
+                silver -= 24
+                grain -= 18
+                cohesion += 6
+                relations = relations.copy(villagers = clamp(relations.villagers + 9))
+                route = V3Route.Hermit
+                "医馆开义诊，疫病流言暂平。银-24，粮-18，凝聚+6，乡民+9。"
+            }
+            V3CountySiteType.Fort -> {
+                silver -= 32
+                grain -= 28
+                militia += 24
+                relations = relations.copy(garrison = clamp(relations.garrison + 5), yamen = clamp(relations.yamen - 3))
+                route = V3Route.Fortress
+                "寨堡点验乡勇，守望相助。银-32，粮-28，乡勇+24，军镇+5，官府-3。"
+            }
+            V3CountySiteType.Dock -> {
+                silver += 96
+                influence += 2
+                relations = relations.copy(merchants = clamp(relations.merchants + 9), yamen = clamp(relations.yamen - 5))
+                route = V3Route.Overseas
+                routeGain = 8
+                "码头走成一趟暗货，海路声势大涨。银+96，族望+2，商帮+9，官府-5。"
+            }
+            V3CountySiteType.MountainPass -> {
+                silver -= 18
+                militia += 14
+                relations = relations.copy(bandits = clamp(relations.bandits - 10), garrison = clamp(relations.garrison + 3))
+                route = V3Route.Warlord
+                routeGain = 8
+                "黑松山道设卡哨，私盐盗影暂退。银-18，乡勇+14，流寇-10，军镇+3。"
+            }
+        }
+        val nextSite = site.copy(control = (site.control + siteControl).coerceIn(0, 100), risk = (site.risk + siteRisk).coerceIn(0, 100))
+        val title = "【${site.name}专属事务】$message"
+        return state.copy(
+            silver = silver.coerceAtLeast(-999),
+            grain = grain.coerceAtLeast(-999),
+            influence = influence.coerceIn(0, 100),
+            cohesion = cohesion.coerceIn(0, 100),
+            militia = militia.coerceIn(0, 999),
+            relations = relations,
+            sites = state.sites.map { if (it.id == site.id) nextSite.copy(status = statusFor(nextSite.control, nextSite.risk)) else it },
+            routeScores = state.routeScores + (route to ((state.routeScores[route] ?: 0) + routeGain)),
+            pendingReports = listOf(title),
+            eventLog = (listOf("${state.year}年${state.month}月 · $title") + state.eventLog).take(100)
+        )
+    }
+
     fun assignTask(state: V3GameState, personId: Int, siteId: String, task: V3TaskType): V3GameState {
         val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
         val site = state.sites.firstOrNull { it.id == siteId && it.taskTypes.contains(task) } ?: return state
@@ -757,7 +856,7 @@ object V3GameEngine {
         }
 
         val nextRoutes = state.routeScores.mapValues { (route, value) -> value + (routeDelta[route] ?: 0) }
-        val grownPeople = growPeople(state.people, assignmentResults, detailLines, state.month == 12)
+        val grownPeople = processLifeCycle(growPeople(state.people, assignmentResults, detailLines, state.month == 12), state, detailLines, state.month == 12)
         val nextBranches = updateBranches(state.branches, grownPeople, assignmentResults, silverDelta, grainDelta, detailLines)
         val nextSites = sites.map { it.copy(assignedPersonId = null) }
         var settledState = state.copy(
@@ -930,6 +1029,40 @@ object V3GameEngine {
         }
     }
 
+    private fun processLifeCycle(people: List<V3Person>, state: V3GameState, lines: MutableList<String>, yearEnded: Boolean): List<V3Person> {
+        if (!yearEnded) return people
+        val living = people.filter { it.alive }
+        val heirs = living.filter { it.generation >= 2 && it.age >= 16 }
+        val existingBranches = state.branches.map { it.leaderName }.toSet()
+        val newBranchLeaders = heirs.filter { it.name !in existingBranches && it.branch == "主房" }.take(2)
+        val branchAdjusted = people.map { person ->
+            val leader = newBranchLeaders.firstOrNull { it.id == person.id }
+            if (leader != null) {
+                lines += "${leader.name}成年立房，宗族从主房分出新支。"
+                person.copy(branch = "${leader.name.takeLast(2)}房", identity = "分房支主")
+            } else person
+        }
+        return branchAdjusted.map { person ->
+            if (!person.alive) return@map person
+            val ageRisk = when {
+                person.age < 55 -> 0
+                person.age < 65 -> 1
+                person.age < 75 -> 2
+                else -> 4
+            }
+            val fatigueRisk = if (person.fatigue >= 80) 2 else if (person.fatigue >= 60) 1 else 0
+            val plagueRisk = if (state.crisis == "瘟疫初起") 1 else 0
+            val seed = (state.year + state.month + person.id * 17 + person.age * 3) % 24
+            if (ageRisk + fatigueRisk + plagueRisk > 0 && seed < ageRisk + fatigueRisk + plagueRisk && living.size > 1) {
+                lines += "${person.name}因年高劳病离世，族谱记入卒年。"
+                person.copy(alive = false, currentTask = null, assignedSiteId = null, trainingFocus = null)
+            } else if (person.fatigue >= 70) {
+                lines += "${person.name}积劳过重，族老建议暂缓派遣。"
+                person.copy(loyalty = (person.loyalty - 2).coerceAtLeast(0))
+            } else person
+        }
+    }
+
     private fun maybeAddChild(state: V3GameState, lines: MutableList<String>): V3GameState {
         val husband = state.people.firstOrNull { it.gender == V3Gender.Male && it.spouseId != null && it.age in 16..55 } ?: return state
         val wife = state.people.firstOrNull { it.id == husband.spouseId && it.age in 16..45 } ?: return state
@@ -980,7 +1113,23 @@ object V3GameEngine {
         lines: MutableList<String>
     ): List<V3Branch> {
         val activeByBranch = people.filter { assignments.containsKey(it.id) }.groupingBy { it.branch }.eachCount()
-        return branches.map { branch ->
+        val existingNames = branches.map { it.name }.toSet()
+        val autoBranches = people.filter { it.alive && it.branch !in existingNames }
+            .distinctBy { it.branch }
+            .map { leader ->
+                V3Branch(
+                    id = "branch_${leader.id}",
+                    name = leader.branch,
+                    leaderName = leader.name,
+                    focus = routeForPerson(leader),
+                    loyalty = leader.loyalty.coerceIn(40, 95),
+                    wealth = (12 + leader.commerce / 4).coerceIn(0, 100),
+                    influence = (10 + leader.merit / 8).coerceIn(0, 100),
+                    grievance = 8,
+                    desc = "${leader.name}成年立房，新支开始争取家业席位。"
+                )
+            }
+        return (branches + autoBranches).map { branch ->
             val active = activeByBranch[branch.name] ?: 0
             val wealthShift = when {
                 active > 0 && silverDelta > 0 -> 1
@@ -1002,6 +1151,14 @@ object V3GameEngine {
             next
         }
     }
+
+    private fun routeForPerson(person: V3Person): V3Route = listOf(
+        V3Route.Scholar to person.study,
+        V3Route.Fortress to person.martial,
+        V3Route.Merchant to person.commerce,
+        V3Route.Loyalist to person.diplomacy,
+        V3Route.Hermit to person.loyalty
+    ).maxByOrNull { it.second }?.first ?: V3Route.Hermit
 
     private data class GrowthDelta(
         val study: Int = 0,

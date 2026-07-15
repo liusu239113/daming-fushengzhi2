@@ -6,7 +6,7 @@ object GameImages {
     const val V3DossierBg = "image/v3_dossier_bg.png"
     const val V3CountyMap = "image/v3_county_map.png"
     const val V3Icon = "image/v3_icon.png"
-    const val V3MapBgPlain = "image/v3_map_bg_plain.png"
+    const val V3MapBgPlain = V3CountyMap
     const val V3IconSilver = "image/v3_icon_silver.png"
     const val V3IconGrain = "image/v3_icon_grain.png"
     const val V3IconPopulation = "image/v3_icon_population.png"
@@ -51,7 +51,10 @@ enum class SfxKey {
     V3Build,
     V3Dispute,
     V3Finale,
-    V3PageTurn
+    V3PageTurn,
+    V3SpecialAction,
+    V3Success,
+    V3Failure
 }
 
 object GameAudioAssets {
@@ -68,6 +71,9 @@ object GameAudioAssets {
         SfxKey.V3Build to "audio/sfx/v3_county_build.ogg",
         SfxKey.V3Dispute to "audio/sfx/v3_branch_dispute.ogg",
         SfxKey.V3Finale to "audio/sfx/v3_final_chronicle.ogg",
-        SfxKey.V3PageTurn to "audio/sfx/v3_page_turn_genealogy.ogg"
+        SfxKey.V3PageTurn to "audio/sfx/v3_page_turn_genealogy.ogg",
+        SfxKey.V3SpecialAction to "audio/sfx/v3_county_build.ogg",
+        SfxKey.V3Success to "audio/sfx/v3_official_edict_stamp.ogg",
+        SfxKey.V3Failure to "audio/sfx/v3_branch_dispute.ogg"
     )
 }

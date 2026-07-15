@@ -26,6 +26,7 @@ object V3EventEngine {
             else -> null
         }
         if (criticalEvent != null) return criticalEvent
+        followUpEvent(state)?.let { return it }
         if (!shouldRoutineEvent(state, totalRisk)) return null
 
         val staticCandidates = V3EventContent.allEvents.filter { event ->
@@ -151,6 +152,56 @@ object V3EventEngine {
         if (state.month % 3 == 0 && (totalRisk >= 260 || state.silver < 70 || state.grain < 120)) return true
         if (state.month == 12) return true
         return false
+    }
+
+    private fun followUpEvent(state: V3GameState): V3ActiveEvent? {
+        if (state.month % 5 != 2) return null
+        val recent = state.eventLog.take(8).joinToString("｜")
+        if ((recent.contains("开仓") || recent.contains("赈") || recent.contains("义诊")) && !recent.contains("赈济余波")) {
+            return V3ActiveEvent(
+                "赈济余波",
+                "前番赈济之后，乡民口碑传开，也有外乡饥民闻讯而来。族老提醒：善名能聚人，也会继续消耗粮仓。",
+                listOf(
+                    V3EventChoice("续开粥棚", "继续换民心与凝聚。", grainDelta = -55, cohesionDelta = 6, villagersDelta = 9, route = V3Route.Hermit, routeDelta = 7),
+                    V3EventChoice("登记为佃户", "把善名转为劳力。", grainDelta = -25, influenceDelta = 3, villagersDelta = 5, siteId = "farmland", siteControlDelta = 6, route = V3Route.Hermit, routeDelta = 5),
+                    V3EventChoice("限额施救", "稳住粮仓，但善名放缓。", grainDelta = -10, cohesionDelta = 2, villagersDelta = 2, route = V3Route.Hermit, routeDelta = 3)
+                )
+            )
+        }
+        if ((recent.contains("商") || recent.contains("牙行") || recent.contains("海货") || recent.contains("码头")) && !recent.contains("商路回响")) {
+            return V3ActiveEvent(
+                "商路回响",
+                "前番商路动作让西河商帮重新估量李氏。有人愿意入股，也有人担心官府追查。",
+                listOf(
+                    V3EventChoice("开联合账房", "银两和商帮关系上升。", silverDelta = 90, merchantsDelta = 8, yamenDelta = -3, route = V3Route.Merchant, routeDelta = 8),
+                    V3EventChoice("分润给官差", "降低追查风险。", silverDelta = -35, yamenDelta = 6, merchantsDelta = 3, route = V3Route.Loyalist, routeDelta = 4),
+                    V3EventChoice("暗投海路", "海外路线增强。", silverDelta = -25, merchantsDelta = 6, siteId = "dock", siteControlDelta = 6, route = V3Route.Overseas, routeDelta = 8)
+                )
+            )
+        }
+        if ((recent.contains("讨伐") || recent.contains("乡勇") || recent.contains("寨堡") || recent.contains("山道")) && !recent.contains("军务余震")) {
+            return V3ActiveEvent(
+                "军务余震",
+                "乡勇操练和山道冲突之后，县中豪族都开始打听李氏兵力。若处理不好，官府疑心和流寇仇怨都会加深。",
+                listOf(
+                    V3EventChoice("整编乡勇", "兵力更稳，官府略疑。", silverDelta = -28, grainDelta = -24, militiaDelta = 20, yamenDelta = -3, route = V3Route.Fortress, routeDelta = 8),
+                    V3EventChoice("递名册报备", "官府军镇关系回升。", silverDelta = -18, yamenDelta = 7, garrisonDelta = 5, route = V3Route.Loyalist, routeDelta = 5),
+                    V3EventChoice("暗招山民", "割据路线加深。", silverDelta = -35, militiaDelta = 18, banditsDelta = 4, route = V3Route.Warlord, routeDelta = 9)
+                )
+            )
+        }
+        if ((recent.contains("书院") || recent.contains("科举") || recent.contains("讲会") || recent.contains("士绅")) && !recent.contains("士林回函")) {
+            return V3ActiveEvent(
+                "士林回函",
+                "书院讲会与科举消息传开，邻县士子送来名帖。接还是不接，都会决定李氏是否真正走进士林。",
+                listOf(
+                    V3EventChoice("设席延请", "士绅和耕读路线提升。", silverDelta = -40, gentryDelta = 9, influenceDelta = 5, route = V3Route.Scholar, routeDelta = 9),
+                    V3EventChoice("只收名帖", "低成本维持名声。", influenceDelta = 2, gentryDelta = 3, route = V3Route.Scholar, routeDelta = 4),
+                    V3EventChoice("避开党争", "凝聚上升，士林热度放缓。", cohesionDelta = 4, gentryDelta = -2, route = V3Route.Hermit, routeDelta = 4)
+                )
+            )
+        }
+        return null
     }
 
     private fun eventFitScore(event: V3ActiveEvent, state: V3GameState, totalRisk: Int): Int {

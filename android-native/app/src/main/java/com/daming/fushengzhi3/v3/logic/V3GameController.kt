@@ -155,6 +155,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun siteSpecialAction(siteId: String) {
+        audio.playSfx(SfxKey.V3SpecialAction)
+        state = V3GameEngine.siteSpecialAction(state, siteId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun contactRegion(regionId: String) {
         audio.select()
         state = V3GameEngine.contactRegion(state, regionId)
@@ -177,8 +184,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     fun resolveConquest() {
-        audio.playSfx(SfxKey.V3Dispute)
         state = V3GameEngine.resolveConquest(state)
+        val result = state.pendingReports.firstOrNull().orEmpty()
+        audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
@@ -212,8 +220,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     fun answerExam(answerIndex: Int) {
-        audio.playSfx(SfxKey.V3Edict)
         state = V3GameEngine.answerExam(state, answerIndex)
+        val result = state.pendingReports.firstOrNull().orEmpty()
+        audio.playSfx(if (result.contains("通过")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
@@ -226,8 +235,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     fun resolveBattle() {
-        audio.playSfx(SfxKey.V3Dispute)
         state = V3GameEngine.resolveBattle(state)
+        val result = state.pendingReports.firstOrNull().orEmpty()
+        audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }

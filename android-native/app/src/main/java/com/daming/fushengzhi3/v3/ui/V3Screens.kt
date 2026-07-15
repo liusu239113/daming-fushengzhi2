@@ -203,6 +203,8 @@ private fun V3HomePage(state: V3GameState, controller: V3GameController) {
     val forecast = V3GameEngine.monthlyForecast(state)
 
     V3Section("家业", nextAdvice(state))
+    V3NewPlayerGuide(state)
+    V3RouteOverviewPanel(state)
     V3Panel {
         Text("本月账本", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(forecast.summary, color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -226,6 +228,63 @@ private fun V3HomePage(state: V3GameState, controller: V3GameController) {
     selectedSite?.let { site ->
         V3SiteManageDialog(site = site, state = state, controller = controller, onDismiss = { selectedSiteId = null })
     }
+}
+
+@Composable
+private fun V3NewPlayerGuide(state: V3GameState) {
+    if (state.year > 1601 || state.month > 4) return
+    val steps = listOf(
+        Triple("成家", V3GameEngine.alivePeople(state).size >= 2, "到【宗族】迎娶妻子，开启添丁与家族传承。"),
+        Triple("立业", V3GameEngine.builtSiteCount(state) >= 2, "点县域地图营建集市、书院或寨堡，形成第二收入点。"),
+        Triple("用人", state.people.any { it.currentTask != null || it.trainingFocus != null }, "到【族人】安排培养或派遣，让每月结算有明确产出。"),
+        Triple("定路", (state.routeScores.values.maxOrNull() ?: 0) >= 18, "观察路线进度，决定耕读、商族、自保、勤王、割据或海路。")
+    )
+    V3Panel {
+        Text("开局三月指引", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("先别急着等时间流逝，前三月把家、业、人、路线四件事立起来。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+        steps.forEachIndexed { index, step ->
+            val (title, done, desc) = step
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                Text(if (done) "已成" else "${index + 1}", color = if (done) V3Green else V3Red, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(34.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = if (done) V3Green else V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(desc, color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V3RouteOverviewPanel(state: V3GameState) {
+    val dominant = V3GameEngine.dominantRoute(state)
+    V3Panel {
+        Text("当前主路线：${dominant.label}", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        V3Content.routePlans.sortedByDescending { state.routeScores[it.route] ?: 0 }.take(4).forEach { plan ->
+            V3RouteProgressRow(plan.route.label, state.routeScores[plan.route] ?: 0, selected = plan.route == dominant)
+        }
+    }
+}
+
+@Composable
+private fun V3RouteProgressRow(label: String, score: Int, selected: Boolean) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(label, color = if (selected) V3Gold else V3Ink, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+            Text(routeStage(score), color = if (selected) V3Gold else V3Muted, fontSize = 12.sp)
+        }
+        Box(Modifier.fillMaxWidth().height(7.dp).background(V3PaperDeep, RoundedCornerShape(0.dp))) {
+            Box(Modifier.fillMaxWidth((score.coerceIn(0, 100) / 100f).coerceAtLeast(0.05f)).height(7.dp).background(if (selected) V3Gold else V3Blue, RoundedCornerShape(0.dp)))
+        }
+    }
+}
+
+private fun routeStage(score: Int): String = when {
+    score >= 80 -> "成局"
+    score >= 55 -> "成势"
+    score >= 32 -> "入路"
+    score >= 15 -> "萌芽"
+    else -> "未定"
 }
 
 @Composable
@@ -365,8 +424,9 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController) {
     }
     V3Panel {
         Text("路线", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        V3Content.routePlans.sortedByDescending { state.routeScores[it.route] ?: 0 }.take(4).forEach { plan ->
-            Text("${plan.route.label} ${state.routeScores[plan.route] ?: 0} · ${plan.goal}", color = if (plan.route == ending.route) V3Red else V3Ink, fontSize = 13.sp, fontWeight = if (plan.route == ending.route) FontWeight.Bold else FontWeight.Normal)
+        V3Content.routePlans.sortedByDescending { state.routeScores[it.route] ?: 0 }.forEach { plan ->
+            V3RouteProgressRow(plan.route.label, state.routeScores[plan.route] ?: 0, selected = plan.route == ending.route)
+            Text("· ${plan.goal}", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
         }
     }
     V3WorldPanel(state, controller)
@@ -458,7 +518,8 @@ private fun V3WorldRegionPin(region: V3WorldRegion, worldWidthPx: Float, worldHe
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Box(Modifier.size(72.dp).background(V3Paper.copy(alpha = 0.24f), RoundedCornerShape(0.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(72.dp).background(V3Paper.copy(alpha = 0.24f), RoundedCornerShape(0.dp)).padding(2.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.matchParentSize().background(color.copy(alpha = 0.32f), RoundedCornerShape(0.dp)))
             if (icon != null) {
                 AssetImage(icon, region.name, Modifier.size(68.dp), ContentScale.Fit)
             }
@@ -533,6 +594,12 @@ private fun V3MapSitePin(site: V3CountySite, mapWidthPx: Float, mapHeightPx: Flo
     val safeMarginPx = with(density) { 10.dp.toPx() }
     val x = (mapWidthPx * point.x - pinWidthPx * 0.5f).coerceIn(safeMarginPx, mapWidthPx - pinWidthPx - safeMarginPx)
     val y = (mapHeightPx * point.y - pinHeightPx * 0.35f).coerceIn(safeMarginPx, mapHeightPx - pinHeightPx - safeMarginPx)
+    val markerColor = when {
+        site.risk >= 60 -> V3Red
+        site.control >= 55 -> V3Green
+        site.level > 0 -> V3Gold
+        else -> V3Muted
+    }
     Column(
         Modifier.graphicsLayer {
             translationX = x
@@ -541,10 +608,11 @@ private fun V3MapSitePin(site: V3CountySite, mapWidthPx: Float, mapHeightPx: Flo
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Box(Modifier.size(66.dp).background(V3PaperDeep.copy(alpha = 0.38f), RoundedCornerShape(0.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(66.dp).background(markerColor.copy(alpha = 0.32f), RoundedCornerShape(0.dp)).padding(2.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.matchParentSize().background(V3PaperDeep.copy(alpha = 0.35f), RoundedCornerShape(0.dp)))
             AssetImage(icon, site.name, Modifier.size(58.dp), ContentScale.Fit)
         }
-        Text(site.name, color = V3Gold, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
+        Text(site.name, color = markerColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
     }
 }
 
@@ -585,6 +653,8 @@ private fun V3SiteCard(site: V3CountySite, state: V3GameState, controller: V3Gam
         }
         Text(site.desc, color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
         Text("月产：${siteYieldSummary(yield)} · ${yield.desc}", color = if (site.level > 0) V3Green else V3Muted, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(siteSpecialHint(site), color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+        V3SmallButton(siteSpecialButtonLabel(site), Modifier.fillMaxWidth(), enabled = site.level > 0) { controller.siteSpecialAction(site.id) }
         val cost = V3GameEngine.upgradeCost(site)
         if (cost != null) {
             Text("营建：银${cost.silver} / 粮${cost.grain} · ${cost.desc}", color = V3Muted, fontSize = 12.sp)
@@ -805,7 +875,11 @@ private fun V3Panel(modifier: Modifier = Modifier, content: @Composable ColumnSc
 @Composable
 private fun V3ImagePanel(imagePath: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Gold), shape = RoundedCornerShape(0.dp)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
+        Box {
+            AssetImage(imagePath, null, Modifier.matchParentSize(), ContentScale.Crop, alpha = 0.55f)
+            Box(Modifier.matchParentSize().background(Color(0xCC17112A)))
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
+        }
     }
 }
 
@@ -1053,6 +1127,30 @@ private fun nextAdvice(state: V3GameState): String = when {
 }
 
 private fun siteChipText(site: V3CountySite): String = "${site.name.takeLast(2)}${if (site.level > 0) "Lv.${site.level}" else "未建"}"
+
+private fun siteSpecialButtonLabel(site: V3CountySite): String = when (site.type) {
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Shrine -> "开祠修谱"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Farmland -> "抢修水渠"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Market -> "开设牙行"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Yamen -> "打点税册"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Academy -> "举行讲会"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Clinic -> "开设义诊"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Fort -> "点验乡勇"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Dock -> "开走海货"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.MountainPass -> "山道设卡"
+}
+
+private fun siteSpecialHint(site: V3CountySite): String = when (site.type) {
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Shrine -> "专属事务：消耗粮食，提升凝聚和族望。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Farmland -> "专属事务：花银修渠，换取大量粮食。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Market -> "专属事务：消耗粮食换银两和商帮关系。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Yamen -> "专属事务：花银打点官府，缓冲税役压力。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Academy -> "专属事务：开讲会提升士绅、族望和耕读路线。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Clinic -> "专属事务：义诊压疫病，提高乡民与凝聚。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Fort -> "专属事务：消耗银粮，快速增加乡勇。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.Dock -> "专属事务：走海货获银，推进海外路线但损官府。"
+    com.daming.fushengzhi3.v3.data.V3CountySiteType.MountainPass -> "专属事务：设卡压流寇，推进割据路线。"
+}
 
 private fun siteYieldSummary(yield: V3SiteYield): String {
     val parts = mutableListOf<String>()
