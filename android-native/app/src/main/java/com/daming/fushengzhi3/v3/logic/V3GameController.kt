@@ -312,7 +312,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     private fun shouldGenerateEventThisMonth(nextState: V3GameState): Boolean {
-        if (nextState.month \!in listOf(2, 5, 8, 11)) return false
+        if (nextState.month !in listOf(2, 5, 8, 11)) return false
         if (nextState.eventLog.take(2).any { it.contains("事件【") || it.contains("抉择") }) return false
         return true
     }

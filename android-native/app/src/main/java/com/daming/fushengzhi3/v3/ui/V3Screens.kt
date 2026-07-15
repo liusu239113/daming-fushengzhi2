@@ -262,7 +262,7 @@ private fun V3HomePage(state: V3GameState, controller: V3GameController) {
 
 @Composable
 private fun V3CoreLoopPanel(state: V3GameState) {
-    val peopleFood = V3GameEngine.alivePeople(state).sumOf { if (it.age < 12) 1 else 3 }
+    val peopleFood = V3GameEngine.alivePeople(state).map { if (it.age < 12) 1 else 3 }.sum()
     val militiaFood = state.militia / 8
     V3Panel {
         Text("这一局到底在玩什么", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)

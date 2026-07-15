@@ -845,7 +845,7 @@ object V3GameEngine {
 
         val silverExpense = monthlySilverExpense(state)
         val grainExpense = monthlyGrainExpense(state)
-        val peopleFood = alivePeople(state).sumOf { if (it.age < 12) 1 else 3 }
+        val peopleFood = alivePeople(state).map { if (it.age < 12) 1 else 3 }.sum()
         val militiaFood = state.militia / 8
         val taxSilver = silverExpense
         silverDelta -= silverExpense
