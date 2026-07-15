@@ -70,6 +70,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun switchScreen(next: V3Screen) {
         if (screen != next) audio.tabSwitch()
         screen = next
+        timeSpeed = 0
     }
 
     fun updateTimeSpeed(speed: Int) {
@@ -319,11 +320,15 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun openPlayGuide() {
         audio.playSfx(SfxKey.UiSelect)
-        message = "玩法核心：从一户起家，先通过婚配形成家庭，再置办田庄、集市、书院、寨堡等产业。族人可以每月培养属性；成年后可派去经营地点。学识高的族人可参加科举答题，武艺和乡勇足够后可讨伐流寇；控制据点、积累乡勇和族望后可以尝试举旗造反。"
+        message = "族老札记：立户之后，先娶妻安家，再置田庄、开集市、修书院、筑寨堡。孩童可培养，成年可派差；学识可入科举，武艺可讨流寇。等族望、乡勇和地域控制足够，李氏便能在乱世中择路而行。"
     }
 
     fun openAudioVisualGuide() {
         audio.playSfx(SfxKey.UiSelect)
         message = "三代采用案牍卷轴、县域旧地图与宗祠议事风格界面，并配有专属县域主题音乐、印信、落笔、营建与终局音效。"
+    }
+
+    fun playGuideTick() {
+        audio.playSfx(SfxKey.UiSelect)
     }
 }

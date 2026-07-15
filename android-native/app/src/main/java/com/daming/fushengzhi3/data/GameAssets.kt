@@ -5,10 +5,10 @@ object GameImages {
     const val V3MainLogo = "image/v3_main_logo.png"
     const val V3DossierBg = "image/v3_dossier_bg.png"
     const val V3CountyMap = "image/v3_county_map.png"
-    const val V3WorldMap = "image/v3_world_map_scroll.png"
+    const val V3WorldMap = "image/v3_world_map_scroll_ext.png"
     const val V3GenealogyBg = "image/v3_genealogy_light_bg.png"
     const val V3Icon = "image/v3_icon.png"
-    const val V3MapBgPlain = "image/v3_map_bg_plain.png"
+    const val V3MapBgPlain = "image/v3_map_bg_plain_ext.png"
     const val V3IconSilver = "image/v3_icon_silver.png"
     const val V3IconGrain = "image/v3_icon_grain.png"
     const val V3IconPopulation = "image/v3_icon_population.png"
@@ -39,6 +39,16 @@ object GameImages {
         "south_province" to "image/v3_world_south_province.png",
         "north_capital" to "image/v3_world_north_capital.png",
         "all_realm" to "image/v3_world_all_realm.png"
+    )
+
+    val v3AvatarPortraits = mapOf(
+        "baby" to "image/avatars/v3_avatar_baby.png",
+        "male_youth" to "image/avatars/v3_avatar_male_youth.png",
+        "male_middle" to "image/avatars/v3_avatar_male_middle.png",
+        "male_elder" to "image/avatars/v3_avatar_male_elder.png",
+        "female_youth" to "image/avatars/v3_avatar_female_youth.png",
+        "female_middle" to "image/avatars/v3_avatar_female_middle.png",
+        "female_elder" to "image/avatars/v3_avatar_female_elder.png"
     )
 }
 
