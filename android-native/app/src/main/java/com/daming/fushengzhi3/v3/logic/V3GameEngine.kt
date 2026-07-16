@@ -267,6 +267,52 @@ object V3GameEngine {
         )
     }
 
+    fun holdCouncil(state: V3GameState, agenda: String): V3GameState {
+        val monthPrefix = "${state.year}年${state.month}月 · 宗族议事"
+        if (state.eventLog.take(10).any { it.startsWith(monthPrefix) }) {
+            return state.copy(pendingReports = listOf("本月族老已经议定方略。等下月新账出来后，再开祠堂议事。"))
+        }
+        data class CouncilPlan(
+            val title: String,
+            val costSilver: Int,
+            val costGrain: Int,
+            val silver: Int = 0,
+            val grain: Int = 0,
+            val influence: Int = 0,
+            val cohesion: Int = 0,
+            val militia: Int = 0,
+            val relations: V3Relations.() -> V3Relations = { this },
+            val route: V3Route,
+            val routeGain: Int,
+            val desc: String
+        )
+        val plan = when (agenda) {
+            "granary" -> CouncilPlan("开仓平粜", 18, 0, grain = 42, cohesion = 2, relations = { copy(villagers = clamp(villagers + 4), gentry = clamp(gentry - 1)) }, route = V3Route.Hermit, routeGain = 4, desc = "压低粮价，稳住乡民与族中口粮。")
+            "trade" -> CouncilPlan("重整商账", 0, 18, silver = 46, influence = 1, relations = { copy(merchants = clamp(merchants + 5), yamen = clamp(yamen + 1)) }, route = V3Route.Merchant, routeGain = 5, desc = "清点铺面与行商往来，把闲粮换成现银。")
+            "ritual" -> CouncilPlan("修谱祭祖", 24, 12, influence = 3, cohesion = 6, relations = { copy(gentry = clamp(gentry + 2), villagers = clamp(villagers + 1)) }, route = V3Route.Scholar, routeGain = 4, desc = "在宗祠修谱立规，压住房支怨气。")
+            "drill" -> CouncilPlan("团练巡夜", 28, 34, militia = 12, influence = 1, relations = { copy(garrison = clamp(garrison + 3), bandits = clamp(bandits - 4)) }, route = V3Route.Fortress, routeGain = 5, desc = "抽丁巡夜、修械练阵，县中盗寇不敢轻犯。")
+            "study" -> CouncilPlan("延师讲学", 30, 8, influence = 4, cohesion = 1, relations = { copy(gentry = clamp(gentry + 4), yamen = clamp(yamen + 1)) }, route = V3Route.Scholar, routeGain = 6, desc = "延请塾师讲学，给科举和士绅路线打底。")
+            else -> CouncilPlan("赈济乡邻", 12, 32, influence = 2, cohesion = 3, relations = { copy(villagers = clamp(villagers + 6), bandits = clamp(bandits - 1)) }, route = V3Route.Hermit, routeGain = 4, desc = "拿出粮米赈济近邻，换来民心和安定。")
+        }
+        if (state.silver < plan.costSilver || state.grain < plan.costGrain) {
+            return state.copy(pendingReports = listOf("议定【${plan.title}】需要银${plan.costSilver}、粮${plan.costGrain}，当前不足。"))
+        }
+        val nextArmy = if (plan.militia > 0) state.army.add(V3TroopType.Militia, plan.militia) else state.army
+        val message = "宗族议事【${plan.title}】：${plan.desc}"
+        return state.copy(
+            silver = (state.silver - plan.costSilver + plan.silver).coerceAtLeast(-999),
+            grain = (state.grain - plan.costGrain + plan.grain).coerceAtLeast(-999),
+            influence = (state.influence + plan.influence).coerceIn(0, 100),
+            cohesion = (state.cohesion + plan.cohesion).coerceIn(0, 100),
+            militia = nextArmy.total(),
+            army = nextArmy,
+            relations = plan.relations(state.relations),
+            routeScores = state.routeScores + (plan.route to ((state.routeScores[plan.route] ?: 0) + plan.routeGain)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("$monthPrefix【${plan.title}】。${plan.desc}") + state.eventLog).take(100)
+        )
+    }
+
     fun marriageOptions(state: V3GameState): List<V3SpouseCandidate> {
         if (hasSpouse(state)) return emptyList()
         return V3Content.spouseCandidates.filter { state.influence >= it.influenceReq }

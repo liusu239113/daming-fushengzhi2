@@ -695,14 +695,45 @@ private fun V3GenealogyTree(clanName: String, people: List<V3Person>, onSelect: 
 
 @Composable
 private fun V3FamilyMiniNode(person: V3Person, x: Int, y: Int, onSelect: (Int) -> Unit) {
-    Column(
-        Modifier.graphicsLayer { translationX = x.toFloat(); translationY = y.toFloat() }.width(104.dp).background(V3Rice.copy(alpha = 0.94f), V3SoftShape).clickable { onSelect(person.id) }.padding(6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+    val statusColor = when {
+        person.currentTask != null -> V3Green
+        person.trainingFocus != null -> V3Blue
+        person.fatigue >= 65 -> V3Red
+        person.age < 12 -> V3Gold
+        else -> V3Muted
+    }
+    val statusText = when {
+        person.currentTask != null -> person.currentTask.label
+        person.trainingFocus != null -> person.trainingFocus.label
+        person.fatigue >= 65 -> "疲惫"
+        person.age < 12 -> "幼学"
+        else -> "待命"
+    }
+    Box(
+        Modifier
+            .graphicsLayer { translationX = x.toFloat(); translationY = y.toFloat() }
+            .width(112.dp)
+            .background(V3Paper.copy(alpha = 0.96f), V3SoftShape)
+            .border(2.dp, V3Gold.copy(alpha = 0.88f), V3SoftShape)
+            .clickable { onSelect(person.id) }
+            .padding(4.dp)
     ) {
-        AssetImage(v3AvatarFor(person), person.name, Modifier.size(48.dp), ContentScale.Fit)
-        Text(person.name, color = V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text("${person.age}岁 · ${person.trait.label}", color = V3Muted, fontSize = 10.sp, maxLines = 1)
+        Box(Modifier.matchParentSize().border(1.dp, V3Red.copy(alpha = 0.38f), V3SoftShape))
+        Column(
+            Modifier.fillMaxWidth().padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text("第${person.generation}世", color = V3Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Box(Modifier.size(54.dp).background(V3Rice, CircleShape).border(2.dp, statusColor, CircleShape).padding(2.dp), contentAlignment = Alignment.Center) {
+                AssetImage(v3AvatarFor(person), person.name, Modifier.size(49.dp), ContentScale.Fit)
+            }
+            Text(person.name, color = V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("${person.age}岁 · ${person.trait.label}", color = V3Muted, fontSize = 9.sp, maxLines = 1)
+            Box(Modifier.fillMaxWidth().background(statusColor.copy(alpha = 0.14f), CircleShape).border(1.dp, statusColor.copy(alpha = 0.45f), CircleShape).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
+                Text(statusText, color = statusColor, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+        }
     }
 }
 
@@ -759,6 +790,7 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController, for
                 V3RelationRow("商帮", state.relations.merchants)
                 V3RelationRow("军镇", state.relations.garrison)
             }
+            V3CouncilPanel(state, controller)
             V3Panel {
                 Text("路线", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 V3Content.routePlans.sortedByDescending { state.routeScores[it.route] ?: 0 }.take(4).forEach { plan ->
@@ -798,6 +830,34 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController, for
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         V3SmallButton("设置", Modifier.weight(1f), onClick = controller::openSettings)
         V3SmallButton("族老札记", Modifier.weight(1f), onClick = openGuide)
+    }
+}
+
+@Composable
+private fun V3CouncilPanel(state: V3GameState, controller: V3GameController) {
+    val usedThisMonth = state.eventLog.take(10).any { it.startsWith("${state.year}年${state.month}月 · 宗族议事") }
+    V3Panel {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("宗族议事", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(if (usedThisMonth) "本月已议" else "每月一议", color = if (usedThisMonth) V3Muted else V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Text("不是只看数值：每月在祠堂议定一项家政方略，会真实改变银粮、族望、凝聚、地方关系、路线倾向和兵册。", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+        val agendas = listOf(
+            Triple("granary", "开仓平粜", "银18 → 粮+42 / 民心"),
+            Triple("trade", "重整商账", "粮18 → 银+46 / 商帮"),
+            Triple("ritual", "修谱祭祖", "银24粮12 → 凝聚+6"),
+            Triple("drill", "团练巡夜", "银28粮34 → 乡勇+12"),
+            Triple("study", "延师讲学", "银30粮8 → 族望+4"),
+            Triple("relief", "赈济乡邻", "银12粮32 → 民心+6")
+        )
+        agendas.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                row.forEach { (id, label, desc) ->
+                    V3SmallButton("$label\n$desc", Modifier.weight(1f), enabled = !usedThisMonth) { controller.holdCouncil(id) }
+                }
+                repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
     }
 }
 
@@ -1079,15 +1139,22 @@ private fun V3EstatePanel(state: V3GameState, controller: V3GameController) {
 @Composable
 private fun V3PersonCard(person: V3Person, state: V3GameState, controller: V3GameController) {
     V3Panel {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(person.name, color = V3Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                Text("${person.gender.label} · ${person.branch} · ${person.identity} · ${person.age}岁 · ${person.trait.label}", color = V3Red, fontSize = 13.sp)
-                Text(person.trait.desc, color = V3Muted, fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+            Box(Modifier.size(78.dp).background(V3Rice, CircleShape).border(3.dp, V3Gold, CircleShape).padding(4.dp), contentAlignment = Alignment.Center) {
+                AssetImage(v3AvatarFor(person), person.name, Modifier.size(70.dp), ContentScale.Fit)
             }
-            val assignedSite = person.assignedSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
-            val titleBits = listOfNotNull(person.officeRank, person.militaryRank).joinToString(" · ")
-            Text(if (person.currentTask == null && person.trainingFocus == null) "待命${if (titleBits.isBlank()) "" else " · $titleBits"}" else "${person.currentTask?.label ?: person.trainingFocus?.label}@${assignedSite?.name ?: "家中"}", color = if (person.currentTask == null && person.trainingFocus == null) V3Muted else V3Green, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        Text(person.name, color = V3Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                        Text("第${person.generation}世 · ${person.gender.label} · ${person.branch} · ${person.identity} · ${person.age}岁", color = V3Red, fontSize = 12.sp)
+                    }
+                    val assignedSite = person.assignedSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
+                    val titleBits = listOfNotNull(person.officeRank, person.militaryRank).joinToString(" · ")
+                    Text(if (person.currentTask == null && person.trainingFocus == null) "待命${if (titleBits.isBlank()) "" else " · $titleBits"}" else "${person.currentTask?.label ?: person.trainingFocus?.label}@${assignedSite?.name ?: "家中"}", color = if (person.currentTask == null && person.trainingFocus == null) V3Muted else V3Green, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+                }
+                Text("${person.trait.label}：${person.trait.desc}", color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
+            }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             V3Metric("学", person.study, V3Blue, Modifier.weight(1f))
@@ -1243,8 +1310,12 @@ private fun V3Section(title: String, subtitle: String) {
 
 @Composable
 private fun V3Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Border), shape = V3PanelShape) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Gold), shape = V3PanelShape) {
+        Box(Modifier.background(V3Paper.copy(alpha = 0.98f))) {
+            V3CornerOrnaments()
+            Box(Modifier.matchParentSize().padding(5.dp).border(1.dp, V3Red.copy(alpha = 0.34f), V3SoftShape))
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        }
     }
 }
 
@@ -1254,8 +1325,20 @@ private fun V3ImagePanel(imagePath: String, modifier: Modifier = Modifier, conte
         Box {
             AssetImage(imagePath, null, Modifier.matchParentSize(), ContentScale.Crop, alpha = 0.55f)
             Box(Modifier.matchParentSize().background(Color(0xDDF8EBCB)))
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
+            V3CornerOrnaments()
+            Box(Modifier.matchParentSize().padding(6.dp).border(1.dp, V3Red.copy(alpha = 0.35f), V3SoftShape))
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
         }
+    }
+}
+
+@Composable
+private fun V3CornerOrnaments() {
+    Box(Modifier.matchParentSize()) {
+        Text("◆", color = V3Gold.copy(alpha = 0.82f), fontSize = 11.sp, modifier = Modifier.align(Alignment.TopStart).padding(7.dp))
+        Text("◆", color = V3Gold.copy(alpha = 0.82f), fontSize = 11.sp, modifier = Modifier.align(Alignment.TopEnd).padding(7.dp))
+        Text("◆", color = V3Gold.copy(alpha = 0.82f), fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomStart).padding(7.dp))
+        Text("◆", color = V3Gold.copy(alpha = 0.82f), fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(7.dp))
     }
 }
 
@@ -1382,18 +1465,17 @@ private fun V3GoalRow(state: V3GameState, goal: V3AnnualGoal) {
 
 @Composable
 private fun V3Button(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Text(
-        text,
+    Box(
         modifier = modifier
             .background(V3Red, V3ButtonShape)
-            .border(1.dp, V3Gold, V3ButtonShape)
+            .border(2.dp, V3Gold, V3ButtonShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 12.dp),
-        color = V3Rice,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
-    )
+            .padding(3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(Modifier.matchParentSize().border(1.dp, V3Rice.copy(alpha = 0.52f), V3SoftShape))
+        Text("❖ $text ❖", color = V3Rice, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp))
+    }
 }
 
 @Composable
@@ -1408,19 +1490,30 @@ private fun V3SmallButton(text: String, modifier: Modifier = Modifier, enabled: 
         enabled -> V3Ink
         else -> V3Muted.copy(alpha = 0.75f)
     }
-    Text(
-        text,
+    val edge = when {
+        selected -> V3Gold
+        enabled -> V3Border.copy(alpha = 0.72f)
+        else -> V3Muted.copy(alpha = 0.35f)
+    }
+    Box(
         modifier = modifier
             .background(bg, V3SoftShape)
-            .border(1.dp, if (selected) V3Gold else V3Border.copy(alpha = 0.45f), V3SoftShape)
+            .border(1.dp, edge, V3SoftShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 7.dp, vertical = 8.dp),
-        color = fg,
-        fontSize = 12.sp,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-        textAlign = TextAlign.Center,
-        lineHeight = 15.sp
-    )
+            .padding(3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(Modifier.matchParentSize().border(1.dp, if (selected) V3Rice.copy(alpha = 0.35f) else V3Gold.copy(alpha = 0.25f), V3SoftShape))
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp),
+            color = fg,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            lineHeight = 15.sp
+        )
+    }
 }
 
 @Composable

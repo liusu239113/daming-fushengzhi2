@@ -142,6 +142,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun holdCouncil(agenda: String) {
+        audio.playSfx(SfxKey.V3Edict)
+        state = V3GameEngine.holdCouncil(state, agenda)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun assignTask(personId: Int, siteId: String, task: V3TaskType) {
         audio.select()
         state = V3GameEngine.assignTask(state, personId, siteId, task)
