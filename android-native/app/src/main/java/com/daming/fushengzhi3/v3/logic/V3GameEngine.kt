@@ -29,6 +29,7 @@ import com.daming.fushengzhi3.v3.data.V3TrainingType
 import com.daming.fushengzhi3.v3.data.V3Trait
 import com.daming.fushengzhi3.v3.data.V3UpgradeCost
 import com.daming.fushengzhi3.v3.data.V3BattleState
+import com.daming.fushengzhi3.v3.data.V3BattlePhase
 import com.daming.fushengzhi3.v3.data.V3Combatant
 import com.daming.fushengzhi3.v3.data.V3BattleRound
 import com.daming.fushengzhi3.v3.data.V3TroopType
@@ -668,7 +669,7 @@ object V3GameEngine {
 
     fun selectBattlePerson(state: V3GameState, personId: Int): V3GameState {
         val battle = state.battleState ?: return state
-        if (battle.finished) return state
+        if (battle.finished || battle.phase != V3BattlePhase.Draft) return state
         val person = alivePeople(state).firstOrNull { it.id == personId && it.age >= 15 } ?: return state
         val selected = battle.selectedPersonIds.toMutableList()
         if (selected.contains(personId)) selected.remove(personId) else {
@@ -679,28 +680,48 @@ object V3GameEngine {
         return state.copy(battleState = battle.copy(selectedPersonIds = selected, allies = allies))
     }
 
+    fun confirmBattleLineup(state: V3GameState): V3GameState {
+        val battle = state.battleState ?: return state
+        if (battle.selectedPersonIds.isEmpty()) return state.copy(pendingReports = listOf("至少选择1名族人出战。"))
+        val allies = battle.selectedPersonIds.mapNotNull { id -> alivePeople(state).firstOrNull { it.id == id } }.map { battleCombatant(it) }
+        return state.copy(battleState = battle.copy(phase = V3BattlePhase.Fighting, allies = allies, turn = 0, roundLog = emptyList()))
+    }
+
     fun advanceBattleRound(state: V3GameState): V3GameState {
         val battle = state.battleState ?: return state
         if (battle.finished) return state
+        if (battle.phase != V3BattlePhase.Fighting) return state.copy(pendingReports = listOf("请先确认出战阵容。"))
         if (battle.allies.isEmpty()) return state.copy(pendingReports = listOf("请先在下方选择出战族人，最多6名。"))
         val aliveAllies = battle.allies.filter { it.hp > 0 }
         val aliveEnemies = battle.enemies.filter { it.hp > 0 }
-        if (aliveAllies.isEmpty() || aliveEnemies.isEmpty()) return state.copy(battleState = battle.copy(finished = true, victory = aliveEnemies.isEmpty()))
+        if (aliveAllies.isEmpty() || aliveEnemies.isEmpty()) return state.copy(battleState = battle.copy(phase = V3BattlePhase.Finished, finished = true, victory = aliveEnemies.isEmpty()))
         val allyTurn = battle.turn % 2 == 0
-        val attacker = if (allyTurn) aliveAllies[battle.turn % aliveAllies.size] else aliveEnemies[battle.turn % aliveEnemies.size]
-        val defender = if (allyTurn) aliveEnemies.minByOrNull { it.hp }!! else aliveAllies.minByOrNull { it.hp }!!
-        val damage = max(5, attacker.power + (battle.turn % 5) * 2 - defender.power / 4)
-        val text = if (allyTurn) "${attacker.name}挥${attacker.role}攻向${defender.name}，伤$damage。" else "${attacker.name}反扑${defender.name}，伤$damage。"
-        val nextAllies = battle.allies.map { if (it.name == defender.name && !allyTurn) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
-        val nextEnemies = battle.enemies.map { if (it.name == defender.name && allyTurn) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
+        val attackers = if (allyTurn) aliveAllies else aliveEnemies
+        var nextAllies = battle.allies
+        var nextEnemies = battle.enemies
+        val newLogs = mutableListOf<V3BattleRound>()
+        attackers.forEachIndexed { index, attacker ->
+            val defenders = if (allyTurn) nextEnemies.filter { it.hp > 0 } else nextAllies.filter { it.hp > 0 }
+            if (defenders.isNotEmpty()) {
+                val targetIndex = ((battle.turn + 1) * 7 + index * 3 + attacker.power) % defenders.size
+                val defender = defenders[targetIndex]
+                val variance = ((battle.turn + index + attacker.power) % 9) - 4
+                val crit = ((battle.turn + index + attacker.power) % 11) == 0
+                val damage = max(4, attacker.power + variance + if (crit) 10 else 0 - defender.power / 5)
+                val text = if (allyTurn) "${attacker.name}先手${attacker.role}击${defender.name}，${if (crit) "会心" else "伤"}$damage。" else "${attacker.name}反攻${defender.name}，${if (crit) "重创" else "伤"}$damage。"
+                if (allyTurn) nextEnemies = nextEnemies.map { if (it.name == defender.name) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
+                else nextAllies = nextAllies.map { if (it.name == defender.name) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
+                newLogs += V3BattleRound(attacker.name, defender.name, damage, text)
+            }
+        }
         val nextBattle = battle.copy(
             allies = nextAllies,
             enemies = nextEnemies,
             turn = battle.turn + 1,
-            roundLog = (listOf(V3BattleRound(attacker.name, defender.name, damage, text)) + battle.roundLog).take(8)
+            roundLog = (newLogs.reversed() + battle.roundLog).take(10)
         )
         val ended = nextAllies.none { it.hp > 0 } || nextEnemies.none { it.hp > 0 } || nextBattle.turn >= 18
-        return if (ended) state.copy(battleState = nextBattle.copy(finished = true, victory = nextEnemies.none { it.hp > 0 } || nextAllies.sumOf { it.hp } >= nextEnemies.sumOf { it.hp })) else state.copy(battleState = nextBattle)
+        return if (ended) state.copy(battleState = nextBattle.copy(phase = V3BattlePhase.Finished, finished = true, victory = nextEnemies.none { it.hp > 0 } || nextAllies.sumOf { it.hp } >= nextEnemies.sumOf { it.hp })) else state.copy(battleState = nextBattle)
     }
 
     fun resolveBattle(state: V3GameState): V3GameState {

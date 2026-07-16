@@ -256,6 +256,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun confirmBattleLineup() {
+        audio.playSfx(SfxKey.V3Edict)
+        state = V3GameEngine.confirmBattleLineup(state)
+        message = if (state.battleState?.phase == com.daming.fushengzhi3.v3.data.V3BattlePhase.Fighting) null else state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun advanceBattleRound() {
         state = V3GameEngine.advanceBattleRound(state)
         val result = state.battleState?.roundLog?.firstOrNull()?.text.orEmpty()

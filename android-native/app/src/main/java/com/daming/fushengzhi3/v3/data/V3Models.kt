@@ -148,12 +148,16 @@ data class V3BattleRound(
 )
 
 @Serializable
+enum class V3BattlePhase { Draft, Fighting, Finished }
+
+@Serializable
 data class V3BattleState(
     val target: String,
     val enemyPower: Int,
     val rewardInfluence: Int,
     val rewardSilver: Int,
     val risk: String,
+    val phase: V3BattlePhase = V3BattlePhase.Draft,
     val selectedPersonIds: List<Int> = emptyList(),
     val allies: List<V3Combatant> = emptyList(),
     val enemies: List<V3Combatant> = emptyList(),

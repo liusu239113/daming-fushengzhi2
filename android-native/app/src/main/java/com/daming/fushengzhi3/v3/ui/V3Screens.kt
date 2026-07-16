@@ -58,6 +58,7 @@ import com.daming.fushengzhi3.ui.theme.FontPreference
 import com.daming.fushengzhi3.ui.theme.FontStyleKey
 import com.daming.fushengzhi3.v3.data.V3ActiveEvent
 import com.daming.fushengzhi3.v3.data.V3BattleState
+import com.daming.fushengzhi3.v3.data.V3BattlePhase
 import com.daming.fushengzhi3.v3.data.V3Combatant
 import com.daming.fushengzhi3.v3.data.V3AnnualGoal
 import com.daming.fushengzhi3.v3.data.V3Content
@@ -1479,61 +1480,77 @@ private fun V3ExamDialog(session: com.daming.fushengzhi3.v3.data.V3ExamSession, 
 @Composable
 private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller: V3GameController) {
     Dialog(onDismissRequest = {}) {
-        V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 520.dp)) {
+        V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 540.dp)) {
             Text("军务出征 · ${battle.target}", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            Text("敌势 ${battle.enemyPower} · 风险 ${battle.risk} · 已选 ${battle.selectedPersonIds.size}/6。下方点族人入阵，点推进回合会一来一回交战。", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
-            Text("敌阵", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            battle.enemies.chunked(3).forEach { row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { fighter -> V3CombatantCard(fighter, Modifier.weight(1f), enemy = true) }
-                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
-            Text("我阵", color = V3Green, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            val selected = battle.allies
-            if (selected.isEmpty()) {
-                Text("尚未派人。请选择最多6名成年族人。", color = V3Muted, fontSize = 12.sp)
-            } else {
-                selected.chunked(3).forEach { row ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { fighter -> V3CombatantCard(fighter, Modifier.weight(1f), enemy = false) }
-                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
-            }
-            Text("候选族人", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Box(Modifier.fillMaxWidth().heightIn(max = 132.dp).verticalScroll(rememberScrollState())) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    V3GameEngine.adultPeople(state).chunked(2).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.forEach { person ->
-                                val selectedPerson = battle.selectedPersonIds.contains(person.id)
-                                V3SmallButton("${person.name} 武${person.martial} 谋${person.diplomacy}", Modifier.weight(1f), selected = selectedPerson) { controller.selectBattlePerson(person.id) }
+            Text("敌势 ${battle.enemyPower} · 风险 ${battle.risk} · 第${battle.turn + 1}阵。${if (battle.turn % 2 == 0) "我方先手" else "敌方先手"}", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+            if (battle.phase == V3BattlePhase.Draft) {
+                Text("先点选最多6名成年族人，确认后进入战斗。战斗界面只显示上下两阵，不再显示候选人。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                Text("已选 ${battle.selectedPersonIds.size}/6", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Box(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        V3GameEngine.adultPeople(state).chunked(2).forEach { row ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                row.forEach { person ->
+                                    val selectedPerson = battle.selectedPersonIds.contains(person.id)
+                                    V3SmallButton("${person.name} 武${person.martial} 谋${person.diplomacy} 功${person.merit}", Modifier.weight(1f), selected = selectedPerson) { controller.selectBattlePerson(person.id) }
+                                }
+                                repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                             }
-                            repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                 }
-            }
-            if (battle.roundLog.isNotEmpty()) {
-                Text("战报", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                battle.roundLog.take(4).forEach { round -> Text("· ${round.text}", color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp) }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                V3SmallButton(if (battle.finished) "收兵结算" else "推进回合", Modifier.weight(1f), selected = true) {
-                    if (battle.finished) controller.finalizeBattle() else controller.advanceBattleRound()
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton("确认出战", Modifier.weight(1f), selected = true, enabled = battle.selectedPersonIds.isNotEmpty()) { controller.confirmBattleLineup() }
+                    V3SmallButton("暂缓", Modifier.weight(1f)) { controller.cancelBattle() }
                 }
-                V3SmallButton("自动打完", Modifier.weight(1f), enabled = !battle.finished) { controller.resolveBattle() }
-                V3SmallButton("暂缓", Modifier.weight(1f), enabled = !battle.finished) { controller.cancelBattle() }
+            } else {
+                Text("敌阵", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                V3BattleGrid(battle.enemies, state, enemy = true)
+                battle.roundLog.firstOrNull()?.let { latest ->
+                    Text("-${latest.damage}  ${latest.defender}", color = V3Red, fontSize = 24.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
+                Text("我阵", color = V3Green, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                V3BattleGrid(battle.allies, state, enemy = false)
+                if (battle.roundLog.isNotEmpty()) {
+                    Text("战报", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    battle.roundLog.take(5).forEach { round -> Text("· ${round.text}", color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp) }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton(if (battle.finished) "收兵结算" else if (battle.turn % 2 == 0) "我方先手" else "敌方先手", Modifier.weight(1f), selected = true) {
+                        if (battle.finished) controller.finalizeBattle() else controller.advanceBattleRound()
+                    }
+                    V3SmallButton("自动打完", Modifier.weight(1f), enabled = \!battle.finished) { controller.resolveBattle() }
+                    V3SmallButton("撤出", Modifier.weight(1f), enabled = \!battle.finished) { controller.cancelBattle() }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun V3CombatantCard(fighter: V3Combatant, modifier: Modifier = Modifier, enemy: Boolean) {
+private fun V3BattleGrid(fighters: List<V3Combatant>, state: V3GameState, enemy: Boolean) {
+    fighters.chunked(3).forEach { row ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            row.forEach { fighter ->
+                val person = fighter.personId?.let { id -> state.people.firstOrNull { it.id == id } }
+                V3CombatantCard(fighter, Modifier.weight(1f), enemy = enemy, avatarPath = person?.let { v3AvatarFor(it) })
+            }
+            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
+}
+
+@Composable
+private fun V3CombatantCard(fighter: V3Combatant, modifier: Modifier = Modifier, enemy: Boolean, avatarPath: String? = null) {
     val hpRatio = if (fighter.maxHp <= 0) 0f else fighter.hp.toFloat() / fighter.maxHp.toFloat()
-    Column(modifier.background(if (enemy) V3PaperDeep else V3Rice, V3SoftShape).border(1.dp, if (enemy) V3Red else V3Green, V3SoftShape).padding(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(modifier.background(if (enemy) V3PaperDeep else V3Rice, V3SoftShape).border(1.dp, if (enemy) V3Red else V3Green, V3SoftShape).padding(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (avatarPath != null) {
+            AssetImage(avatarPath, fighter.name, Modifier.size(34.dp), ContentScale.Fit)
+        } else {
+            Box(Modifier.size(34.dp).background(if (enemy) V3Red.copy(alpha = 0.18f) else V3Green.copy(alpha = 0.18f), CircleShape), contentAlignment = Alignment.Center) {
+                Text(if (enemy) "寇" else "兵", color = if (enemy) V3Red else V3Green, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
         Text(fighter.name, color = if (enemy) V3Red else V3Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Text("${fighter.role} · 战${fighter.power}", color = V3Ink, fontSize = 10.sp, maxLines = 1)
         Box(Modifier.fillMaxWidth().height(5.dp).background(V3Border.copy(alpha = 0.25f), V3SoftShape)) {
