@@ -1,5 +1,7 @@
 package com.daming.fushengzhi3.v3.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -1504,13 +1506,14 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                     V3SmallButton("暂缓", Modifier.weight(1f)) { controller.cancelBattle() }
                 }
             } else {
+                val latestHit = battle.roundLog.firstOrNull()
                 Text("敌阵", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                V3BattleGrid(battle.enemies, state, enemy = true)
-                battle.roundLog.firstOrNull()?.let { latest ->
+                V3BattleGrid(battle.enemies, state, enemy = true, recentHitName = latestHit?.defender, recentHitDamage = latestHit?.damage)
+                latestHit?.let { latest ->
                     Text("-${latest.damage}  ${latest.defender}", color = V3Red, fontSize = 24.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 }
                 Text("我阵", color = V3Green, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                V3BattleGrid(battle.allies, state, enemy = false)
+                V3BattleGrid(battle.allies, state, enemy = false, recentHitName = latestHit?.defender, recentHitDamage = latestHit?.damage)
                 if (battle.roundLog.isNotEmpty()) {
                     Text("战报", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     battle.roundLog.take(5).forEach { round -> Text("· ${round.text}", color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp) }
@@ -1528,14 +1531,21 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
 }
 
 @Composable
-private fun V3BattleGrid(fighters: List<V3Combatant>, state: V3GameState, enemy: Boolean) {
+private fun V3BattleGrid(fighters: List<V3Combatant>, state: V3GameState, enemy: Boolean, recentHitName: String? = null, recentHitDamage: Int? = null) {
     fighters.chunked(3).forEach { row ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             row.forEach { fighter ->
                 val person = fighter.personId?.let { id -> state.people.firstOrNull { it.id == id } }
                 val enemyIndex = ((fighter.name.hashCode() and Int.MAX_VALUE) % GameImages.v3EnemyPortraits.size)
                 val enemyAvatar = GameImages.v3EnemyPortraits.getOrNull(enemyIndex)
-                V3CombatantCard(fighter, Modifier.weight(1f), enemy = enemy, avatarPath = if (enemy) enemyAvatar else person?.let { v3AvatarFor(it) })
+                V3CombatantCard(
+                    fighter = fighter,
+                    modifier = Modifier.weight(1f),
+                    enemy = enemy,
+                    avatarPath = if (enemy) enemyAvatar else person?.let { v3AvatarFor(it) },
+                    highlighted = fighter.name == recentHitName,
+                    floatingDamage = if (fighter.name == recentHitName) recentHitDamage else null
+                )
             }
             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }
@@ -1543,22 +1553,95 @@ private fun V3BattleGrid(fighters: List<V3Combatant>, state: V3GameState, enemy:
 }
 
 @Composable
-private fun V3CombatantCard(fighter: V3Combatant, modifier: Modifier = Modifier, enemy: Boolean, avatarPath: String? = null) {
+private fun V3CombatantCard(
+    fighter: V3Combatant,
+    modifier: Modifier = Modifier,
+    enemy: Boolean,
+    avatarPath: String? = null,
+    highlighted: Boolean = false,
+    floatingDamage: Int? = null
+) {
     val hpRatio = if (fighter.maxHp <= 0) 0f else fighter.hp.toFloat() / fighter.maxHp.toFloat()
-    Column(modifier.background(if (enemy) V3PaperDeep else V3Rice, V3SoftShape).border(1.dp, if (enemy) V3Red else V3Green, V3SoftShape).padding(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        if (avatarPath != null) {
-            AssetImage(avatarPath, fighter.name, Modifier.size(34.dp), ContentScale.Fit)
-        } else {
-            Box(Modifier.size(34.dp).background(if (enemy) V3Red.copy(alpha = 0.18f) else V3Green.copy(alpha = 0.18f), CircleShape), contentAlignment = Alignment.Center) {
-                Text(if (enemy) "寇" else "兵", color = if (enemy) V3Red else V3Green, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    val shake = remember { Animatable(0f) }
+    val lift = remember { Animatable(0f) }
+    LaunchedEffect(highlighted, floatingDamage, fighter.hp) {
+        if (highlighted) {
+            shake.snapTo(0f)
+            lift.snapTo(0f)
+            shake.animateTo(
+                0f,
+                keyframes {
+                    durationMillis = 420
+                    0f at 0
+                    -7f at 50
+                    7f at 100
+                    -5f at 150
+                    5f at 210
+                    0f at 300
+                }
+            )
+            lift.animateTo(
+                1f,
+                keyframes {
+                    durationMillis = 520
+                    0f at 0
+                    1f at 520
+                }
+            )
+        }
+    }
+    Box(modifier.graphicsLayer { translationX = shake.value }) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(if (highlighted) V3Red.copy(alpha = 0.16f) else if (enemy) V3PaperDeep else V3Rice, V3SoftShape)
+                .border(if (highlighted) 2.dp else 1.dp, if (highlighted) V3SealRed else if (enemy) V3Red else V3Green, V3SoftShape)
+                .padding(6.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (avatarPath != null) {
+                AssetImage(
+                    avatarPath,
+                    fighter.name,
+                    Modifier
+                        .size(34.dp)
+                        .graphicsLayer {
+                            if (highlighted) {
+                                scaleX = 1.08f
+                                scaleY = 1.08f
+                            }
+                        },
+                    ContentScale.Fit
+                )
+            } else {
+                Box(Modifier.size(34.dp).background(if (enemy) V3Red.copy(alpha = 0.18f) else V3Green.copy(alpha = 0.18f), CircleShape), contentAlignment = Alignment.Center) {
+                    Text(if (enemy) "敌" else "兵", color = if (enemy) V3Red else V3Green, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
             }
+            Text(fighter.name, color = if (enemy) V3Red else V3Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("${fighter.role} · 战${fighter.power}", color = V3Ink, fontSize = 10.sp, maxLines = 1)
+            Box(Modifier.fillMaxWidth().height(5.dp).background(V3Border.copy(alpha = 0.25f), V3SoftShape)) {
+                Box(Modifier.fillMaxWidth(hpRatio.coerceIn(0.03f, 1f)).height(5.dp).background(if (enemy) V3Red else V3Green, V3SoftShape))
+            }
+            Text("血 ${fighter.hp}/${fighter.maxHp}", color = V3Muted, fontSize = 9.sp, maxLines = 1)
         }
-        Text(fighter.name, color = if (enemy) V3Red else V3Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text("${fighter.role} · 战${fighter.power}", color = V3Ink, fontSize = 10.sp, maxLines = 1)
-        Box(Modifier.fillMaxWidth().height(5.dp).background(V3Border.copy(alpha = 0.25f), V3SoftShape)) {
-            Box(Modifier.fillMaxWidth(hpRatio.coerceIn(0.03f, 1f)).height(5.dp).background(if (enemy) V3Red else V3Green, V3SoftShape))
+        floatingDamage?.let { damage ->
+            Text(
+                "-$damage",
+                color = V3SealRed,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .graphicsLayer {
+                        translationY = -18f * lift.value
+                        alpha = 1f - lift.value * 0.45f
+                    }
+                    .background(V3Rice.copy(alpha = 0.82f), CircleShape)
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            )
         }
-        Text("血 ${fighter.hp}/${fighter.maxHp}", color = V3Muted, fontSize = 9.sp, maxLines = 1)
     }
 }
 
