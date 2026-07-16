@@ -52,12 +52,16 @@ object GameImages {
     )
 
     val v3EnemyPortraits = listOf(
-        "image/avatars/enemies/v3_enemy_bandit_1.png",
-        "image/avatars/enemies/v3_enemy_bandit_2.png",
-        "image/avatars/enemies/v3_enemy_bandit_3.png",
-        "image/avatars/enemies/v3_enemy_bandit_4.png",
-        "image/avatars/enemies/v3_enemy_bandit_5.png",
-        "image/avatars/enemies/v3_enemy_bandit_6.png"
+        "image/avatars/enemies/v3_enemy_ref_01.png",
+        "image/avatars/enemies/v3_enemy_ref_02.png",
+        "image/avatars/enemies/v3_enemy_ref_03.png",
+        "image/avatars/enemies/v3_enemy_ref_04.png",
+        "image/avatars/enemies/v3_enemy_ref_05.png",
+        "image/avatars/enemies/v3_enemy_ref_06.png",
+        "image/avatars/enemies/v3_enemy_ref_07.png",
+        "image/avatars/enemies/v3_enemy_ref_08.png",
+        "image/avatars/enemies/v3_enemy_ref_09.png",
+        "image/avatars/enemies/v3_enemy_ref_10.png"
     )
 }
 

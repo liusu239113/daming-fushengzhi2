@@ -790,9 +790,21 @@ object V3GameEngine {
         return V3Combatant(person.name, hp = 70 + person.martial / 2 + person.loyalty / 4, maxHp = 70 + person.martial / 2 + person.loyalty / 4, power = power.coerceAtLeast(12), role = role, personId = person.id)
     }
 
-    private fun enemyLineup(target: String, enemyPower: Int): List<V3Combatant> = List(6) { index ->
-        val power = enemyPower / 8 + index * 3
-        V3Combatant("${target}贼首${index + 1}", hp = 58 + enemyPower / 8 + index * 4, maxHp = 58 + enemyPower / 8 + index * 4, power = power, role = if (index % 2 == 0) "刀" else "弓")
+    private fun enemyLineup(target: String, enemyPower: Int): List<V3Combatant> {
+        val surnames = listOf("赵", "钱", "孙", "周", "吴", "郑", "王", "冯", "陈", "褚", "卫", "蒋", "沈", "韩", "杨", "朱", "秦", "尤", "许", "何", "吕", "施", "张", "孔")
+        val given = listOf("大彪", "铁山", "黑虎", "三刀", "仲魁", "季鹰", "文豹", "守魁", "长贵", "石头", "海蛟", "阿猛", "彦武", "宗烈", "承勇", "虎臣")
+        val faction = when {
+            target.contains("州") || target.contains("府") -> "豪族"
+            target.contains("山") || target.contains("道") -> "山寨"
+            target.contains("海") || target.contains("江") || target.contains("河") -> "水寇"
+            else -> "流寇"
+        }
+        return List(6) { index ->
+            val nameSeed = (target.hashCode() + enemyPower + index * 17).let { if (it < 0) -it else it }
+            val name = "${target}${faction}·${surnames[nameSeed % surnames.size]}${given[(nameSeed / 7) % given.size]}"
+            val power = enemyPower / 8 + index * 3
+            V3Combatant(name, hp = 58 + enemyPower / 8 + index * 4, maxHp = 58 + enemyPower / 8 + index * 4, power = power, role = if (index % 3 == 0) "刀" else if (index % 3 == 1) "弓" else "枪")
+        }
     }
 
     fun raiseBanner(state: V3GameState): V3GameState {
