@@ -89,6 +89,9 @@ private val V3Bg = Color(0xFFB98E59)
 private val V3Border = Color(0xFF8A5A19)
 private val V3SealRed = Color(0xFFB33A2F)
 private val V3Rice = Color(0xFFFFF4D8)
+private val V3SoftShape = RoundedCornerShape(16.dp)
+private val V3PanelShape = RoundedCornerShape(20.dp)
+private val V3ButtonShape = RoundedCornerShape(14.dp)
 
 @Composable
 fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: () -> Unit) {
@@ -172,6 +175,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     var confirmBackToMenu by remember { mutableStateOf(false) }
     var elderGuideVisible by remember { mutableStateOf(state.year == 1601 && state.month <= 3) }
     var elderGuideStep by remember { mutableStateOf(0) }
+    var guideStrategyPage by remember { mutableStateOf<String?>(null) }
     V3Background {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
@@ -188,7 +192,11 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                             V3Screen.County -> V3HomePage(state, controller)
                             V3Screen.Clan -> V3ClanPage(state, controller)
                             V3Screen.People -> V3PeoplePage(state, controller)
-                            V3Screen.Strategy -> V3StrategyPage(state, controller)
+                            V3Screen.Strategy -> V3StrategyPage(state, controller, forcedPage = guideStrategyPage, openGuide = {
+                                elderGuideStep = 0
+                                guideStrategyPage = null
+                                elderGuideVisible = true
+                            })
                         }
                     }
                 }
@@ -210,7 +218,11 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                     controller = controller,
                     stepIndex = elderGuideStep,
                     onStepChange = { elderGuideStep = it },
-                    onDismiss = { elderGuideVisible = false }
+                    onStrategyPageChange = { guideStrategyPage = it },
+                    onDismiss = {
+                        guideStrategyPage = null
+                        elderGuideVisible = false
+                    }
                 )
             }
         }
@@ -314,56 +326,169 @@ private fun forecastDangerCount(state: V3GameState): Int = state.sites.count { i
 
 private fun expandedMapPoint(point: Offset): Offset = Offset(0.18f + point.x * 0.64f, 0.18f + point.y * 0.64f)
 
+private enum class V3GuideFocus {
+    TopBar,
+    TimeControls,
+    Resources,
+    MainPanel,
+    MapArea,
+    BottomNav
+}
+
 private data class V3ElderGuideStep(
     val tab: V3Screen,
     val title: String,
     val words: String,
-    val action: String
+    val action: String,
+    val focus: V3GuideFocus,
+    val strategyPage: String? = null
 )
 
 private fun elderGuideSteps(state: V3GameState): List<V3ElderGuideStep> = listOf(
     V3ElderGuideStep(
         V3Screen.County,
-        "族老叩案",
-        "慎行，县中粮价已动。先看家业账本，再点县域地图，把宗祠、田庄、集市这些根基立住。",
-        "去县域"
+        "雨夜启卷",
+        "慎行，今晚族祠只点一盏灯。你接过的是${state.clanName}的家乘，不是一张空账。先看最上方的案头：银两能办事，粮食能养人，人口是根，产业是枝。时间默认暂停，别急着让月份流走。",
+        "看案头",
+        V3GuideFocus.TopBar
+    ),
+    V3ElderGuideStep(
+        V3Screen.County,
+        "别让年月偷跑",
+        "这里是时间控制。点【继续】或 1倍、2倍、3倍，月份才会流动。每次切页面都会自动暂停，给你时间看账、派人、营建。经营游戏不是拼手速，是先做决定。",
+        "看时间",
+        V3GuideFocus.TimeControls
+    ),
+    V3ElderGuideStep(
+        V3Screen.County,
+        "四样家底",
+        "这四个小胶囊是眼前命脉：银两用来婚配、营建、升级；粮食养人养勇；人口决定族谱能不能延续；产业决定每月是否有稳定进项。少看一个，账就会歪。",
+        "看资源",
+        V3GuideFocus.Resources
+    ),
+    V3ElderGuideStep(
+        V3Screen.County,
+        "先读月账",
+        "家业页第一眼看【族中月账】和【本月账本】。入银、出银、入粮、出粮决定你能不能撑过一年。人丁越多，消耗越大；乡勇越多，打仗越稳，粮仓也越紧。",
+        "看账本",
+        V3GuideFocus.MainPanel
+    ),
+    V3ElderGuideStep(
+        V3Screen.County,
+        "县图可拖",
+        "这块县域地图可以拖动。宗祠管凝聚，田庄管粮，集市管银，书院管科举，寨堡管军务，码头管商路。点任意建筑，会弹出管理窗口。",
+        "看地图",
+        V3GuideFocus.MapArea
+    ),
+    V3ElderGuideStep(
+        V3Screen.County,
+        "营建根基",
+        "建筑不是摆设。先造田庄保粮，再开集市补银；若流寇逼近，寨堡要早修；若想走读书入仕，书院不能拖。每个地点都有升级成本和特殊动作。",
+        "看营建",
+        V3GuideFocus.MapArea
     ),
     V3ElderGuideStep(
         V3Screen.Clan,
-        "先成一户",
-        "一人难成族。到宗族页迎娶妻子，后面才有添丁、分房和族谱传承。",
-        "去宗族"
+        "一户成家",
+        "现在自动切到宗族页。乱世里，一人不是宗族。先看【婚配】，迎娶妻子后，后面才有添丁、子嗣、房支、族谱传承。没有家口，李氏再有银粮也只是独户。",
+        "看婚配",
+        V3GuideFocus.MainPanel
+    ),
+    V3ElderGuideStep(
+        V3Screen.Clan,
+        "宗族晋升",
+        "宗族页还有【晋升宗族】。晋升要银、粮、人口、产业和族望。品第越高，家族影响越大，路线推进也更稳。别只攒钱，人口和族望同样要经营。",
+        "看晋升",
+        V3GuideFocus.MainPanel
     ),
     V3ElderGuideStep(
         V3Screen.People,
-        "因材用人",
-        "族人不是摆设。孩童先培养，成年后派往田庄、集市、书院或寨堡，每月都会回到账上。",
-        "看族谱"
+        "翻开族谱",
+        "现在自动切到族人页。这里是活的族谱，不是名单。拖动画布看族人，点头像看详情。孩童先培养，成年后派差；老人虽少外出，也能撑起房支名望。",
+        "看族谱",
+        V3GuideFocus.MapArea
+    ),
+    V3ElderGuideStep(
+        V3Screen.People,
+        "因材派差",
+        "点开族人后看四项：学、武、商、谋。学高走书院和科举，武高守寨讨寇，商高跑集市码头，谋高适合交涉经营。派错人不是不能做，但收益会低。",
+        "点族人",
+        V3GuideFocus.MainPanel
+    ),
+    V3ElderGuideStep(
+        V3Screen.People,
+        "培养与疲劳",
+        "每个族人都可以培养。孩童培养成长更快，成年族人办事会积累功绩，也会疲劳。疲劳高了要收手，否则家里账面好看，人却会被拖垮。",
+        "看培养",
+        V3GuideFocus.MainPanel
     ),
     V3ElderGuideStep(
         V3Screen.Strategy,
-        "择一条路",
-        "乱世渐近。耕读、商族、自保、勤王、割据、海路都会留下痕迹，别让年月白白流走。",
-        "看大势"
+        "看清大势",
+        "现在自动切到大势页。这里不是结算页，是路线盘。耕读、重商、自保、勤王、割据、海路，每个月的选择都会悄悄给路线加分，最后决定李氏写进怎样的家乘。",
+        "看大势",
+        V3GuideFocus.MainPanel,
+        strategyPage = "声势"
+    ),
+    V3ElderGuideStep(
+        V3Screen.Strategy,
+        "四个分卷",
+        "大势页上方有【声势、天下、军务、近事】四个按钮。声势看路线，天下看地域，军务管战争，近事看日志。后面玩不懂，就先回这四个分卷找线索。",
+        "看分卷",
+        V3GuideFocus.MainPanel,
+        strategyPage = "声势"
+    ),
+    V3ElderGuideStep(
+        V3Screen.Strategy,
+        "天下地图",
+        "【天下】是一张更大的局。地图可以拖动，点清河县、州府、南直隶、京畿、天下这些节点，可以结交、经营、征伐。县里稳住后，李氏才有资格看天下。",
+        "看天下",
+        V3GuideFocus.MapArea,
+        strategyPage = "天下"
+    ),
+    V3ElderGuideStep(
+        V3Screen.Strategy,
+        "军务与举旗",
+        "【军务】里能讨伐流寇，也能举旗。别早早举旗，乡勇、寨堡、族望、武艺人才都不够时，旗一竖就是灭门。先自保，再谈征伐。",
+        "看军务",
+        V3GuideFocus.MainPanel,
+        strategyPage = "军务"
+    ),
+    V3ElderGuideStep(
+        V3Screen.County,
+        "底部四页",
+        "最后看底部四个主按钮：家业、宗族、族人、大势。家业管账和地图，宗族管婚配晋升，族人管培养派差，大势管路线天下。四页都会用，才是真正在经营宗族。",
+        "看底栏",
+        V3GuideFocus.BottomNav
+    ),
+    V3ElderGuideStep(
+        V3Screen.County,
+        "族老退席",
+        "记住顺序：先成家，再造田；先养人，再派差；先稳县，再问天下。若哪一步忘了，到大势页点【族老札记】，我会重新把这卷家乘讲一遍。",
+        "开始经营",
+        V3GuideFocus.MainPanel
     )
 )
 
 @Composable
-private fun V3ElderGuideOverlay(state: V3GameState, controller: V3GameController, stepIndex: Int, onStepChange: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun V3ElderGuideOverlay(state: V3GameState, controller: V3GameController, stepIndex: Int, onStepChange: (Int) -> Unit, onStrategyPageChange: (String?) -> Unit, onDismiss: () -> Unit) {
     val steps = elderGuideSteps(state)
     val safeIndex = stepIndex.coerceIn(0, steps.lastIndex)
     val step = steps[safeIndex]
     LaunchedEffect(safeIndex) {
+        onStrategyPageChange(step.strategyPage)
+        controller.switchScreen(step.tab)
         controller.playGuideTick()
     }
-    Box(Modifier.fillMaxSize().background(Color(0x66000000))) {
+    Box(Modifier.fillMaxSize().background(Color(0x77000000))) {
+        V3GuideFocusFrame(step.focus)
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
                 .padding(12.dp)
                 .fillMaxWidth()
-                .background(V3Rice, RoundedCornerShape(0.dp))
-                .border(2.dp, V3Gold, RoundedCornerShape(0.dp))
+                .background(V3Rice, V3PanelShape)
+                .border(2.dp, V3Gold, V3PanelShape)
                 .padding(12.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -391,6 +516,49 @@ private fun V3ElderGuideOverlay(state: V3GameState, controller: V3GameController
 }
 
 @Composable
+private fun V3GuideFocusFrame(focus: V3GuideFocus) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val modifier = when (focus) {
+            V3GuideFocus.TopBar -> Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(58.dp)
+                .padding(horizontal = 8.dp, vertical = 5.dp)
+            V3GuideFocus.TimeControls -> Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 8.dp, top = 54.dp)
+                .height(48.dp)
+            V3GuideFocus.Resources -> Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 8.dp, top = 102.dp)
+                .height(62.dp)
+            V3GuideFocus.MainPanel -> Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .height(maxHeight * 0.42f)
+                .padding(horizontal = 12.dp)
+            V3GuideFocus.MapArea -> Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth()
+                .height(maxHeight * 0.52f)
+                .padding(horizontal = 14.dp)
+            V3GuideFocus.BottomNav -> Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(70.dp)
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+        }
+        Box(
+            modifier
+                .background(Color(0x22FFF4D8), V3PanelShape)
+                .border(3.dp, V3Gold, V3PanelShape)
+        )
+    }
+}
+
+@Composable
 private fun V3RouteOverviewPanel(state: V3GameState) {
     val dominant = V3GameEngine.dominantRoute(state)
     V3Panel {
@@ -408,8 +576,8 @@ private fun V3RouteProgressRow(label: String, score: Int, selected: Boolean) {
             Text(label, color = if (selected) V3Gold else V3Ink, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
             Text(routeStage(score), color = if (selected) V3Gold else V3Muted, fontSize = 12.sp)
         }
-        Box(Modifier.fillMaxWidth().height(7.dp).background(V3PaperDeep, RoundedCornerShape(0.dp))) {
-            Box(Modifier.fillMaxWidth((score.coerceIn(0, 100) / 100f).coerceAtLeast(0.05f)).height(7.dp).background(if (selected) V3Gold else V3Blue, RoundedCornerShape(0.dp)))
+        Box(Modifier.fillMaxWidth().height(7.dp).background(V3PaperDeep, V3SoftShape)) {
+            Box(Modifier.fillMaxWidth((score.coerceIn(0, 100) / 100f).coerceAtLeast(0.05f)).height(7.dp).background(if (selected) V3Gold else V3Blue, V3SoftShape))
         }
     }
 }
@@ -441,7 +609,7 @@ private fun V3ClanPage(state: V3GameState, controller: V3GameController) {
             Text("婚配", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text("娶妻后才会有添丁机会，这是家族模拟的第一步。", color = V3Ink, fontSize = 13.sp)
             options.take(3).forEach { option ->
-                Card(colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Gold), shape = RoundedCornerShape(0.dp)) {
+                Card(colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Gold), shape = V3SoftShape) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(option.name, color = V3Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -498,7 +666,7 @@ private fun V3GenealogyTree(clanName: String, people: List<V3Person>, onSelect: 
     V3Panel {
         Text("${clanName}谱系", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text("拖动画布查看族人；点头像可看详情、培养和派差。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        Box(Modifier.fillMaxWidth().height(460.dp).clip(RoundedCornerShape(0.dp)).background(V3Rice, RoundedCornerShape(0.dp)).pointerInput(Unit) {
+        Box(Modifier.fillMaxWidth().height(460.dp).clip(V3SoftShape).background(V3Rice, V3SoftShape).pointerInput(Unit) {
             detectDragGestures { _, dragAmount -> pan = Offset((pan.x + dragAmount.x).coerceIn(-880f, 80f), (pan.y + dragAmount.y).coerceIn(-980f, 80f)) }
         }) {
             AssetImage(GameImages.V3GenealogyBg, null, Modifier.matchParentSize(), ContentScale.Crop, alpha = 0.72f)
@@ -522,13 +690,13 @@ private fun V3GenealogyTree(clanName: String, people: List<V3Person>, onSelect: 
 @Composable
 private fun V3FamilyMiniNode(person: V3Person, x: Int, y: Int, onSelect: (Int) -> Unit) {
     Column(
-        Modifier.graphicsLayer { translationX = x.toFloat(); translationY = y.toFloat() }.width(104.dp).background(V3Rice.copy(alpha = 0.94f), RoundedCornerShape(0.dp)).clickable { onSelect(person.id) }.padding(6.dp),
+        Modifier.graphicsLayer { translationX = x.toFloat(); translationY = y.toFloat() }.width(104.dp).background(V3Rice.copy(alpha = 0.94f), V3SoftShape).clickable { onSelect(person.id) }.padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         AssetImage(v3AvatarFor(person), person.name, Modifier.size(48.dp), ContentScale.Fit)
         Text(person.name, color = V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text("${person.age}岁 · ${person.gender.label}", color = V3Muted, fontSize = 10.sp, maxLines = 1)
+        Text("${person.age}岁 · ${person.trait.label}", color = V3Muted, fontSize = 10.sp, maxLines = 1)
     }
 }
 
@@ -556,9 +724,12 @@ private fun V3PersonDetailDialog(person: V3Person, state: V3GameState, controlle
 }
 
 @Composable
-private fun V3StrategyPage(state: V3GameState, controller: V3GameController) {
+private fun V3StrategyPage(state: V3GameState, controller: V3GameController, forcedPage: String?, openGuide: () -> Unit) {
     val ending = V3GameEngine.endingPreview(state)
-    var page by remember { mutableStateOf("声势") }
+    var page by remember { mutableStateOf(forcedPage ?: "声势") }
+    LaunchedEffect(forcedPage) {
+        if (forcedPage != null) page = forcedPage
+    }
     V3Section("大势", "当前路线：${V3GameEngine.dominantRoute(state).label}")
     V3Panel {
         Text("路线评估：${ending.title}", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -606,7 +777,7 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController) {
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         V3SmallButton("设置", Modifier.weight(1f), onClick = controller::openSettings)
-        V3SmallButton("族老札记", Modifier.weight(1f), onClick = controller::openPlayGuide)
+        V3SmallButton("族老札记", Modifier.weight(1f), onClick = openGuide)
     }
 }
 
@@ -648,7 +819,7 @@ private fun V3RegionManageDialog(region: V3WorldRegion, state: V3GameState, cont
 @Composable
 private fun V3WorldVisualMap(state: V3GameState, onSelect: (String) -> Unit) {
     var pan by remember { mutableStateOf(Offset.Zero) }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(430.dp).background(V3Rice, RoundedCornerShape(0.dp)).clip(RoundedCornerShape(0.dp))) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(430.dp).background(V3Rice, V3SoftShape).clip(V3SoftShape)) {
         val density = LocalDensity.current
         val frameWidthPx = with(density) { maxWidth.toPx() }
         val frameHeightPx = with(density) { maxHeight.toPx() }
@@ -665,7 +836,7 @@ private fun V3WorldVisualMap(state: V3GameState, onSelect: (String) -> Unit) {
             }
         }) {
             Box(Modifier.size(width = mapWidth, height = mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
-                AssetImage(GameImages.V3WorldMap, null, Modifier.fillMaxSize(), ContentScale.Crop, alpha = 0.96f)
+                AssetImage(GameImages.V3WorldMap, null, Modifier.fillMaxSize(), ContentScale.FillBounds, alpha = 0.96f)
                 Canvas(Modifier.matchParentSize()) {
                     drawLine(V3Red.copy(alpha = 0.55f), Offset(size.width * 0.12f, size.height * 0.72f), Offset(size.width * 0.38f, size.height * 0.54f), strokeWidth = 5f, cap = StrokeCap.Square)
                     drawLine(V3Red.copy(alpha = 0.55f), Offset(size.width * 0.38f, size.height * 0.54f), Offset(size.width * 0.67f, size.height * 0.38f), strokeWidth = 5f, cap = StrokeCap.Square)
@@ -702,14 +873,14 @@ private fun V3WorldRegionPin(region: V3WorldRegion, worldWidthPx: Float, worldHe
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        Box(Modifier.size(72.dp).background(V3Paper.copy(alpha = 0.24f), RoundedCornerShape(0.dp)).padding(2.dp), contentAlignment = Alignment.Center) {
-            Box(Modifier.matchParentSize().background(color.copy(alpha = 0.32f), RoundedCornerShape(0.dp)))
+        Box(Modifier.size(72.dp).background(V3Paper.copy(alpha = 0.24f), V3SoftShape).padding(2.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.matchParentSize().background(color.copy(alpha = 0.32f), V3SoftShape))
             if (icon != null) {
                 AssetImage(icon, region.name, Modifier.size(68.dp), ContentScale.Fit)
             }
         }
         Column(
-            Modifier.fillMaxWidth().background(V3Paper.copy(alpha = 0.92f), RoundedCornerShape(0.dp)).padding(horizontal = 4.dp, vertical = 3.dp),
+            Modifier.fillMaxWidth().background(V3Paper.copy(alpha = 0.92f), V3SoftShape).padding(horizontal = 4.dp, vertical = 3.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
@@ -733,7 +904,7 @@ private fun worldMapPoint(regionId: String): Offset = expandedMapPoint(when (reg
 private fun V3CountyMapView(state: V3GameState, onSelectSite: (String) -> Unit) {
     var pan by remember { mutableStateOf(Offset.Zero) }
     val frameHeight = 560.dp
-    val frameShape = RoundedCornerShape(0.dp)
+    val frameShape = V3SoftShape
     val density = LocalDensity.current
     V3Panel {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -760,7 +931,7 @@ private fun V3CountyMapView(state: V3GameState, onSelectSite: (String) -> Unit) 
                 }
             ) {
                 Box(Modifier.size(width = mapWidth, height = mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
-                    AssetImage(GameImages.V3MapBgPlain, null, Modifier.fillMaxSize(), ContentScale.Crop)
+                    AssetImage(GameImages.V3MapBgPlain, null, Modifier.fillMaxSize(), ContentScale.FillBounds)
                     state.sites.forEach { site ->
                         V3MapSitePin(site, mapWidthPx = mapWidthPx, mapHeightPx = mapHeightPx) { onSelectSite(site.id) }
                     }
@@ -797,7 +968,7 @@ private fun V3MapSitePin(site: V3CountySite, mapWidthPx: Float, mapHeightPx: Flo
         Box(Modifier.size(70.dp), contentAlignment = Alignment.Center) {
             AssetImage(icon, site.name, Modifier.size(66.dp), ContentScale.Fit)
         }
-        Text(site.name, color = markerColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.background(V3Rice.copy(alpha = 0.88f), RoundedCornerShape(0.dp)).padding(horizontal = 5.dp, vertical = 3.dp))
+        Text(site.name, color = markerColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.background(V3Rice.copy(alpha = 0.88f), V3SoftShape).padding(horizontal = 5.dp, vertical = 3.dp))
     }
 }
 
@@ -1052,14 +1223,14 @@ private fun V3Section(title: String, subtitle: String) {
 
 @Composable
 private fun V3Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Border), shape = RoundedCornerShape(0.dp)) {
+    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Border), shape = V3PanelShape) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
 
 @Composable
 private fun V3ImagePanel(imagePath: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Gold), shape = RoundedCornerShape(0.dp)) {
+    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Gold), shape = V3PanelShape) {
         Box {
             AssetImage(imagePath, null, Modifier.matchParentSize(), ContentScale.Crop, alpha = 0.55f)
             Box(Modifier.matchParentSize().background(Color(0xDDF8EBCB)))
@@ -1147,7 +1318,7 @@ private fun V3SelectorChips(title: String, values: List<Pair<String, String>>, s
 
 @Composable
 private fun V3Metric(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier.background(V3PaperDeep, RoundedCornerShape(0.dp)).padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.background(V3PaperDeep, V3SoftShape).padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = V3Muted, fontSize = 11.sp)
         Text(value.toString(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
@@ -1180,7 +1351,7 @@ private fun V3RelationRow(label: String, value: Int) {
 private fun V3GoalRow(state: V3GameState, goal: V3AnnualGoal) {
     val progress = V3GameEngine.goalProgress(state, goal)
     val reached = progress >= goal.target || goal.completed
-    Column(Modifier.fillMaxWidth().background(if (reached) V3Green.copy(alpha = 0.16f) else V3PaperDeep, RoundedCornerShape(0.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(Modifier.fillMaxWidth().background(if (reached) V3Green.copy(alpha = 0.16f) else V3PaperDeep, V3SoftShape).padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(goal.title, color = V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(if (reached) "已成" else "${progress}/${goal.target}", color = if (reached) V3Green else V3Red, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -1194,8 +1365,8 @@ private fun V3Button(text: String, modifier: Modifier = Modifier, onClick: () ->
     Text(
         text,
         modifier = modifier
-            .background(V3Red, RoundedCornerShape(0.dp))
-            .border(1.dp, V3Gold, RoundedCornerShape(0.dp))
+            .background(V3Red, V3ButtonShape)
+            .border(1.dp, V3Gold, V3ButtonShape)
             .clickable(onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 12.dp),
         color = V3Rice,
@@ -1220,8 +1391,8 @@ private fun V3SmallButton(text: String, modifier: Modifier = Modifier, enabled: 
     Text(
         text,
         modifier = modifier
-            .background(bg, RoundedCornerShape(0.dp))
-            .border(1.dp, if (selected) V3Gold else V3Border.copy(alpha = 0.45f), RoundedCornerShape(0.dp))
+            .background(bg, V3SoftShape)
+            .border(1.dp, if (selected) V3Gold else V3Border.copy(alpha = 0.45f), V3SoftShape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 7.dp, vertical = 8.dp),
         color = fg,
@@ -1241,7 +1412,7 @@ private fun V3EventDialog(event: V3ActiveEvent, controller: V3GameController) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(event.body, color = V3Ink, fontSize = 15.sp, lineHeight = 23.sp)
                     event.choices.forEach { choice ->
-                        Card(modifier = Modifier.fillMaxWidth().clickable { controller.chooseEvent(choice) }, colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Red), shape = RoundedCornerShape(0.dp)) {
+                        Card(modifier = Modifier.fillMaxWidth().clickable { controller.chooseEvent(choice) }, colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Red), shape = V3SoftShape) {
                             Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text(choice.label, color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)

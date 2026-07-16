@@ -43,6 +43,8 @@ private val MenuMuted = Color(0xFF6E5D46)
 private val MenuGold = Color(0xFF8A5A19)
 private val MenuRed = Color(0xFFA83224)
 private val MenuCyan = Color(0xFF426B67)
+private val MenuShape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+private val MenuButtonShape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
 
 @Composable
 fun MainMenuScreen(
@@ -108,14 +110,18 @@ private fun MenuButton(text: String, subtitle: String = "", enabled: Boolean = t
         modifier = Modifier.fillMaxWidth().then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
         colors = CardDefaults.cardColors(containerColor = bg),
         border = BorderStroke(2.dp, border),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp)
+        shape = MenuButtonShape
     ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 15.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(text, color = if (enabled) MenuInk else MenuMuted, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(text, color = when {
+                !enabled -> MenuMuted
+                primary -> Color(0xFFFFF4D8)
+                else -> MenuInk
+            }, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             if (subtitle.isNotBlank()) Text(subtitle, color = if (enabled) MenuMuted else MenuMuted.copy(alpha = 0.6f), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }
@@ -126,7 +132,7 @@ private fun MenuPanel(content: @Composable ColumnScope.() -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MenuSurface),
         border = BorderStroke(2.dp, MenuGold),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+        shape = MenuShape,
         modifier = Modifier.fillMaxWidth().widthIn(max = 460.dp)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
@@ -158,8 +164,8 @@ private fun MenuSettingsDialog(controller: V3GameController, fontPreference: Fon
 private fun MenuChoice(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Text(
         text,
-        modifier = modifier.background(if (selected) MenuRed else MenuSurface2).clickable(onClick = onClick).padding(vertical = 10.dp),
-        color = MenuInk,
+        modifier = modifier.background(if (selected) MenuRed else MenuSurface2, MenuButtonShape).clickable(onClick = onClick).padding(vertical = 10.dp),
+        color = if (selected) Color(0xFFFFF4D8) else MenuInk,
         fontSize = 13.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center
