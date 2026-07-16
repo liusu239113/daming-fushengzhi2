@@ -92,12 +92,75 @@ data class V3ExamSession(
 )
 
 @Serializable
+enum class V3TroopType(val label: String, val desc: String, val silverCost: Int, val grainCost: Int, val power: Int) {
+    Militia("乡勇", "便宜耐用，前期守寨讨寇主力", 5, 8, 8),
+    Spear("枪兵", "克制骑冲，适合稳阵", 10, 14, 14),
+    Archer("弓手", "先手消耗，适合压低敌方血线", 12, 10, 13),
+    Shield("盾手", "护住文官与弓手，降低伤损", 14, 16, 15),
+    Cavalry("骑兵", "后期冲阵强，但费用高", 28, 22, 28)
+}
+
+@Serializable
+data class V3ArmyRoster(
+    val militia: Int = 20,
+    val spear: Int = 0,
+    val archer: Int = 0,
+    val shield: Int = 0,
+    val cavalry: Int = 0
+) {
+    fun count(type: V3TroopType): Int = when (type) {
+        V3TroopType.Militia -> militia
+        V3TroopType.Spear -> spear
+        V3TroopType.Archer -> archer
+        V3TroopType.Shield -> shield
+        V3TroopType.Cavalry -> cavalry
+    }
+
+    fun add(type: V3TroopType, amount: Int): V3ArmyRoster = when (type) {
+        V3TroopType.Militia -> copy(militia = militia + amount)
+        V3TroopType.Spear -> copy(spear = spear + amount)
+        V3TroopType.Archer -> copy(archer = archer + amount)
+        V3TroopType.Shield -> copy(shield = shield + amount)
+        V3TroopType.Cavalry -> copy(cavalry = cavalry + amount)
+    }
+
+    fun total(): Int = militia + spear + archer + shield + cavalry
+
+    fun battlePower(): Int = militia * V3TroopType.Militia.power + spear * V3TroopType.Spear.power + archer * V3TroopType.Archer.power + shield * V3TroopType.Shield.power + cavalry * V3TroopType.Cavalry.power
+}
+
+@Serializable
+data class V3Combatant(
+    val name: String,
+    val hp: Int,
+    val maxHp: Int,
+    val power: Int,
+    val role: String,
+    val personId: Int? = null
+)
+
+@Serializable
+data class V3BattleRound(
+    val attacker: String,
+    val defender: String,
+    val damage: Int,
+    val text: String
+)
+
+@Serializable
 data class V3BattleState(
     val target: String,
     val enemyPower: Int,
     val rewardInfluence: Int,
     val rewardSilver: Int,
-    val risk: String
+    val risk: String,
+    val selectedPersonIds: List<Int> = emptyList(),
+    val allies: List<V3Combatant> = emptyList(),
+    val enemies: List<V3Combatant> = emptyList(),
+    val roundLog: List<V3BattleRound> = emptyList(),
+    val turn: Int = 0,
+    val finished: Boolean = false,
+    val victory: Boolean = false
 )
 
 @Serializable
@@ -272,6 +335,7 @@ data class V3GameState(
     val influence: Int = 35,
     val cohesion: Int = 60,
     val militia: Int = 20,
+    val army: V3ArmyRoster = V3ArmyRoster(),
     val people: List<V3Person> = V3Content.initialPeople,
     val branches: List<V3Branch> = V3Content.initialBranches,
     val sites: List<V3CountySite> = V3Content.initialSites,

@@ -57,6 +57,8 @@ import com.daming.fushengzhi3.ui.components.AssetImage
 import com.daming.fushengzhi3.ui.theme.FontPreference
 import com.daming.fushengzhi3.ui.theme.FontStyleKey
 import com.daming.fushengzhi3.v3.data.V3ActiveEvent
+import com.daming.fushengzhi3.v3.data.V3BattleState
+import com.daming.fushengzhi3.v3.data.V3Combatant
 import com.daming.fushengzhi3.v3.data.V3AnnualGoal
 import com.daming.fushengzhi3.v3.data.V3Content
 import com.daming.fushengzhi3.v3.data.V3CountySite
@@ -72,6 +74,7 @@ import com.daming.fushengzhi3.v3.data.V3Screen
 import com.daming.fushengzhi3.v3.data.V3SiteYield
 import com.daming.fushengzhi3.v3.data.V3TaskType
 import com.daming.fushengzhi3.v3.data.V3TrainingType
+import com.daming.fushengzhi3.v3.data.V3TroopType
 import com.daming.fushengzhi3.v3.data.V3WorldRegion
 import com.daming.fushengzhi3.v3.logic.V3GameController
 import com.daming.fushengzhi3.v3.logic.V3GameEngine
@@ -260,7 +263,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         V3ExamDialog(session = session, controller = controller)
     }
     controller.state.battleState?.let { battle ->
-        V3BattleDialog(target = battle.target, enemyPower = battle.enemyPower, risk = battle.risk, controller = controller)
+        V3BattleDialog(state = controller.state, battle = battle, controller = controller)
     }
     controller.state.conquestState?.let { conquest ->
         V3ConquestDialog(target = conquest.targetName, enemyPower = conquest.enemyPower, scale = conquest.scale, controller = controller)
@@ -764,10 +767,24 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController, for
         "天下" -> V3WorldPanel(state, controller)
         "军务" -> V3Panel {
             Text("军务与举旗", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("乡勇 ${state.militia} · 举旗热度 ${state.rebelHeat}。战斗参考乡勇、武艺最高族人、寨堡等级和军镇关系。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+            val recruitUnlocked = V3GameEngine.isUnlocked(state, "Recruit")
+            val advancedUnlocked = V3GameEngine.isUnlocked(state, "AdvancedTroops")
+            val conquestUnlocked = V3GameEngine.isUnlocked(state, "Conquest")
+            val bannerUnlocked = V3GameEngine.isUnlocked(state, "RaiseBanner")
+            Text("兵册 ${state.army.total()} · 乡勇 ${state.army.militia} · 枪${state.army.spear} 弓${state.army.archer} 盾${state.army.shield} 骑${state.army.cavalry}。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+            Text("解锁：募兵 ${if (recruitUnlocked) "已开" else "小族/寨堡"} · 精兵 ${if (advancedUnlocked) "已开" else "望族+团练营"} · 征伐 ${if (conquestUnlocked) "已开" else "望族+控制地域"} · 举旗 ${if (bannerUnlocked) "已开" else "县中大姓+兵80"}", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+            V3TroopType.entries.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { type ->
+                        val enabled = type == V3TroopType.Militia || advancedUnlocked || (type == V3TroopType.Cavalry && state.clanRank >= 4)
+                        V3SmallButton("募${type.label}×5", Modifier.weight(1f), enabled = recruitUnlocked && enabled) { controller.recruitTroops(type, 5) }
+                    }
+                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                V3SmallButton("讨伐流寇", Modifier.weight(1f), enabled = state.battleState == null) { controller.startBattle() }
-                V3SmallButton("举旗造反", Modifier.weight(1f)) { controller.raiseBanner() }
+                V3SmallButton("讨伐流寇", Modifier.weight(1f), enabled = recruitUnlocked && state.battleState == null) { controller.startBattle() }
+                V3SmallButton("举旗造反", Modifier.weight(1f), enabled = bannerUnlocked) { controller.raiseBanner() }
             }
         }
         else -> V3Panel {
@@ -809,7 +826,7 @@ private fun V3RegionManageDialog(region: V3WorldRegion, state: V3GameState, cont
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V3SmallButton("结交", Modifier.weight(1f), enabled = region.status == V3RegionStatus.Unknown) { controller.contactRegion(region.id) }
                 V3SmallButton("经营", Modifier.weight(1f)) { controller.influenceRegion(region.id) }
-                V3SmallButton("征伐", Modifier.weight(1f), enabled = state.conquestState == null) { controller.startConquest(region.id) }
+                V3SmallButton("征伐", Modifier.weight(1f), enabled = state.conquestState == null && V3GameEngine.isUnlocked(state, "Conquest")) { controller.startConquest(region.id) }
             }
             V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
         }
@@ -1460,18 +1477,69 @@ private fun V3ExamDialog(session: com.daming.fushengzhi3.v3.data.V3ExamSession, 
 }
 
 @Composable
-private fun V3BattleDialog(target: String, enemyPower: Int, risk: String, controller: V3GameController) {
+private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller: V3GameController) {
     Dialog(onDismissRequest = {}) {
-        V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 460.dp)) {
-            Text("军务出征", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            Text("目标：$target", color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text("敌势：$enemyPower · 风险：$risk", color = V3Muted, fontSize = 13.sp)
-            Text("结算会参考乡勇数量、武艺最高族人、寨堡等级和军镇关系。胜利后降低地点风险，推动从军、自保和割据路线。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+        V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 520.dp)) {
+            Text("军务出征 · ${battle.target}", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("敌势 ${battle.enemyPower} · 风险 ${battle.risk} · 已选 ${battle.selectedPersonIds.size}/6。下方点族人入阵，点推进回合会一来一回交战。", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("敌阵", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            battle.enemies.chunked(3).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    row.forEach { fighter -> V3CombatantCard(fighter, Modifier.weight(1f), enemy = true) }
+                    repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Text("我阵", color = V3Green, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            val selected = battle.allies
+            if (selected.isEmpty()) {
+                Text("尚未派人。请选择最多6名成年族人。", color = V3Muted, fontSize = 12.sp)
+            } else {
+                selected.chunked(3).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { fighter -> V3CombatantCard(fighter, Modifier.weight(1f), enemy = false) }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+            Text("候选族人", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.fillMaxWidth().heightIn(max = 132.dp).verticalScroll(rememberScrollState())) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    V3GameEngine.adultPeople(state).chunked(2).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.forEach { person ->
+                                val selectedPerson = battle.selectedPersonIds.contains(person.id)
+                                V3SmallButton("${person.name} 武${person.martial} 谋${person.diplomacy}", Modifier.weight(1f), selected = selectedPerson) { controller.selectBattlePerson(person.id) }
+                            }
+                            repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+            }
+            if (battle.roundLog.isNotEmpty()) {
+                Text("战报", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                battle.roundLog.take(4).forEach { round -> Text("· ${round.text}", color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp) }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                V3SmallButton("出战", Modifier.weight(1f), selected = true) { controller.resolveBattle() }
-                V3SmallButton("暂缓", Modifier.weight(1f)) { controller.cancelBattle() }
+                V3SmallButton(if (battle.finished) "收兵结算" else "推进回合", Modifier.weight(1f), selected = true) {
+                    if (battle.finished) controller.finalizeBattle() else controller.advanceBattleRound()
+                }
+                V3SmallButton("自动打完", Modifier.weight(1f), enabled = !battle.finished) { controller.resolveBattle() }
+                V3SmallButton("暂缓", Modifier.weight(1f), enabled = !battle.finished) { controller.cancelBattle() }
             }
         }
+    }
+}
+
+@Composable
+private fun V3CombatantCard(fighter: V3Combatant, modifier: Modifier = Modifier, enemy: Boolean) {
+    val hpRatio = if (fighter.maxHp <= 0) 0f else fighter.hp.toFloat() / fighter.maxHp.toFloat()
+    Column(modifier.background(if (enemy) V3PaperDeep else V3Rice, V3SoftShape).border(1.dp, if (enemy) V3Red else V3Green, V3SoftShape).padding(6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(fighter.name, color = if (enemy) V3Red else V3Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text("${fighter.role} · 战${fighter.power}", color = V3Ink, fontSize = 10.sp, maxLines = 1)
+        Box(Modifier.fillMaxWidth().height(5.dp).background(V3Border.copy(alpha = 0.25f), V3SoftShape)) {
+            Box(Modifier.fillMaxWidth(hpRatio.coerceIn(0.03f, 1f)).height(5.dp).background(if (enemy) V3Red else V3Green, V3SoftShape))
+        }
+        Text("血 ${fighter.hp}/${fighter.maxHp}", color = V3Muted, fontSize = 9.sp, maxLines = 1)
     }
 }
 

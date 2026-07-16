@@ -15,6 +15,7 @@ import com.daming.fushengzhi3.v3.data.V3TaskType
 import com.daming.fushengzhi3.v3.data.V3TrainingType
 import com.daming.fushengzhi3.v3.data.V3EventChoice
 import com.daming.fushengzhi3.v3.data.V3EstateType
+import com.daming.fushengzhi3.v3.data.V3TroopType
 
 class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
     var state by mutableStateOf(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税"))
@@ -234,9 +235,39 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun recruitTroops(type: V3TroopType, amount: Int = 5) {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.recruitTroops(state, type, amount)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun startBattle() {
         audio.playSfx(SfxKey.V3Dispute)
         state = V3GameEngine.startBattle(state)
+        message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
+        saveStore.save(state)
+    }
+
+    fun selectBattlePerson(personId: Int) {
+        audio.select()
+        state = V3GameEngine.selectBattlePerson(state, personId)
+        message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
+        saveStore.save(state)
+    }
+
+    fun advanceBattleRound() {
+        state = V3GameEngine.advanceBattleRound(state)
+        val result = state.battleState?.roundLog?.firstOrNull()?.text.orEmpty()
+        audio.playSfx(if (result.contains("反扑")) SfxKey.V3Warning else SfxKey.V3Dispute)
+        message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
+        saveStore.save(state)
+    }
+
+    fun finalizeBattle() {
+        state = V3GameEngine.finalizeBattle(state)
+        val result = state.pendingReports.firstOrNull().orEmpty()
+        audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
@@ -245,7 +276,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         state = V3GameEngine.resolveBattle(state)
         val result = state.pendingReports.firstOrNull().orEmpty()
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
-        message = state.pendingReports.firstOrNull()
+        message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
     }
 
