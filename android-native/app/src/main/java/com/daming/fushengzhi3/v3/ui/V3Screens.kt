@@ -1533,7 +1533,9 @@ private fun V3BattleGrid(fighters: List<V3Combatant>, state: V3GameState, enemy:
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             row.forEach { fighter ->
                 val person = fighter.personId?.let { id -> state.people.firstOrNull { it.id == id } }
-                V3CombatantCard(fighter, Modifier.weight(1f), enemy = enemy, avatarPath = person?.let { v3AvatarFor(it) })
+                val enemyIndex = fighters.indexOf(fighter).coerceAtLeast(0)
+                val enemyAvatar = GameImages.v3EnemyPortraits.getOrNull(enemyIndex % GameImages.v3EnemyPortraits.size)
+                V3CombatantCard(fighter, Modifier.weight(1f), enemy = enemy, avatarPath = if (enemy) enemyAvatar else person?.let { v3AvatarFor(it) })
             }
             repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }

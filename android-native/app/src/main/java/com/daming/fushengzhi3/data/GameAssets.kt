@@ -50,6 +50,15 @@ object GameImages {
         "female_middle" to "image/avatars/v3_avatar_female_middle.png",
         "female_elder" to "image/avatars/v3_avatar_female_elder.png"
     )
+
+    val v3EnemyPortraits = listOf(
+        "image/avatars/enemies/v3_enemy_bandit_1.png",
+        "image/avatars/enemies/v3_enemy_bandit_2.png",
+        "image/avatars/enemies/v3_enemy_bandit_3.png",
+        "image/avatars/enemies/v3_enemy_bandit_4.png",
+        "image/avatars/enemies/v3_enemy_bandit_5.png",
+        "image/avatars/enemies/v3_enemy_bandit_6.png"
+    )
 }
 
 enum class BgmKey { V3County }
