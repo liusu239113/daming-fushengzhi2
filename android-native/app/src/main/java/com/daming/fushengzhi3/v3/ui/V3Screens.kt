@@ -1334,7 +1334,7 @@ private fun V3ImagePanel(imagePath: String, modifier: Modifier = Modifier, conte
 
 @Composable
 private fun V3CornerOrnaments() {
-    Box(Modifier.matchParentSize()) {
+    Box(Modifier.fillMaxSize()) {
         Text("◆", color = V3Gold.copy(alpha = 0.82f), fontSize = 11.sp, modifier = Modifier.align(Alignment.TopStart).padding(7.dp))
         Text("◆", color = V3Gold.copy(alpha = 0.82f), fontSize = 11.sp, modifier = Modifier.align(Alignment.TopEnd).padding(7.dp))
         Text("◆", color = V3Gold.copy(alpha = 0.82f), fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomStart).padding(7.dp))
