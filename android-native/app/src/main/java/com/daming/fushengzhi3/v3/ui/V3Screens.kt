@@ -131,10 +131,17 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
             }
             V3Panel {
                 Text("开局效果", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text("${createRootEffect(root)}
-${createCountyEffect(county)}
-${createCreedEffect(creed)}
-${createCrisisEffect(crisis)}", color = V3Ink, fontSize = 12.sp, lineHeight = 17.sp)
+                Text(
+                    """
+                    ${createRootEffect(root)}
+                    ${createCountyEffect(county)}
+                    ${createCreedEffect(creed)}
+                    ${createCrisisEffect(crisis)}
+                    """.trimIndent(),
+                    color = V3Ink,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 V3Button("返回", Modifier.weight(1f), onClick = onBack)
