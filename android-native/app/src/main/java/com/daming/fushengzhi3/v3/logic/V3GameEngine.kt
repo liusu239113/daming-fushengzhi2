@@ -637,7 +637,7 @@ object V3GameEngine {
         if (type == V3TroopType.Cavalry && state.clanRank < 4) return state.copy(pendingReports = listOf("骑兵尚未解锁：至少需要县中大姓品第。"))
         val silverCost = type.silverCost * count
         val grainCost = type.grainCost * count
-        if (state.silver < silverCost || state.grain < grainCost) return state.copy(pendingReports = listOf("募${type.label}$count名需要银$silverCost、粮$grainCost，当前不足。"))
+        if (state.silver < silverCost || state.grain < grainCost) return state.copy(pendingReports = listOf("募${type.label}${count}名需要银$silverCost、粮$grainCost，当前不足。"))
         val nextArmy = state.army.add(type, count)
         return state.copy(
             silver = state.silver - silverCost,
@@ -645,8 +645,8 @@ object V3GameEngine {
             militia = nextArmy.total(),
             army = nextArmy,
             routeScores = state.routeScores + (V3Route.Fortress to ((state.routeScores[V3Route.Fortress] ?: 0) + if (type == V3TroopType.Militia) 1 else 2)),
-            pendingReports = listOf("已募${type.label}$count名，耗银$silverCost、粮$grainCost。当前兵册共${nextArmy.total()}人。"),
-            eventLog = (listOf("${state.year}年${state.month}月 · 募${type.label}$count名。") + state.eventLog).take(100)
+            pendingReports = listOf("已募${type.label}${count}名，耗银$silverCost、粮$grainCost。当前兵册共${nextArmy.total()}人。"),
+            eventLog = (listOf("${state.year}年${state.month}月 · 募${type.label}${count}名。") + state.eventLog).take(100)
         )
     }
 
