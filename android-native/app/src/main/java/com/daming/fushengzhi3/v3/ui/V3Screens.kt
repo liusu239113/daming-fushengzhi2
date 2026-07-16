@@ -1519,8 +1519,8 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                     V3SmallButton(if (battle.finished) "收兵结算" else if (battle.turn % 2 == 0) "我方先手" else "敌方先手", Modifier.weight(1f), selected = true) {
                         if (battle.finished) controller.finalizeBattle() else controller.advanceBattleRound()
                     }
-                    V3SmallButton("自动打完", Modifier.weight(1f), enabled = \!battle.finished) { controller.resolveBattle() }
-                    V3SmallButton("撤出", Modifier.weight(1f), enabled = \!battle.finished) { controller.cancelBattle() }
+                    V3SmallButton("自动打完", Modifier.weight(1f), enabled = !battle.finished) { controller.resolveBattle() }
+                    V3SmallButton("撤出", Modifier.weight(1f), enabled = !battle.finished) { controller.cancelBattle() }
                 }
             }
         }
