@@ -14,7 +14,11 @@ object V3Content {
         V3SpouseCandidate("farmer", "王春娘", "邻村农户之女，能持家、会管田，适合稳住粮仓。", silverCost = 18, grainCost = 35, influenceReq = 0, studyBonus = 4, commerceBonus = 8, diplomacyBonus = 4, route = V3Route.Hermit),
         V3SpouseCandidate("merchant", "沈玉娘", "小商户之女，带来账本和货路，适合早期积银。", silverCost = 45, grainCost = 20, influenceReq = 8, commerceBonus = 16, diplomacyBonus = 6, route = V3Route.Merchant),
         V3SpouseCandidate("scholar", "陈婉仪", "寒门书香之后，擅识字教子，适合耕读路线。", silverCost = 35, grainCost = 25, influenceReq = 12, studyBonus = 16, diplomacyBonus = 7, route = V3Route.Scholar),
-        V3SpouseCandidate("martial", "赵月英", "军户孤女，熟弓马与寨防，适合乱世自保。", silverCost = 30, grainCost = 30, influenceReq = 10, martialBonus = 16, diplomacyBonus = 3, route = V3Route.Fortress)
+        V3SpouseCandidate("martial", "赵月英", "军户孤女，熟弓马与寨防，适合乱世自保。", silverCost = 30, grainCost = 30, influenceReq = 10, martialBonus = 16, diplomacyBonus = 3, route = V3Route.Fortress),
+        V3SpouseCandidate("healer", "顾素问", "医家之女，识药理、善抚幼，能在灾疫年景稳住族人和乡里。", silverCost = 38, grainCost = 28, influenceReq = 14, studyBonus = 10, commerceBonus = 3, diplomacyBonus = 10, route = V3Route.Hermit),
+        V3SpouseCandidate("gentry", "周明徽", "县中士绅旁支之女，熟礼法与人情，能替家族打开官绅门路。", silverCost = 72, grainCost = 35, influenceReq = 28, studyBonus = 12, commerceBonus = 4, diplomacyBonus = 16, route = V3Route.Loyalist),
+        V3SpouseCandidate("sea", "林海棠", "闽商船主之女，懂海货、识风信，婚后可为远海路线积攒人脉。", silverCost = 88, grainCost = 30, influenceReq = 35, studyBonus = 4, commerceBonus = 18, diplomacyBonus = 12, route = V3Route.Overseas),
+        V3SpouseCandidate("chieftain", "秦照雪", "山寨盟主遗女，性情果决，能聚拢乡勇，却也容易引来官府猜疑。", silverCost = 65, grainCost = 55, influenceReq = 42, martialBonus = 20, commerceBonus = 3, diplomacyBonus = 9, route = V3Route.Warlord)
     )
 
     val initialBranches = listOf(
@@ -27,10 +31,16 @@ object V3Content {
 
     val initialWorldRegions = listOf(
         V3WorldRegion("home_county", "清河县", 1, V3RegionStatus.Controlled, control = 42, enemyPower = 45, wealth = 40, desc = "家族起家的县域，先从这里控制税粮、宗族和团练。"),
+        V3WorldRegion("neighbor_county", "临水县", 1, V3RegionStatus.Unknown, control = 0, enemyPower = 68, wealth = 52, desc = "清河邻县，田庄密集但豪强林立，是跨县经营的第一步。"),
         V3WorldRegion("river_prefecture", "三江府", 2, V3RegionStatus.Unknown, control = 0, enemyPower = 95, wealth = 85, desc = "水路商贸和粮仓所在，控制后商队收益大增。"),
         V3WorldRegion("mountain_prefecture", "黑松府", 2, V3RegionStatus.Unknown, control = 0, enemyPower = 120, wealth = 55, desc = "山寨、流寇和盐道盘踞之地，是军务扩张的试金石。"),
+        V3WorldRegion("lake_province", "湖广粮区", 3, V3RegionStatus.Unknown, control = 0, enemyPower = 175, wealth = 145, desc = "湖广米粮汇聚之地，地方军头、粮商与流民势力相互角逐。"),
+        V3WorldRegion("coast_province", "闽粤海门", 3, V3RegionStatus.Unknown, control = 0, enemyPower = 190, wealth = 175, desc = "海商、卫所与走私船队交错，是南洋路线的重要门户。"),
         V3WorldRegion("south_province", "南直隶", 3, V3RegionStatus.Unknown, control = 0, enemyPower = 210, wealth = 160, desc = "州府士绅与商帮交错，控制后家族从县族跃升一方豪强。"),
+        V3WorldRegion("shandong_corridor", "山东运河", 3, V3RegionStatus.Unknown, control = 0, enemyPower = 235, wealth = 150, desc = "漕运与北上咽喉，控制此地可通京畿，也会直面军镇与饥军。"),
+        V3WorldRegion("liaodong_front", "辽东军镇", 4, V3RegionStatus.Unknown, control = 0, enemyPower = 330, wealth = 130, desc = "边军、堡垒与难民汇聚，适合勤王立功，也可能陷入无底军需。"),
         V3WorldRegion("north_capital", "京畿", 4, V3RegionStatus.Unknown, control = 0, enemyPower = 360, wealth = 220, desc = "朝廷与禁军所在。若能入主京畿，造反路线进入天下争鼎。"),
+        V3WorldRegion("jiangsea_gate", "江海门户", 4, V3RegionStatus.Unknown, control = 0, enemyPower = 295, wealth = 245, desc = "长江入海之门，船队、盐税和南迁族人都要从此经过。"),
         V3WorldRegion("all_realm", "天下", 5, V3RegionStatus.Unknown, control = 0, enemyPower = 520, wealth = 300, desc = "统一终局。需要足够人口、产业、军力、声望和已控制地域。")
     )
 
@@ -112,6 +122,54 @@ object V3Content {
             options = listOf("士绅声望", "婴儿数量立刻翻倍", "所有风险清零", "无需粮食"),
             answerIndex = 0,
             note = "举人身份会显著提高士绅关系、族望和仕途路线。"
+        ),
+        V3ExamQuestion(
+            id = "county_3",
+            stage = V3ExamStage.County,
+            question = "宗族遭遇灾荒时，哪种做法最有利于长期稳定？",
+            options = listOf("尽数逐民", "核户赈济并留种粮", "立刻卖空粮仓", "停修族谱"),
+            answerIndex = 1,
+            note = "赈济需要留有余地，兼顾民心与来年生产。"
+        ),
+        V3ExamQuestion(
+            id = "county_4",
+            stage = V3ExamStage.County,
+            question = "县中田契发生争议，最稳妥的处理方式通常是？",
+            options = listOf("焚毁契书", "邀乡约士绅与官府丈量", "直接动兵", "弃田远走"),
+            answerIndex = 1,
+            note = "契书、乡约与官府丈量共同构成地方产权秩序。"
+        ),
+        V3ExamQuestion(
+            id = "prefecture_3",
+            stage = V3ExamStage.Prefecture,
+            question = "明末商路受阻时，宗族经营最需要同时控制什么？",
+            options = listOf("码头与山道风险", "族谱字体", "婴儿姓名", "按钮颜色"),
+            answerIndex = 0,
+            note = "码头、集市和山道共同决定货物流通与安全。"
+        ),
+        V3ExamQuestion(
+            id = "prefecture_4",
+            stage = V3ExamStage.Prefecture,
+            question = "宗族房支怨气过高时，最可能造成什么后果？",
+            options = listOf("月粮自动翻倍", "争产与拒绝出丁", "官府关系自动满值", "所有族人免疲劳"),
+            answerIndex = 1,
+            note = "房支怨气会引发争产、逼议和资源分配冲突。"
+        ),
+        V3ExamQuestion(
+            id = "provincial_3",
+            stage = V3ExamStage.Provincial,
+            question = "地方豪族要从县域经营迈向跨府势力，首先需要什么？",
+            options = listOf("稳定据点、财粮和可用人才", "只靠一次事件", "取消族规", "放弃全部产业"),
+            answerIndex = 0,
+            note = "跨府扩张需要据点控制、后勤和能够独当一面的族人。"
+        ),
+        V3ExamQuestion(
+            id = "provincial_4",
+            stage = V3ExamStage.Provincial,
+            question = "面对甲申前后的天下大乱，哪项资源最能决定路线选择余地？",
+            options = listOf("财粮、兵力、声望与凝聚", "单一人物年龄", "地图底色", "事件标题长度"),
+            answerIndex = 0,
+            note = "终局路线由多系统共同决定，不能只堆一种数值。"
         )
     )
 
@@ -128,7 +186,17 @@ object V3Content {
         V3AnnualGoal("influence_48", "族望入县", "把族望声名提升到 48。", V3GoalMetric.Influence, 48, V3Route.Scholar, rewardInfluence = 3),
         V3AnnualGoal("estate_5", "家产成局", "把家产总等级提升到 5，形成田、铺、仓、团练的基本盘。", V3GoalMetric.EstateLevel, 5, V3Route.Merchant, rewardSilver = 35),
         V3AnnualGoal("region_2", "跨县经营", "控制至少 2 个地域，家族势力从本县走向府县。", V3GoalMetric.ControlledRegions, 2, V3Route.Warlord, rewardInfluence = 8),
-        V3AnnualGoal("unify_30", "一方豪强", "统一进度达到 30，具备割据一方的基础。", V3GoalMetric.Unification, 30, V3Route.Warlord, rewardSilver = 80)
+        V3AnnualGoal("unify_30", "一方豪强", "统一进度达到 30，具备割据一方的基础。", V3GoalMetric.Unification, 30, V3Route.Warlord, rewardSilver = 80),
+        V3AnnualGoal("militia_60", "团练初成", "兵册达到 60 人，能够应对县域流寇和护商。", V3GoalMetric.Militia, 60, V3Route.Fortress, rewardGrain = 45, rewardInfluence = 3),
+        V3AnnualGoal("militia_140", "武备成营", "兵册达到 140 人，并为跨府征伐积攒兵力。", V3GoalMetric.Militia, 140, V3Route.Warlord, rewardSilver = 55, rewardInfluence = 5),
+        V3AnnualGoal("population_6", "六口成族", "在族谱中维持至少 6 名在世族人。", V3GoalMetric.Population, 6, V3Route.Hermit, rewardGrain = 55, rewardCohesion = 5),
+        V3AnnualGoal("rank_3", "望族门第", "晋升到望族品第，解锁高级兵种与跨域征伐。", V3GoalMetric.ClanRank, 3, V3Route.Scholar, rewardSilver = 45, rewardInfluence = 6),
+        V3AnnualGoal("relations_180", "六方通达", "地方综合关系达到 180，在官绅民商军之间取得立足点。", V3GoalMetric.RelationTotal, 180, V3Route.Loyalist, rewardInfluence = 7),
+        V3AnnualGoal("route_scholar_55", "书香成脉", "耕读路线达到 55，形成稳定士林影响。", V3GoalMetric.RouteScore, 55, V3Route.Scholar, rewardSilver = 30, rewardInfluence = 6),
+        V3AnnualGoal("route_merchant_55", "商号成局", "重商路线达到 55，形成跨县货路。", V3GoalMetric.RouteScore, 55, V3Route.Merchant, rewardSilver = 70),
+        V3AnnualGoal("route_fortress_55", "堡寨成盟", "自保路线达到 55，建立守望互助体系。", V3GoalMetric.RouteScore, 55, V3Route.Fortress, rewardGrain = 70, rewardCohesion = 4),
+        V3AnnualGoal("region_4", "跨府立名", "控制至少 4 个地域，形成跨府影响。", V3GoalMetric.ControlledRegions, 4, V3Route.Warlord, rewardSilver = 100, rewardInfluence = 10),
+        V3AnnualGoal("unify_60", "逐鹿天下", "统一进度达到 60，具备问鼎京畿的资格。", V3GoalMetric.Unification, 60, V3Route.Warlord, rewardSilver = 140, rewardInfluence = 12)
     )
 
     fun goalsFor(creed: String, crisis: String): List<V3AnnualGoal> {
@@ -306,6 +374,7 @@ object V3Content {
             },
             cohesion = 62,
             militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3,
+            army = V3ArmyRoster(militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3),
             people = initialPeople.map { if (it.id == 1) it.copy(name = founderName) else it },
             branches = initialBranches.map { if (it.id == "main") it.copy(leaderName = founderName, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。") else it },
             sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${clanSurname}氏宗祠") else it },

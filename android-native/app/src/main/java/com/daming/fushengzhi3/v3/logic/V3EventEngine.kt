@@ -89,10 +89,16 @@ object V3EventEngine {
             choice.desc
         ) + impactLines + branchNotes).joinToString("\n")
         val logLine = "事件【$eventTitle】选择：${choice.label}。${impactLines.joinToString("；")}"
+        val nextArmy = if (choice.militiaDelta >= 0) {
+            state.army.add(com.daming.fushengzhi3.v3.data.V3TroopType.Militia, choice.militiaDelta)
+        } else {
+            state.army.lose(-choice.militiaDelta)
+        }
         return state.copy(
             silver = state.silver + choice.silverDelta,
             grain = state.grain + choice.grainDelta,
-            militia = (state.militia + choice.militiaDelta).coerceIn(0, 999),
+            militia = nextArmy.total(),
+            army = nextArmy,
             cohesion = (state.cohesion + choice.cohesionDelta).coerceIn(0, 100),
             influence = (state.influence + choice.influenceDelta).coerceIn(0, 100),
             sites = nextSites,
@@ -372,6 +378,28 @@ object V3EventEngine {
 
     private fun dynamicWorldEvents(state: V3GameState): List<V3ActiveEvent> {
         val events = mutableListOf<V3ActiveEvent>()
+        fun regionVisible(id: String): Boolean = state.worldRegions.firstOrNull { it.id == id }?.status?.let { it != V3RegionStatus.Unknown } == true
+        if (regionVisible("lake_province")) events += V3ActiveEvent("湖广粮约", "湖广粮商愿按年供米，但要求李氏替他们护住运船与仓栈。", listOf(
+            V3EventChoice("签下粮约", "获得大批粮食，承担护运成本。", silverDelta = -65, grainDelta = 150, merchantsDelta = 6, garrisonDelta = 2, route = V3Route.Merchant, routeDelta = 8),
+            V3EventChoice("设义仓分粮", "以粮区声望换民心。", grainDelta = -45, villagersDelta = 12, influenceDelta = 6, route = V3Route.Hermit, routeDelta = 7)
+        ))
+        if (regionVisible("coast_province")) events += V3ActiveEvent("闽粤船契", "闽粤船主送来船契，可入股远海，也可替官府缉查走私。", listOf(
+            V3EventChoice("入股远海", "海外路线和商利提升。", silverDelta = -90, merchantsDelta = 10, route = V3Route.Overseas, routeDelta = 12),
+            V3EventChoice("协助巡海", "官府军镇关系提升。", silverDelta = -35, yamenDelta = 8, garrisonDelta = 6, route = V3Route.Loyalist, routeDelta = 7)
+        ))
+        if (regionVisible("shandong_corridor")) events += V3ActiveEvent("运河漕争", "山东运河数家豪强争夺漕船泊位，李氏必须决定以商契、官帖还是兵威入局。", listOf(
+            V3EventChoice("合股漕运", "银两和商帮关系提升。", silverDelta = 85, merchantsDelta = 8, route = V3Route.Merchant, routeDelta = 9),
+            V3EventChoice("持官帖调停", "官府与士绅关系提升。", silverDelta = -30, yamenDelta = 7, gentryDelta = 6, route = V3Route.Loyalist, routeDelta = 8),
+            V3EventChoice("派兵占泊", "乡勇与割据路线增强。", grainDelta = -35, militiaDelta = 18, yamenDelta = -6, route = V3Route.Warlord, routeDelta = 10)
+        ))
+        if (regionVisible("liaodong_front")) events += V3ActiveEvent("辽东残军", "一队辽东残军求粮求械，愿受李氏节制，也可能把边祸带回族中。", listOf(
+            V3EventChoice("收编残军", "兵力和军镇关系大增。", silverDelta = -55, grainDelta = -65, militiaDelta = 28, garrisonDelta = 10, route = V3Route.Loyalist, routeDelta = 11),
+            V3EventChoice("资粮遣返", "勤王声名提升但不扩军。", grainDelta = -45, influenceDelta = 7, yamenDelta = 5, route = V3Route.Loyalist, routeDelta = 8)
+        ))
+        if (regionVisible("jiangsea_gate")) events += V3ActiveEvent("江海迁族", "江海门户聚集许多南迁宗族，有人求依附李氏，有人只想搭船远走。", listOf(
+            V3EventChoice("接纳入族", "凝聚、声望和商帮关系提升。", silverDelta = -45, grainDelta = -55, cohesionDelta = 6, influenceDelta = 6, merchantsDelta = 5, route = V3Route.Hermit, routeDelta = 8),
+            V3EventChoice("资助出海", "海外路线大幅推进。", silverDelta = -100, merchantsDelta = 8, route = V3Route.Overseas, routeDelta = 12)
+        ))
         state.worldRegions.filter { it.status == V3RegionStatus.Contacted || it.status == V3RegionStatus.Influenced }.forEach { region ->
             events += V3ActiveEvent("${region.name}来使", "${region.name}已有李氏声望，对方遣人来谈粮、兵、商路与归附条件。", listOf(
                 V3EventChoice("厚礼结交", "提升天下路线声望。", silverDelta = -80, influenceDelta = 8, merchantsDelta = 4, route = V3Route.Merchant, routeDelta = 7),

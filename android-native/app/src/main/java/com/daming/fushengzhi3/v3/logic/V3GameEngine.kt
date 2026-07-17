@@ -33,6 +33,7 @@ import com.daming.fushengzhi3.v3.data.V3BattlePhase
 import com.daming.fushengzhi3.v3.data.V3Combatant
 import com.daming.fushengzhi3.v3.data.V3BattleRound
 import com.daming.fushengzhi3.v3.data.V3TroopType
+import com.daming.fushengzhi3.v3.data.V3ArmyRoster
 import com.daming.fushengzhi3.v3.data.V3ConquestState
 import com.daming.fushengzhi3.v3.data.V3ExamQuestion
 import com.daming.fushengzhi3.v3.data.V3ExamSession
@@ -41,6 +42,21 @@ import kotlin.math.max
 import kotlin.math.min
 
 object V3GameEngine {
+    fun normalizeState(state: V3GameState): V3GameState {
+        val migratedArmy = if (
+            state.army == V3ArmyRoster() &&
+            state.militia != V3ArmyRoster().total()
+        ) {
+            V3ArmyRoster(militia = state.militia.coerceIn(0, 999))
+        } else {
+            state.army
+        }
+        val existingRegionIds = state.worldRegions.map { it.id }.toSet()
+        val mergedRegions = state.worldRegions + V3Content.initialWorldRegions.filter { it.id !in existingRegionIds }
+        if (migratedArmy.total() == state.militia && mergedRegions.size == state.worldRegions.size) return state
+        return state.copy(militia = migratedArmy.total(), army = migratedArmy, worldRegions = mergedRegions)
+    }
+
     fun alivePeople(state: V3GameState): List<V3Person> = state.people.filter { it.alive }
 
     fun adultPeople(state: V3GameState): List<V3Person> = alivePeople(state).filter { it.age >= 15 }
@@ -195,7 +211,8 @@ object V3GameEngine {
         val bestWarrior = alivePeople(state).maxByOrNull { it.martial + it.merit / 4 }
         val barracks = state.estateAssets.firstOrNull { it.type == V3EstateType.Barracks }?.level ?: 0
         val fortLevel = state.sites.firstOrNull { it.type == V3CountySiteType.Fort }?.level ?: 0
-        val power = state.militia + (bestWarrior?.martial ?: 0) + barracks * 24 + fortLevel * 14 + state.influence / 2 + state.unificationProgress / 2
+        val troopPower = state.army.battlePower() / V3TroopType.Militia.power
+        val power = troopPower + (bestWarrior?.martial ?: 0) + barracks * 24 + fortLevel * 14 + state.influence / 2 + state.unificationProgress / 2
         val victory = power >= conquest.enemyPower
         val loss = if (victory) max(12, conquest.enemyPower / 16) else max(28, conquest.enemyPower / 8)
         val nextRegions = state.worldRegions.map {
@@ -209,12 +226,14 @@ object V3GameEngine {
             if (it.id == bestWarrior?.id) it.copy(martial = (it.martial + (if (victory) 3 else 1)).coerceAtMost(100), merit = (it.merit + (if (victory) 18 else 6)).coerceAtMost(999), militaryRank = if (victory && it.militaryRank == null) "统兵族将" else it.militaryRank, fatigue = (it.fatigue + (if (victory) 18 else 32)).coerceIn(0, 100)) else it
         }
         val message = if (victory) "征伐【${region.name}】得胜，家族势力跨出县域，统一进度推进到$nextProgress。" else "征伐【${region.name}】失利，虽未控制地域，但地方已知李氏兵威。"
+        val nextArmy = state.army.lose(loss)
         return state.copy(
             people = nextPeople,
             worldRegions = nextRegions,
             unificationProgress = nextProgress,
             conquestState = null,
-            militia = (state.militia - loss).coerceAtLeast(0),
+            militia = nextArmy.total(),
+            army = nextArmy,
             silver = state.silver + (if (victory) conquest.rewardSilver else 0),
             grain = state.grain + (if (victory) conquest.rewardGrain else 0),
             influence = (state.influence + (if (victory) conquest.rewardInfluence else 1)).coerceIn(0, 100),
@@ -229,7 +248,8 @@ object V3GameEngine {
         val controlled = controlledRegionCount(state)
         val realmControlled = state.worldRegions.any { it.id == "all_realm" && (it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified) }
         val power = state.unificationProgress + state.militia / 6 + state.influence / 2 + estateLevelTotal(state) * 2 + alivePeople(state).size * 2
-        if (!realmControlled || controlled < 6 || power < 150) return state.copy(pendingReports = listOf("统一条件不足：需控制清河、府县、南直隶、京畿与天下节点，且综合国力达到150。当前地域$controlled/6，国力$power/150。"))
+        val requiredRegions = 8
+        if (!realmControlled || controlled < requiredRegions || power < 150) return state.copy(pendingReports = listOf("统一条件不足：需控制天下节点，并掌握至少$requiredRegions 个战略地域，且综合国力达到150。当前地域$controlled/$requiredRegions，国力$power/150。"))
         val ending = V3FinalEnding(
             route = V3Route.Warlord,
             tier = V3EndingTier.Historic,
@@ -269,7 +289,7 @@ object V3GameEngine {
 
     fun holdCouncil(state: V3GameState, agenda: String): V3GameState {
         val monthPrefix = "${state.year}年${state.month}月 · 宗族议事"
-        if (state.eventLog.take(10).any { it.startsWith(monthPrefix) }) {
+        if (state.eventLog.any { it.startsWith(monthPrefix) }) {
             return state.copy(pendingReports = listOf("本月族老已经议定方略。等下月新账出来后，再开祠堂议事。"))
         }
         data class CouncilPlan(
@@ -509,12 +529,15 @@ object V3GameEngine {
         }
         val nextSite = site.copy(control = (site.control + siteControl).coerceIn(0, 100), risk = (site.risk + siteRisk).coerceIn(0, 100))
         val title = "【${site.name}专属事务】$message"
+        val militiaDelta = militia - state.militia
+        val nextArmy = if (militiaDelta >= 0) state.army.add(V3TroopType.Militia, militiaDelta) else state.army.lose(-militiaDelta)
         return state.copy(
             silver = silver.coerceAtLeast(-999),
             grain = grain.coerceAtLeast(-999),
             influence = influence.coerceIn(0, 100),
             cohesion = cohesion.coerceIn(0, 100),
-            militia = militia.coerceIn(0, 999),
+            militia = nextArmy.total(),
+            army = nextArmy,
             relations = relations,
             sites = state.sites.map { if (it.id == site.id) nextSite.copy(status = statusFor(nextSite.control, nextSite.risk)) else it },
             routeScores = state.routeScores + (route to ((state.routeScores[route] ?: 0) + routeGain)),
@@ -677,7 +700,9 @@ object V3GameEngine {
     }
 
     fun recruitTroops(state: V3GameState, type: V3TroopType, amount: Int): V3GameState {
-        val count = amount.coerceIn(1, 20)
+        val requested = amount.coerceIn(1, 20)
+        val count = requested.coerceAtMost((999 - state.army.total()).coerceAtLeast(0))
+        if (count <= 0) return state.copy(pendingReports = listOf("兵册已满999人，需先经历战损或调整军务后再募兵。"))
         if (!isUnlocked(state, "Recruit")) return state.copy(pendingReports = listOf("募兵尚未解锁：升为小族，或先修建寨堡。"))
         if (type != V3TroopType.Militia && !isUnlocked(state, "AdvancedTroops")) return state.copy(pendingReports = listOf("${type.label}尚未解锁：需要望族品第，并建成团练营。"))
         if (type == V3TroopType.Cavalry && state.clanRank < 4) return state.copy(pendingReports = listOf("骑兵尚未解锁：至少需要县中大姓品第。"))
@@ -772,7 +797,7 @@ object V3GameEngine {
 
     fun resolveBattle(state: V3GameState): V3GameState {
         var next = state
-        repeat(18) {
+        repeat(100) {
             if (next.battleState?.finished != true) next = advanceBattleRound(next)
         }
         return finalizeBattle(next)
@@ -809,8 +834,7 @@ object V3GameEngine {
                 )
             } else it
         }
-        val nextMilitia = (state.army.militia - loss).coerceAtLeast(0)
-        val nextArmy = state.army.copy(militia = nextMilitia)
+        val nextArmy = state.army.lose(loss)
         val message = if (victory) "讨伐【${battle.target}】得胜。参战族人立下军功，地点风险下降。" else "讨伐【${battle.target}】失利。族人带伤归来，建议募兵、培养武艺后再战。"
         return state.copy(
             sites = nextSites,
@@ -1035,7 +1059,7 @@ object V3GameEngine {
         val grownPeople = processLifeCycle(growPeople(state.people, assignmentResults, detailLines, state.month == 12), state, detailLines, state.month == 12)
         val nextBranches = updateBranches(state.branches, grownPeople, assignmentResults, silverDelta, grainDelta, detailLines)
         val nextSites = sites.map { it.copy(assignedPersonId = null) }
-        val nextArmy = state.army.copy(militia = (state.army.militia + militiaDelta).coerceIn(0, 999))
+        val nextArmy = if (militiaDelta >= 0) state.army.add(V3TroopType.Militia, militiaDelta) else state.army.lose(-militiaDelta)
         var settledState = state.copy(
             year = nextYear,
             month = nextMonth,
@@ -1488,11 +1512,18 @@ object V3GameEngine {
         return when {
             !hasSpouse(state) -> pool.firstOrNull { it.id == "marry" }
             alivePeople(state).size < 3 -> pool.firstOrNull { it.id == "child_3" }
+            alivePeople(state).size < 6 && state.clanRank >= 2 -> pool.firstOrNull { it.id == "population_6" }
             builtSiteCount(state) < 2 -> pool.firstOrNull { it.id == "build_2" }
             estateLevelTotal(state) < 5 -> pool.firstOrNull { it.id == "estate_5" }
+            state.clanRank < 2 -> pool.firstOrNull { it.id == "rank_2" }
+            state.clanRank < 3 && alivePeople(state).size >= 4 -> pool.firstOrNull { it.id == "rank_3" }
+            state.militia < 60 && state.clanRank >= 2 -> pool.firstOrNull { it.id == "militia_60" }
             controlledRegionCount(state) < 2 && state.clanRank >= 3 -> pool.firstOrNull { it.id == "region_2" }
+            controlledRegionCount(state) < 4 && controlledRegionCount(state) >= 2 -> pool.firstOrNull { it.id == "region_4" }
             state.unificationProgress < 30 && controlledRegionCount(state) >= 2 -> pool.firstOrNull { it.id == "unify_30" }
-            !canRankUp(state) -> pool.firstOrNull { it.id == "rank_2" }
+            state.unificationProgress < 60 && controlledRegionCount(state) >= 4 -> pool.firstOrNull { it.id == "unify_60" }
+            state.militia < 140 && controlledRegionCount(state) >= 2 -> pool.firstOrNull { it.id == "militia_140" }
+            relationTotal(state.relations) < 180 -> pool.firstOrNull { it.id == "relations_180" }
             else -> pool.firstOrNull { it.route == route } ?: pool.firstOrNull()
         }
     }

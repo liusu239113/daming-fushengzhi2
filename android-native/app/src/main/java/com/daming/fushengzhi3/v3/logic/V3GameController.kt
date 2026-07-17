@@ -18,7 +18,7 @@ import com.daming.fushengzhi3.v3.data.V3EstateType
 import com.daming.fushengzhi3.v3.data.V3TroopType
 
 class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
-    var state by mutableStateOf(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税"))
+    var state by mutableStateOf(V3GameEngine.normalizeState(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")))
         private set
 
     var screen by mutableStateOf(V3Screen.County)
@@ -62,7 +62,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun continueGame() {
         audio.click()
         ensureV3Bgm()
-        state = saveStore.load() ?: state
+        state = V3GameEngine.normalizeState(saveStore.load() ?: state)
         screen = V3Screen.County
         latestReport = null
         message = "案卷已启封，旧日县域局势重归案前。"

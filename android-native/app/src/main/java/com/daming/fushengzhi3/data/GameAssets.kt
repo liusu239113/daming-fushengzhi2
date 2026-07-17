@@ -34,10 +34,16 @@ object GameImages {
     )
     val v3WorldRegionIcons = mapOf(
         "home_county" to "image/v3_world_home_county.png",
+        "neighbor_county" to "image/v3_world_home_county.png",
         "river_prefecture" to "image/v3_world_river_prefecture.png",
         "mountain_prefecture" to "image/v3_world_mountain_prefecture.png",
+        "lake_province" to "image/v3_world_river_prefecture.png",
+        "coast_province" to "image/v3_world_south_province.png",
         "south_province" to "image/v3_world_south_province.png",
+        "shandong_corridor" to "image/v3_world_mountain_prefecture.png",
+        "liaodong_front" to "image/v3_world_north_capital.png",
         "north_capital" to "image/v3_world_north_capital.png",
+        "jiangsea_gate" to "image/v3_world_south_province.png",
         "all_realm" to "image/v3_world_all_realm.png"
     )
 

@@ -116,15 +116,33 @@ data class V3ArmyRoster(
         V3TroopType.Cavalry -> cavalry
     }
 
-    fun add(type: V3TroopType, amount: Int): V3ArmyRoster = when (type) {
-        V3TroopType.Militia -> copy(militia = militia + amount)
-        V3TroopType.Spear -> copy(spear = spear + amount)
-        V3TroopType.Archer -> copy(archer = archer + amount)
-        V3TroopType.Shield -> copy(shield = shield + amount)
-        V3TroopType.Cavalry -> copy(cavalry = cavalry + amount)
+    fun add(type: V3TroopType, amount: Int): V3ArmyRoster {
+        val accepted = amount.coerceAtLeast(0).coerceAtMost((999 - total()).coerceAtLeast(0))
+        return when (type) {
+            V3TroopType.Militia -> copy(militia = militia + accepted)
+            V3TroopType.Spear -> copy(spear = spear + accepted)
+            V3TroopType.Archer -> copy(archer = archer + accepted)
+            V3TroopType.Shield -> copy(shield = shield + accepted)
+            V3TroopType.Cavalry -> copy(cavalry = cavalry + accepted)
+        }
     }
 
     fun total(): Int = militia + spear + archer + shield + cavalry
+
+    fun lose(amount: Int): V3ArmyRoster {
+        var remaining = amount.coerceAtLeast(0)
+        fun take(current: Int): Int {
+            val lost = minOf(current, remaining)
+            remaining -= lost
+            return current - lost
+        }
+        val nextMilitia = take(militia)
+        val nextSpear = take(spear)
+        val nextArcher = take(archer)
+        val nextShield = take(shield)
+        val nextCavalry = take(cavalry)
+        return copy(militia = nextMilitia, spear = nextSpear, archer = nextArcher, shield = nextShield, cavalry = nextCavalry)
+    }
 
     fun battlePower(): Int = militia * V3TroopType.Militia.power + spear * V3TroopType.Spear.power + archer * V3TroopType.Archer.power + shield * V3TroopType.Shield.power + cavalry * V3TroopType.Cavalry.power
 }

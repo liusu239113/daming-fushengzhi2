@@ -835,7 +835,7 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController, for
 
 @Composable
 private fun V3CouncilPanel(state: V3GameState, controller: V3GameController) {
-    val usedThisMonth = state.eventLog.take(10).any { it.startsWith("${state.year}年${state.month}月 · 宗族议事") }
+    val usedThisMonth = state.eventLog.any { it.startsWith("${state.year}年${state.month}月 · 宗族议事") }
     V3Panel {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("宗族议事", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -918,11 +918,22 @@ private fun V3WorldVisualMap(state: V3GameState, onSelect: (String) -> Unit) {
             Box(Modifier.size(width = mapWidth, height = mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
                 AssetImage(GameImages.V3WorldMap, null, Modifier.fillMaxSize(), ContentScale.FillBounds, alpha = 0.96f)
                 Canvas(Modifier.matchParentSize()) {
-                    drawLine(V3Red.copy(alpha = 0.55f), Offset(size.width * 0.12f, size.height * 0.72f), Offset(size.width * 0.38f, size.height * 0.54f), strokeWidth = 5f, cap = StrokeCap.Square)
-                    drawLine(V3Red.copy(alpha = 0.55f), Offset(size.width * 0.38f, size.height * 0.54f), Offset(size.width * 0.67f, size.height * 0.38f), strokeWidth = 5f, cap = StrokeCap.Square)
-                    drawLine(V3Red.copy(alpha = 0.55f), Offset(size.width * 0.67f, size.height * 0.38f), Offset(size.width * 0.86f, size.height * 0.18f), strokeWidth = 5f, cap = StrokeCap.Square)
-                    drawLine(V3Red.copy(alpha = 0.42f), Offset(size.width * 0.38f, size.height * 0.54f), Offset(size.width * 0.22f, size.height * 0.25f), strokeWidth = 4f, cap = StrokeCap.Square)
-                    drawLine(V3Red.copy(alpha = 0.42f), Offset(size.width * 0.86f, size.height * 0.18f), Offset(size.width * 0.54f, size.height * 0.10f), strokeWidth = 4f, cap = StrokeCap.Square)
+                    fun point(x: Float, y: Float) = expandedMapPoint(Offset(x, y)).let { Offset(size.width * it.x, size.height * it.y) }
+                    fun route(ax: Float, ay: Float, bx: Float, by: Float, alpha: Float = 0.48f) {
+                        drawLine(V3Red.copy(alpha = alpha), point(ax, ay), point(bx, by), strokeWidth = 4f, cap = StrokeCap.Square)
+                    }
+                    route(0.10f, 0.73f, 0.26f, 0.72f)
+                    route(0.26f, 0.72f, 0.39f, 0.58f)
+                    route(0.26f, 0.72f, 0.18f, 0.43f)
+                    route(0.39f, 0.58f, 0.43f, 0.39f)
+                    route(0.39f, 0.58f, 0.66f, 0.62f)
+                    route(0.43f, 0.39f, 0.63f, 0.40f)
+                    route(0.63f, 0.40f, 0.67f, 0.25f)
+                    route(0.66f, 0.62f, 0.83f, 0.52f)
+                    route(0.67f, 0.25f, 0.79f, 0.25f)
+                    route(0.79f, 0.25f, 0.88f, 0.12f)
+                    route(0.79f, 0.25f, 0.48f, 0.10f, 0.58f)
+                    route(0.83f, 0.52f, 0.48f, 0.10f, 0.40f)
                 }
                 state.worldRegions.forEach { region ->
                     V3WorldRegionPin(region, worldWidthPx = mapWidthPx, worldHeightPx = mapHeightPx, onClick = { onSelect(region.id) })
@@ -971,12 +982,18 @@ private fun V3WorldRegionPin(region: V3WorldRegion, worldWidthPx: Float, worldHe
 }
 
 private fun worldMapPoint(regionId: String): Offset = expandedMapPoint(when (regionId) {
-    "home_county" -> Offset(0.12f, 0.72f)
-    "river_prefecture" -> Offset(0.38f, 0.54f)
-    "mountain_prefecture" -> Offset(0.22f, 0.25f)
-    "south_province" -> Offset(0.67f, 0.38f)
-    "north_capital" -> Offset(0.86f, 0.18f)
-    "all_realm" -> Offset(0.54f, 0.10f)
+    "home_county" -> Offset(0.10f, 0.73f)
+    "neighbor_county" -> Offset(0.26f, 0.72f)
+    "river_prefecture" -> Offset(0.39f, 0.58f)
+    "mountain_prefecture" -> Offset(0.18f, 0.43f)
+    "lake_province" -> Offset(0.43f, 0.39f)
+    "coast_province" -> Offset(0.66f, 0.62f)
+    "south_province" -> Offset(0.63f, 0.40f)
+    "shandong_corridor" -> Offset(0.67f, 0.25f)
+    "liaodong_front" -> Offset(0.88f, 0.12f)
+    "north_capital" -> Offset(0.79f, 0.25f)
+    "jiangsea_gate" -> Offset(0.83f, 0.52f)
+    "all_realm" -> Offset(0.48f, 0.10f)
     else -> Offset(0.50f, 0.50f)
 })
 
