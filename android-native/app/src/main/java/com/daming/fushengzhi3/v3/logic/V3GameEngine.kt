@@ -247,7 +247,11 @@ object V3GameEngine {
             else -> 1
         }
         if (alivePeople(state).size < requiredPopulation) return state.copy(pendingReports = listOf("经营${type.label}需要人口至少$requiredPopulation。先成婚育子、扩大家族。"))
-        if (state.silver < cost.silver || state.grain < cost.grain) return state.copy(pendingReports = listOf("扩建${type.label}需要银${cost.silver}、粮${cost.grain}。"))
+        if (state.silver < cost.silver || state.grain < cost.grain) {
+            val silverMissing = (cost.silver - state.silver).coerceAtLeast(0)
+            val grainMissing = (cost.grain - state.grain).coerceAtLeast(0)
+            return state.copy(pendingReports = listOf("扩建${type.label}需要银${cost.silver}、粮${cost.grain}；当前银${state.silver}、粮${state.grain}，还缺银$silverMissing、粮$grainMissing。"))
+        }
         val nextLevel = (current?.level ?: 0) + 1
         val nextAsset = V3EstateAsset(type.name.lowercase(), type, nextLevel, workers = requiredPopulation, desc = type.desc)
         val assets = if (current == null) state.estateAssets + nextAsset else state.estateAssets.map { if (it.type == type) nextAsset else it }
@@ -395,7 +399,17 @@ object V3GameEngine {
     fun rankUp(state: V3GameState): V3GameState {
         val cost = nextRankCost(state) ?: return state.copy(pendingReports = listOf("宗族已达最高品第。"))
         if (!canRankUp(state)) {
-            return state.copy(pendingReports = listOf("晋升【${cost.title}】不足：需银${cost.silver}、粮${cost.grain}、人口${cost.population}、产业${cost.builtSites}、族望${cost.influence}。"))
+            val silverMissing = (cost.silver - state.silver).coerceAtLeast(0)
+            val grainMissing = (cost.grain - state.grain).coerceAtLeast(0)
+            val populationMissing = (cost.population - alivePeople(state).size).coerceAtLeast(0)
+            val sitesMissing = (cost.builtSites - builtSiteCount(state)).coerceAtLeast(0)
+            val influenceMissing = (cost.influence - state.influence).coerceAtLeast(0)
+            return state.copy(
+                pendingReports = listOf(
+                    "晋升【${cost.title}】条件不足：还缺银$silverMissing、粮$grainMissing、" +
+                        "人口$populationMissing、产业$sitesMissing、族望$influenceMissing。"
+                )
+            )
         }
         val message = "宗族晋升为【${cost.title}】：可容纳更多产业与人口，家业进入下一阶段。"
         return state.copy(
@@ -479,8 +493,20 @@ object V3GameEngine {
         if (target.spouseId != null || target.age !in 18..MAX_MARRIAGE_AGE || candidate.gender == target.gender) {
             return state.copy(pendingReports = listOf("${target.name}当前不符合婚配条件：需要18—${MAX_MARRIAGE_AGE}岁、未婚，并与对象性别不同。"))
         }
-        if (!marriageCandidatesFor(target, state).any { it.id == candidateId } || state.silver < candidate.silverCost || state.grain < candidate.grainCost || state.influence < candidate.influenceReq) {
-            return state.copy(pendingReports = listOf("婚配【${candidate.name}】的银粮、族望或适配条件不足。"))
+        if (!marriageCandidatesFor(target, state).any { it.id == candidateId }) {
+            return state.copy(pendingReports = listOf("这门亲事与${target.name}并不适配，请重新选择对象。"))
+        }
+        if (state.silver < candidate.silverCost || state.grain < candidate.grainCost || state.influence < candidate.influenceReq) {
+            val silverMissing = (candidate.silverCost - state.silver).coerceAtLeast(0)
+            val grainMissing = (candidate.grainCost - state.grain).coerceAtLeast(0)
+            val influenceMissing = (candidate.influenceReq - state.influence).coerceAtLeast(0)
+            return state.copy(
+                pendingReports = listOf(
+                    "成婚资源不足：需要银${candidate.silverCost}、粮${candidate.grainCost}、族望${candidate.influenceReq}；" +
+                        "当前银${state.silver}、粮${state.grain}、族望${state.influence}，" +
+                        "还缺银$silverMissing、粮$grainMissing、族望$influenceMissing。"
+                )
+            )
         }
         val spouseId = state.nextPersonId
         val spouse = V3Person(
@@ -564,7 +590,9 @@ object V3GameEngine {
             return state.copy(pendingReports = listOf("当前品第最多经营 $limit 处产业。先积累人口、族望与资源，再晋升宗族。"))
         }
         if (state.silver < cost.silver || state.grain < cost.grain) {
-            return state.copy(pendingReports = listOf("资源不足：营建${site.name}需要银${cost.silver}、粮${cost.grain}。"))
+            val silverMissing = (cost.silver - state.silver).coerceAtLeast(0)
+            val grainMissing = (cost.grain - state.grain).coerceAtLeast(0)
+            return state.copy(pendingReports = listOf("资源不足：营建${site.name}需要银${cost.silver}、粮${cost.grain}；当前银${state.silver}、粮${state.grain}，还缺银$silverMissing、粮$grainMissing。"))
         }
         val before = siteYield(site)
         val nextSite = site.copy(

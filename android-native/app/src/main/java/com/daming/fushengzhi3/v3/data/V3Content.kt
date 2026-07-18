@@ -513,15 +513,29 @@ object V3Content {
         return founderGivenNames[seed % founderGivenNames.size]
     }
 
+    private val blockedNameTerms = setOf(
+        "毛泽东", "周恩来", "刘少奇", "朱德", "邓小平", "江泽民", "胡锦涛", "习近平",
+        "孙中山", "蒋介石", "袁世凯", "李大钊", "陈独秀", "鲁迅", "雷锋",
+        "岳飞", "文天祥", "戚继光", "郑成功", "关羽", "诸葛亮"
+    )
+
+    fun isBlockedName(input: String): Boolean = blockedNameTerms.any { term -> input.contains(term) }
+
+    fun sanitizeFounderGivenName(input: String): String =
+        input.trim().filter { it in '\u3400'..'\u9FFF' }.take(4).ifBlank { "慎行" }
+
+    fun founderName(surnameInput: String, givenNameInput: String): String =
+        "${sanitizeSurname(surnameInput)}${sanitizeFounderGivenName(givenNameInput)}"
+
     fun founderName(surnameInput: String, root: String, county: String, creed: String): String =
-        "${sanitizeSurname(surnameInput)}${founderGivenName(root, county, creed)}"
+        founderName(surnameInput, founderGivenName(root, county, creed))
 
     fun clanName(surnameInput: String): String = "${sanitizeSurname(surnameInput)}氏宗族"
 
-    fun newGame(root: String, county: String, creed: String, crisis: String, surnameInput: String = "李"): V3GameState {
+    fun newGame(root: String, county: String, creed: String, crisis: String, surnameInput: String = "李", givenNameInput: String? = null): V3GameState {
         val surname = sanitizeSurname(surnameInput)
         val cleanedClanName = clanName(surname)
-        val founderName = founderName(surname, root, county, creed)
+        val founderName = founderName(surname, givenNameInput ?: founderGivenName(root, county, creed))
         val base = V3GameState(root = root, county = county, creed = creed, crisis = crisis)
         val profile = startProfile(root, county, creed, crisis)
         return base.copy(

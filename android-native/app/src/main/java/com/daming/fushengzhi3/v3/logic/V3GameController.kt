@@ -27,6 +27,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     var timeSpeed by mutableStateOf(0)
         private set
 
+    private var lastActiveSpeed = 1
+
     var latestReport by mutableStateOf<V3MonthlyReport?>(null)
         private set
 
@@ -46,10 +48,11 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playBgm(BgmKey.V3County)
     }
 
-    fun newGame(root: String, county: String, creed: String, crisis: String, surname: String = "李") {
+    fun newGame(root: String, county: String, creed: String, crisis: String, surname: String = "李", givenName: String = "慎行") {
         audio.playSfx(SfxKey.V3ScrollOpen)
         ensureV3Bgm()
-        state = V3Content.newGame(root, county, creed, crisis, surname)
+        val safeGivenName = if (V3Content.isBlockedName(surname + givenName)) "慎行" else V3Content.sanitizeFounderGivenName(givenName)
+        state = V3Content.newGame(root, county, creed, crisis, surname, safeGivenName)
         saveStore.save(state)
         screen = V3Screen.County
         timeSpeed = 0
@@ -72,17 +75,18 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun switchScreen(next: V3Screen) {
         if (screen != next) audio.tabSwitch()
         screen = next
-        timeSpeed = 0
     }
 
     fun updateTimeSpeed(speed: Int) {
         audio.select()
-        timeSpeed = speed.coerceIn(0, 3)
+        val nextSpeed = speed.coerceIn(0, 5)
+        timeSpeed = nextSpeed
+        if (nextSpeed > 0) lastActiveSpeed = nextSpeed
     }
 
     fun togglePause() {
         audio.click()
-        timeSpeed = if (timeSpeed == 0) 1 else 0
+        timeSpeed = if (timeSpeed == 0) lastActiveSpeed else 0
     }
 
     fun pauseForPlayerAction() {
