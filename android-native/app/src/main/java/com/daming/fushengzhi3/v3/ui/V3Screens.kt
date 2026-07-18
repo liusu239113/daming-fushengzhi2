@@ -7,7 +7,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -56,6 +57,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -110,7 +112,7 @@ private val V3ButtonShape = RoundedCornerShape(14.dp)
 @Composable
 fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: () -> Unit) {
     LaunchedEffect(Unit) { controller.ensureV3Bgm() }
-    var clanName by remember { mutableStateOf("李氏宗族") }
+    var surname by remember { mutableStateOf("李") }
     var root by remember { mutableStateOf("没落士族") }
     var county by remember { mutableStateOf("江南水乡") }
     var creed by remember { mutableStateOf("耕读传家") }
@@ -137,10 +139,14 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
                 V3Title("大明浮生志3", "一户起家 · 成婚育子 · 经营宗族")
                 V3Panel {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("宗族", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(54.dp))
+                        Text("姓氏", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(54.dp))
                         TextField(
-                            value = clanName,
-                            onValueChange = { clanName = it.take(8) },
+                            value = surname,
+                            onValueChange = {
+                                surname = it
+                                    .filter { char -> char in '\u3400'..'\u9FFF' }
+                                    .take(2)
+                            },
                             singleLine = true,
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = V3Rice,
@@ -153,6 +159,19 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
                             modifier = Modifier.weight(1f)
                         )
                     }
+                    Text(
+                        "宗族：${V3Content.clanName(surname)} · 开族祖：${V3Content.founderName(surname, root, county, creed)}",
+                        color = V3Gold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 19.sp
+                    )
+                    Text(
+                        "只填写一至二字姓氏，宗族名与开族祖姓名由系统生成；复姓会完整传给后代。",
+                        color = V3Muted,
+                        fontSize = 11.sp,
+                        lineHeight = 17.sp
+                    )
                     V3CompactSelector("出身", V3Content.roots, root, ::createRootEffect) { root = it }
                     V3CompactSelector("县域", V3Content.counties, county, {
                         V3Content.startProfile(root, it, creed, crisis).countyEffect
@@ -215,13 +234,40 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
             ) {
                 V3Button("返回", Modifier.weight(1f), onClick = onBack)
                 V3Button("开宗立户", Modifier.weight(1f)) {
-                    controller.newGame(root, county, creed, crisis, clanName)
+                    controller.newGame(root, county, creed, crisis, surname)
                     onStart()
                 }
             }
         }
     }
 }
+
+private fun Modifier.horizontalMapDrag(onDrag: (Offset) -> Unit): Modifier =
+    pointerInput(onDrag) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var previous = down.position
+            var accumulated = Offset.Zero
+            var draggingMap: Boolean? = null
+            while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                val delta = change.position - previous
+                previous = change.position
+                accumulated += delta
+                if (draggingMap == null && accumulated.getDistance() >= viewConfiguration.touchSlop) {
+                    draggingMap = kotlin.math.abs(accumulated.x) > kotlin.math.abs(accumulated.y)
+                }
+                if (draggingMap == true) {
+                    change.consume()
+                    onDrag(delta)
+                } else if (draggingMap == false) {
+                    break
+                }
+            }
+        }
+    }
 
 private fun Modifier.guideTarget(
     focus: V3GuideFocus,
@@ -233,15 +279,20 @@ private fun Modifier.guideTarget(
 @Composable
 fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, onBackToMenu: () -> Unit) {
     LaunchedEffect(Unit) { controller.ensureV3Bgm() }
+    var secondsToNextMonth by remember { mutableStateOf(0) }
     LaunchedEffect(controller.timeSpeed, controller.state.year, controller.state.month, controller.latestReport, controller.message, controller.state.activeEvent, controller.settingsVisible, controller.state.examSession, controller.state.battleState, controller.state.conquestState) {
         if (controller.shouldAutoTick()) {
-            val interval = when (controller.timeSpeed) {
-                3 -> 7300L
-                2 -> 11000L
-                else -> 22000L
+            var remainingMillis = monthIntervalMillis(controller.timeSpeed)
+            secondsToNextMonth = ((remainingMillis + 999L) / 1000L).toInt()
+            while (remainingMillis > 0L && controller.shouldAutoTick()) {
+                val step = minOf(250L, remainingMillis)
+                delay(step)
+                remainingMillis -= step
+                secondsToNextMonth = ((remainingMillis + 999L) / 1000L).toInt()
             }
-            delay(interval)
-            controller.autoAdvanceTime()
+            if (controller.shouldAutoTick()) controller.autoAdvanceTime()
+        } else {
+            secondsToNextMonth = 0
         }
     }
     val state = controller.state
@@ -271,7 +322,8 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                     state,
                     controller,
                     onRequestBackToMenu = { confirmBackToMenu = true },
-                    guideTargets = guideTargets
+                    guideTargets = guideTargets,
+                    secondsToNextMonth = secondsToNextMonth
                 )
                 Column(
                     Modifier.weight(1f).verticalScroll(contentScroll).padding(10.dp).widthIn(max = 760.dp).align(Alignment.CenterHorizontally),
@@ -610,7 +662,26 @@ private fun V3ClanPage(
                 V3GameEngine.marriageCandidatesFor(person, state).take(8).forEach { option ->
                     Card(colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Gold), shape = V3SoftShape) {
                         Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AssetImage(GameImages.v3AvatarPortraits[option.avatarKey] ?: GameImages.v3AvatarPortraits.getValue("female_youth"), option.name, Modifier.size(58.dp).background(V3Rice, CircleShape).border(2.dp, V3Gold, CircleShape).padding(3.dp), ContentScale.Fit)
+                            Box(
+                                Modifier
+                                    .size(58.dp)
+                                    .clip(CircleShape)
+                                    .background(V3Rice)
+                                    .border(2.dp, V3Gold, CircleShape)
+                                    .padding(5.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AssetImage(
+                                    GameImages.v3SpousePortraits[option.id]
+                                        ?: GameImages.v3AvatarPortraits[option.avatarKey]
+                                        ?: GameImages.v3AvatarPortraits.getValue("female_youth"),
+                                    option.name,
+                                    Modifier
+                                        .matchParentSize()
+                                        .clip(CircleShape),
+                                    ContentScale.Fit
+                                )
+                            }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     Text(option.name, color = V3Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -635,6 +706,7 @@ private fun V3ClanPage(
             Text("下一品第：${cost.title}", color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text("需要：银${cost.silver} / 粮${cost.grain} / 人口${cost.population} / 产业${cost.builtSites} / 族望${cost.influence}", color = V3Muted, fontSize = 13.sp)
             Text("当前：银${state.silver} / 粮${state.grain} / 人口${V3GameEngine.alivePeople(state).size} / 产业${V3GameEngine.builtSiteCount(state)} / 族望${state.influence}", color = V3Ink, fontSize = 13.sp)
+            Text("晋升解锁：${rankUnlockPreview(state.clanRank + 1)}", color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold, lineHeight = 17.sp)
             V3SmallButton("晋升宗族", Modifier.fillMaxWidth(), enabled = V3GameEngine.canRankUp(state), onClick = controller::rankUp)
         }
     }
@@ -683,13 +755,31 @@ private fun V3GenealogyTree(
     V3Panel(modifier) {
         Text("${clanName}谱系", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text("拖动画布查看族人；点头像可看详情、培养和派差。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        Box(Modifier.fillMaxWidth().height(460.dp).clip(V3SoftShape).background(V3Rice, V3SoftShape).pointerInput(Unit) {
-            detectDragGestures { _, dragAmount -> pan = Offset((pan.x + dragAmount.x).coerceIn(-880f, 80f), (pan.y + dragAmount.y).coerceIn(-980f, 80f)) }
-        }) {
-            AssetImage(GameImages.V3GenealogyBg, null, Modifier.matchParentSize(), ContentScale.Crop, alpha = 0.72f)
-            Box(Modifier.requiredSize(width = 1120.dp, height = 1180.dp).graphicsLayer { translationX = pan.x; translationY = pan.y }) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(460.dp)
+                .clip(V3SoftShape)
+                .background(V3Rice, V3SoftShape)
+                .horizontalMapDrag { dragAmount ->
+                    pan = Offset(
+                        (pan.x + dragAmount.x).coerceIn(-880f, 80f),
+                        (pan.y + dragAmount.y).coerceIn(-980f, 80f)
+                    )
+                }
+        ) {
+            Box(
+                Modifier
+                    .wrapContentSize(Alignment.TopStart, unbounded = true)
+                    .requiredSize(width = 1120.dp, height = 1180.dp)
+                    .graphicsLayer {
+                        translationX = pan.x
+                        translationY = pan.y
+                    }
+            ) {
+                AssetImage(GameImages.V3GenealogyBg, null, Modifier.fillMaxSize(), ContentScale.FillBounds, alpha = 0.72f)
                 roots.take(12).forEachIndexed { index, person ->
-                    V3FamilyMiniNode(person, x = 480 + index * 104, y = 32, onSelect = onSelect)
+                    V3FamilyMiniNode(person, x = 16 + index * 104, y = 32, onSelect = onSelect)
                 }
                 generations.filterKeys { it > 1 }.forEach { (gen, members) ->
                     val y = 28 + (gen - 1) * 138
@@ -736,11 +826,11 @@ private fun V3FamilyMiniNode(person: V3Person, x: Int, y: Int, onSelect: (Int) -
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             Text("第${person.generation}世", color = V3Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Box(Modifier.size(54.dp).background(V3Rice, CircleShape).border(2.dp, statusColor, CircleShape).padding(2.dp), contentAlignment = Alignment.Center) {
-                AssetImage(v3AvatarFor(person), person.name, Modifier.size(49.dp), ContentScale.Fit)
+            Box(Modifier.size(54.dp).clip(CircleShape).background(V3Rice).border(2.dp, statusColor, CircleShape).padding(4.dp), contentAlignment = Alignment.Center) {
+                AssetImage(v3AvatarFor(person), person.name, Modifier.matchParentSize().clip(CircleShape), ContentScale.Fit)
             }
             Text(person.name, color = V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text("${person.age}岁 · ${person.trait.label}", color = V3Muted, fontSize = 9.sp, maxLines = 1)
+            Text("${person.age}岁${person.ageMonths.coerceAtLeast(person.age * 12) % 12}个月 · ${person.trait.label}", color = V3Muted, fontSize = 9.sp, maxLines = 1)
             Box(Modifier.fillMaxWidth().background(statusColor.copy(alpha = 0.14f), CircleShape).border(1.dp, statusColor.copy(alpha = 0.45f), CircleShape).padding(vertical = 2.dp), contentAlignment = Alignment.Center) {
                 Text(statusText, color = statusColor, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
@@ -795,7 +885,7 @@ private fun V3StrategyPage(
         Text("路线评估：${ending.title}", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text("${ending.route.label} · ${ending.tier.label} · 评估 ${ending.score}", color = V3Ink, fontSize = 14.sp)
         Text(ending.desc, color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
-        Text("家乘所记，不止县中一亩三分地。婚配、产业、科举、军务和商路都会推着李氏走向不同结局。", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+        Text("家乘所记，不止县中一亩三分地。婚配、产业、科举、军务和商路都会推着${state.surname}氏走向不同结局。", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
         Row(
             Modifier
                 .fillMaxWidth()
@@ -819,7 +909,11 @@ private fun V3StrategyPage(
                 V3RelationRow("商帮", state.relations.merchants)
                 V3RelationRow("军镇", state.relations.garrison)
             }
-            V3CouncilPanel(state, controller)
+            if (V3GameEngine.isUnlocked(state, "Council")) {
+                V3CouncilPanel(state, controller)
+            } else {
+                V3LockedFeaturePanel("宗族议事", "升为小族（2级）后，每月可议定一次家政方略。")
+            }
             V3Panel {
                 Text("路线", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 V3Content.routePlans.sortedByDescending { state.routeScores[it.route] ?: 0 }.take(4).forEach { plan ->
@@ -829,8 +923,14 @@ private fun V3StrategyPage(
             }
             }
         }
-        "天下" -> V3WorldPanel(state, controller, guideTargets)
-        "军务" -> V3Panel(Modifier.guideTarget(V3GuideFocus.StrategyContent, guideTargets)) {
+        "天下" -> if (V3GameEngine.isUnlocked(state, "World")) {
+            V3WorldPanel(state, controller, guideTargets)
+        } else {
+            V3LockedFeaturePanel("天下经营", "升为望族（3级）后开放跨县结交、经营和征伐。")
+        }
+        "军务" -> if (!V3GameEngine.isUnlocked(state, "Recruit")) {
+            V3LockedFeaturePanel("军务", "升为小族（2级）后开放基础募兵；望族后开放精兵与征伐。")
+        } else V3Panel(Modifier.guideTarget(V3GuideFocus.StrategyContent, guideTargets)) {
             Text("军务与举旗", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             val recruitUnlocked = V3GameEngine.isUnlocked(state, "Recruit")
             val advancedUnlocked = V3GameEngine.isUnlocked(state, "AdvancedTroops")
@@ -871,6 +971,15 @@ private fun V3StrategyPage(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         V3SmallButton("设置", Modifier.weight(1f), onClick = controller::openSettings)
         V3SmallButton("族老札记", Modifier.weight(1f), onClick = openGuide)
+    }
+}
+
+@Composable
+private fun V3LockedFeaturePanel(title: String, hint: String) {
+    V3Panel {
+        Text("$title · 尚未解锁", color = V3Muted, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(hint, color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+        Text("先完成顶栏当前目标并提升宗族品第，高阶内容会逐步开放。", color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -968,10 +1077,11 @@ private fun V3WorldVisualMap(
         val minPanX = frameWidthPx - mapWidthPx
         val minPanY = frameHeightPx - mapHeightPx
         val boundedPan = Offset(pan.x.coerceIn(minPanX, 0f), pan.y.coerceIn(minPanY, 0f))
-        Box(Modifier.fillMaxSize().pointerInput(mapWidthPx, mapHeightPx) {
-            detectDragGestures { _, dragAmount ->
-                pan = Offset((pan.x + dragAmount.x).coerceIn(minPanX, 0f), (pan.y + dragAmount.y).coerceIn(minPanY, 0f))
-            }
+        Box(Modifier.fillMaxSize().horizontalMapDrag { dragAmount ->
+            pan = Offset(
+                (pan.x + dragAmount.x).coerceIn(minPanX, 0f),
+                (pan.y + dragAmount.y).coerceIn(minPanY, 0f)
+            )
         }) {
             Box(
                 Modifier
@@ -1091,10 +1201,11 @@ private fun V3CountyMapView(
             val minPanY = frameHeightPx - mapHeightPx
             val boundedPan = Offset(pan.x.coerceIn(minPanX, 0f), pan.y.coerceIn(minPanY, 0f))
             Box(
-                Modifier.fillMaxSize().pointerInput(minPanX, minPanY) {
-                    detectDragGestures { _, dragAmount ->
-                        pan = Offset((pan.x + dragAmount.x).coerceIn(minPanX, 0f), (pan.y + dragAmount.y).coerceIn(minPanY, 0f))
-                    }
+                Modifier.fillMaxSize().horizontalMapDrag { dragAmount ->
+                    pan = Offset(
+                        (pan.x + dragAmount.x).coerceIn(minPanX, 0f),
+                        (pan.y + dragAmount.y).coerceIn(minPanY, 0f)
+                    )
                 }
             ) {
                 Box(
@@ -1108,7 +1219,13 @@ private fun V3CountyMapView(
                 ) {
                     AssetImage(GameImages.V3MapBgPlain, null, Modifier.fillMaxSize(), ContentScale.FillBounds)
                     state.sites.forEach { site ->
-                        V3MapSitePin(site, mapWidthPx = mapWidthPx, mapHeightPx = mapHeightPx) { onSelectSite(site.id) }
+                        V3MapSitePin(
+                            site,
+                            mapWidthPx = mapWidthPx,
+                            mapHeightPx = mapHeightPx,
+                            unlocked = V3GameEngine.isSiteUnlocked(state, site.type),
+                            requiredRank = V3GameEngine.siteRequiredRank(site.type)
+                        ) { onSelectSite(site.id) }
                     }
                 }
             }
@@ -1117,7 +1234,14 @@ private fun V3CountyMapView(
 }
 
 @Composable
-private fun V3MapSitePin(site: V3CountySite, mapWidthPx: Float, mapHeightPx: Float, onClick: () -> Unit) {
+private fun V3MapSitePin(
+    site: V3CountySite,
+    mapWidthPx: Float,
+    mapHeightPx: Float,
+    unlocked: Boolean,
+    requiredRank: Int,
+    onClick: () -> Unit
+) {
     val point = siteMapPoint(site.id)
     val icon = GameImages.v3SiteIcons[site.id] ?: return
     val density = LocalDensity.current
@@ -1127,6 +1251,7 @@ private fun V3MapSitePin(site: V3CountySite, mapWidthPx: Float, mapHeightPx: Flo
     val x = (mapWidthPx * point.x - pinWidthPx * 0.5f).coerceIn(safeMarginPx, mapWidthPx - pinWidthPx - safeMarginPx)
     val y = (mapHeightPx * point.y - pinHeightPx * 0.35f).coerceIn(safeMarginPx, mapHeightPx - pinHeightPx - safeMarginPx)
     val markerColor = when {
+        !unlocked -> V3Muted
         site.risk >= 60 -> V3Red
         site.control >= 55 -> V3Green
         site.level > 0 -> V3Gold
@@ -1136,14 +1261,21 @@ private fun V3MapSitePin(site: V3CountySite, mapWidthPx: Float, mapHeightPx: Flo
         Modifier.graphicsLayer {
             translationX = x
             translationY = y
-        }.width(92.dp).clickable(onClick = onClick),
+        }.width(92.dp).clickable(enabled = unlocked, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Box(Modifier.size(70.dp), contentAlignment = Alignment.Center) {
             AssetImage(icon, site.name, Modifier.size(66.dp), ContentScale.Fit)
         }
-        Text(site.name, color = markerColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.background(V3Rice.copy(alpha = 0.88f), V3SoftShape).padding(horizontal = 5.dp, vertical = 3.dp))
+        Text(
+            if (unlocked) site.name else "${site.name} · ${requiredRank}级",
+            color = markerColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.background(V3Rice.copy(alpha = 0.88f), V3SoftShape).padding(horizontal = 5.dp, vertical = 3.dp)
+        )
     }
 }
 
@@ -1226,9 +1358,15 @@ private fun V3EstatePanel(state: V3GameState, controller: V3GameController) {
                     val asset = state.estateAssets.firstOrNull { it.type == type }
                     val cost = V3GameEngine.estateUpgradeCost(state, type)
                     val yield = asset?.let { V3GameEngine.estateYield(it) }
+                    val unlocked = V3GameEngine.isEstateUnlocked(state, type)
                     V3SmallButton(
-                        "${type.label}${asset?.level?.let { " Lv.$it" } ?: ""}\n银${cost.silver}/粮${cost.grain}${yield?.let { " · ${siteYieldSummary(it)}" } ?: ""}",
-                        Modifier.weight(1f)
+                        if (unlocked) {
+                            "${type.label}${asset?.level?.let { " Lv.$it" } ?: ""}\n银${cost.silver}/粮${cost.grain}${yield?.let { " · ${siteYieldSummary(it)}" } ?: ""}"
+                        } else {
+                            "${type.label}\n${V3GameEngine.estateRequiredRank(type)}级解锁"
+                        },
+                        Modifier.weight(1f),
+                        enabled = unlocked
                     ) { controller.upgradeEstate(type) }
                 }
                 repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -1241,14 +1379,14 @@ private fun V3EstatePanel(state: V3GameState, controller: V3GameController) {
 private fun V3PersonCard(person: V3Person, state: V3GameState, controller: V3GameController) {
     V3Panel {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(78.dp).background(V3Rice, CircleShape).border(3.dp, V3Gold, CircleShape).padding(4.dp), contentAlignment = Alignment.Center) {
-                AssetImage(v3AvatarFor(person), person.name, Modifier.size(70.dp), ContentScale.Fit)
+            Box(Modifier.size(78.dp).clip(CircleShape).background(V3Rice).border(3.dp, V3Gold, CircleShape).padding(6.dp), contentAlignment = Alignment.Center) {
+                AssetImage(v3AvatarFor(person), person.name, Modifier.matchParentSize().clip(CircleShape), ContentScale.Fit)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         Text(person.name, color = V3Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                        Text("第${person.generation}世 · ${person.gender.label} · ${person.branch} · ${person.identity} · ${person.age}岁", color = V3Red, fontSize = 12.sp)
+                        Text("第${person.generation}世 · ${person.gender.label} · ${person.branch} · ${person.identity} · ${person.age}岁${person.ageMonths.coerceAtLeast(person.age * 12) % 12}个月", color = V3Red, fontSize = 12.sp)
                     }
                     val assignedSite = person.assignedSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
                     val titleBits = listOfNotNull(person.officeRank, person.militaryRank).joinToString(" · ")
@@ -1257,7 +1395,15 @@ private fun V3PersonCard(person: V3Person, state: V3GameState, controller: V3Gam
                 Text("${person.trait.label}：${person.trait.desc}", color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
                 Text("阶段：${V3GameEngine.lifeStage(person)} · ${V3GameEngine.marriageStatus(person, state)}", color = V3Red, fontSize = 12.sp, lineHeight = 17.sp)
                 if (person.age < 16) {
-                    Text("距离成年约 ${V3GameEngine.monthsUntilAdult(person)} 个月；1倍速每月推进1个月。", color = V3Muted, fontSize = 11.sp)
+                    val adultMonths = V3GameEngine.monthsUntilAdult(person)
+                    val oneSpeedMinutes = adultMonths * 22.0 / 60.0
+                    val threeSpeedMinutes = adultMonths * 7.3 / 60.0
+                    Text(
+                        "距16岁成年还有 $adultMonths 个月；连续推进约需1倍${"%.1f".format(oneSpeedMinutes)}分钟，3倍${"%.1f".format(threeSpeedMinutes)}分钟。",
+                        color = V3Muted,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp
+                    )
                 }
             }
         }
@@ -1335,7 +1481,8 @@ private fun V3TopBar(
     state: V3GameState,
     controller: V3GameController,
     onRequestBackToMenu: () -> Unit,
-    guideTargets: MutableMap<V3GuideFocus, Rect>
+    guideTargets: MutableMap<V3GuideFocus, Rect>,
+    secondsToNextMonth: Int
 ) {
     Column(
         Modifier
@@ -1353,7 +1500,14 @@ private fun V3TopBar(
                 V3SmallButton("菜单", Modifier.width(66.dp)) { onRequestBackToMenu() }
             }
         }
-        V3TimeControls(controller, guideTargets)
+        V3TimeControls(controller, guideTargets, secondsToNextMonth)
+        Text(
+            "当前目标：${nextAdvice(state)}",
+            color = V3Red,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 17.sp
+        )
         Row(
             Modifier
                 .fillMaxWidth()
@@ -1371,18 +1525,42 @@ private fun V3TopBar(
 @Composable
 private fun V3TimeControls(
     controller: V3GameController,
-    guideTargets: MutableMap<V3GuideFocus, Rect>
+    guideTargets: MutableMap<V3GuideFocus, Rect>,
+    secondsToNextMonth: Int
 ) {
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
-            .guideTarget(V3GuideFocus.TimeControls, guideTargets), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        V3SmallButton(if (controller.timeSpeed == 0) "继续" else "暂停", Modifier.weight(1f), selected = controller.timeSpeed == 0) { controller.togglePause() }
-        listOf(1, 2, 3).forEach { speed ->
-            V3SmallButton("${speed}倍", Modifier.weight(1f), selected = controller.timeSpeed == speed) { controller.updateTimeSpeed(speed) }
+            .guideTarget(V3GuideFocus.TimeControls, guideTargets),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            V3SmallButton(if (controller.timeSpeed == 0) "继续" else "暂停", Modifier.weight(1f), selected = controller.timeSpeed == 0) { controller.togglePause() }
+            listOf(1, 2, 3).forEach { speed ->
+                V3SmallButton("${speed}倍", Modifier.weight(1f), selected = controller.timeSpeed == speed) { controller.updateTimeSpeed(speed) }
+            }
+            Text(
+                if (controller.shouldAutoTick()) "下月 ${secondsToNextMonth}秒" else "时序暂停",
+                color = if (controller.shouldAutoTick()) V3Green else V3Muted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1.4f)
+            )
         }
-        Text(if (controller.shouldAutoTick()) "时序流动中" else "已暂停", color = V3Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.weight(1.4f))
+        Text(
+            "现实耗时：1倍22秒/月（4分24秒/年）· 2倍11秒/月 · 3倍约7秒/月；人物每月增长1个月。",
+            color = V3Muted,
+            fontSize = 10.sp,
+            lineHeight = 15.sp
+        )
     }
+}
+
+private fun monthIntervalMillis(speed: Int): Long = when (speed) {
+    3 -> 7300L
+    2 -> 11000L
+    else -> 22000L
 }
 
 private fun mingEraLabel(year: Int): String = when {
@@ -1392,11 +1570,11 @@ private fun mingEraLabel(year: Int): String = when {
 }
 
 private fun mingSituationText(state: V3GameState): String = when {
-    state.year < 1619 -> "万历末年，矿税、徭役和地方积弊仍在。李氏先要在清河县稳住婚配、田粮、祠产和县衙关系。"
+    state.year < 1619 -> "万历末年，矿税、徭役和地方积弊仍在。${state.surname}氏先要在清河县稳住婚配、田粮、祠产和县衙关系。"
     state.year < 1628 -> "辽事已急，天启年间党争、边饷、军镇催粮渐入县中。宗族不能只看家账，还要决定勤王、自保或通商。"
-    state.year < 1636 -> "崇祯新政催饷更紧，饥荒与流民开始外溢。李氏若无粮、无勇、无族望，乱世会自然吞没家业。"
+    state.year < 1636 -> "崇祯新政催饷更紧，饥荒与流民开始外溢。${state.surname}氏若无粮、无勇、无族望，乱世会自然吞没家业。"
     state.year < 1642 -> "关外势大，流寇四起，地方豪族各谋退路。此时应在书院、商路、寨堡、码头之间定下真正路线。"
-    else -> "甲申将近，天下土崩。李氏必须在勤王、割据、保族、南迁之间作终局选择。"
+    else -> "甲申将近，天下土崩。${state.surname}氏必须在勤王、割据、保族、南迁之间作终局选择。"
 }
 
 @Composable
@@ -1890,7 +2068,7 @@ private fun V3SettingsDialog(controller: V3GameController, fontPreference: FontP
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { style ->
                         V3SmallButton(
-                            "${style.label}\n${style.desc}",
+                            style.label,
                             Modifier.weight(1f),
                             selected = fontPreference.style == style
                         ) { fontPreference.updateStyle(style) }
@@ -1942,12 +2120,32 @@ private fun monthlyReportTitle(baseTitle: String, lines: List<String>): String =
     else -> baseTitle
 }
 
-private fun nextAdvice(state: V3GameState): String = when {
-    V3GameEngine.marriageOptions(state).isNotEmpty() -> "先到【宗族】迎娶妻子，家族才会添丁。"
-    V3GameEngine.builtSiteCount(state) < 2 -> "建第二处产业，形成银粮双收入。"
-    V3GameEngine.canRankUp(state) -> "条件已够，到【宗族】晋升品第。"
-    V3GameEngine.alivePeople(state).none { it.age >= 12 && it.currentTask == null && it.trainingFocus == null } -> "等待子嗣成长，或让空闲族人先培养属性。"
-    else -> "选择产业派人经营，再推进月结。"
+private fun nextAdvice(state: V3GameState): String {
+    val founder = state.people.firstOrNull { it.id == 1 }
+    val hasSpouse = founder?.spouseId != null
+    val builtSites = V3GameEngine.builtSiteCount(state)
+    val hasAssignment = state.people.any { it.currentTask != null || it.trainingFocus != null }
+    val advancedFromOpeningMonth = state.year > 1601 || state.month > 1
+    return when {
+        !hasSpouse -> "前往【宗族】为${state.founderName}完成婚配；完成后解锁添丁传承。"
+        builtSites < 2 -> "在【家业】点县域集市并营建第二处产业；完成后形成银粮双收入。"
+        !hasAssignment -> "前往【族人】点${state.founderName}，安排培养或派差；月结时获得成长与收益。"
+        !advancedFromOpeningMonth -> "返回【家业】点继续或倍速，推进首月结算；倒计时会显示距下月秒数。"
+        state.clanRank == 1 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升小族；解锁议事、书院医馆、县衙与基础募兵。"
+        state.clanRank == 1 -> "完成首年目标并积累银90、粮130、人口2、产业2、族望10，准备晋升小族。"
+        state.clanRank == 2 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升望族；解锁天下经营、军务产业和跨域征伐。"
+        state.clanRank == 2 -> "经营县域、培养族人并扩大家口，满足望族晋升条件。"
+        state.clanRank == 3 && V3GameEngine.canRankUp(state) -> "晋升县中大姓，筹备80兵册后可举旗。"
+        else -> "按【眼前目标】经营产业、派遣族人并推进月结，逐步完成路线与宗族晋升。"
+    }
+}
+
+private fun rankUnlockPreview(rank: Int): String = when (rank) {
+    2 -> "宗族议事、县衙、书院、医馆、铺面粮仓、基础募兵"
+    3 -> "寨堡、码头、山道、作坊商队团练营、天下经营与征伐"
+    4 -> "举旗割据、骑兵与县域统合"
+    5 -> "郡望世家与统一终局"
+    else -> "已达最高品第"
 }
 
 private fun siteChipText(site: V3CountySite): String = "${site.name.takeLast(2)}${if (site.level > 0) "Lv.${site.level}" else "未建"}"
@@ -2053,5 +2251,10 @@ private fun bestPersonFor(people: List<V3Person>, task: V3TaskType): V3Person? {
 }
 
 private fun targetSiteFor(state: V3GameState, task: V3TaskType): V3CountySite? {
-    return state.sites.filter { it.taskTypes.contains(task) }.maxWithOrNull(compareBy<V3CountySite> { it.level }.thenBy { it.risk })
+    return state.sites
+        .filter {
+            it.taskTypes.contains(task) &&
+                V3GameEngine.isSiteUnlocked(state, it.type)
+        }
+        .maxWithOrNull(compareBy<V3CountySite> { it.level }.thenBy { it.risk })
 }

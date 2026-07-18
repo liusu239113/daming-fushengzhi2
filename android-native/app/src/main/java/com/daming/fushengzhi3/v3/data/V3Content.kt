@@ -496,13 +496,37 @@ object V3Content {
         )
     }
 
-    fun newGame(root: String, county: String, creed: String, crisis: String, clanNameInput: String = "李氏宗族"): V3GameState {
-        val cleanedClanName = clanNameInput.trim().ifBlank { "李氏宗族" }.take(8)
-        val clanSurname = cleanedClanName.firstOrNull()?.toString()?.takeIf { it.isNotBlank() } ?: "李"
-        val founderName = "${clanSurname}慎行"
+    fun sanitizeSurname(input: String): String =
+        input
+            .trim()
+            .filter { it in '\u3400'..'\u9FFF' }
+            .take(2)
+            .ifBlank { "李" }
+
+    private val founderGivenNames = listOf(
+        "慎行", "守正", "承安", "景和", "怀义", "允文",
+        "敬修", "知远", "伯谦", "维桢", "弘毅", "明德"
+    )
+
+    fun founderGivenName(root: String, county: String, creed: String): String {
+        val seed = root.sumOf { it.code } + county.sumOf { it.code } + creed.sumOf { it.code }
+        return founderGivenNames[seed % founderGivenNames.size]
+    }
+
+    fun founderName(surnameInput: String, root: String, county: String, creed: String): String =
+        "${sanitizeSurname(surnameInput)}${founderGivenName(root, county, creed)}"
+
+    fun clanName(surnameInput: String): String = "${sanitizeSurname(surnameInput)}氏宗族"
+
+    fun newGame(root: String, county: String, creed: String, crisis: String, surnameInput: String = "李"): V3GameState {
+        val surname = sanitizeSurname(surnameInput)
+        val cleanedClanName = clanName(surname)
+        val founderName = founderName(surname, root, county, creed)
         val base = V3GameState(root = root, county = county, creed = creed, crisis = crisis)
         val profile = startProfile(root, county, creed, crisis)
         return base.copy(
+            surname = surname,
+            founderName = founderName,
             clanName = cleanedClanName,
             silver = profile.silver,
             grain = profile.grain,
@@ -512,9 +536,9 @@ object V3Content {
             army = V3ArmyRoster(militia = profile.militia),
             relations = profile.relations,
             rebelHeat = profile.rebelHeat,
-            people = initialPeople.map { if (it.id == 1) it.copy(name = founderName, ageMonths = it.age * 12) else it },
+            people = initialPeople.map { if (it.id == 1) it.copy(name = founderName, ageMonths = it.age * 12, surname = surname) else it },
             branches = initialBranches.map { if (it.id == "main") it.copy(leaderName = founderName, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。") else it },
-            sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${clanSurname}氏宗祠") else it },
+            sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${surname}氏宗祠") else it },
             annualGoals = profile.annualGoals,
             routeScores = profile.routeScores,
             pendingReports = listOf("${county}局势未稳，${crisis}已成眼前第一患。"),

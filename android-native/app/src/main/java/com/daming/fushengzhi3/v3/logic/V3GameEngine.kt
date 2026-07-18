@@ -77,6 +77,21 @@ object V3GameEngine {
     }
 
     fun normalizeState(state: V3GameState): V3GameState {
+        val surnameFromClan = V3Content.sanitizeSurname(
+            state.clanName
+                .removeSuffix("氏宗族")
+                .removeSuffix("宗族")
+        )
+        val migratedStateSurname = if (
+            state.surname == "李" &&
+            surnameFromClan != "李"
+        ) surnameFromClan else state.surname
+        val founderInPeople = state.people.firstOrNull { it.id == 1 }?.name
+        val migratedFounderName = if (
+            state.founderName == "李慎行" &&
+            !founderInPeople.isNullOrBlank() &&
+            founderInPeople != "李慎行"
+        ) founderInPeople else state.founderName
         val migratedArmy = if (
             state.army == V3ArmyRoster() &&
             state.militia != V3ArmyRoster().total()
@@ -86,12 +101,31 @@ object V3GameEngine {
             state.army
         }
         val migratedPeople = state.people.map { person ->
-            if (person.ageMonths >= 0) person else person.copy(ageMonths = person.age * 12)
+            val migratedAgeMonths = if (person.ageMonths >= 0) person.ageMonths else person.age * 12
+            val migratedSurname = if (person.surname.isNotBlank()) person.surname else migratedStateSurname
+            if (migratedAgeMonths == person.ageMonths && migratedSurname == person.surname) {
+                person
+            } else {
+                person.copy(ageMonths = migratedAgeMonths, surname = migratedSurname)
+            }
         }
         val existingRegionIds = state.worldRegions.map { it.id }.toSet()
         val mergedRegions = state.worldRegions + V3Content.initialWorldRegions.filter { it.id !in existingRegionIds }
-        if (migratedArmy.total() == state.militia && mergedRegions.size == state.worldRegions.size && migratedPeople == state.people) return state
-        return state.copy(militia = migratedArmy.total(), army = migratedArmy, people = migratedPeople, worldRegions = mergedRegions)
+        if (
+            migratedArmy.total() == state.militia &&
+            mergedRegions.size == state.worldRegions.size &&
+            migratedPeople == state.people &&
+            migratedStateSurname == state.surname &&
+            migratedFounderName == state.founderName
+        ) return state
+        return state.copy(
+            surname = migratedStateSurname,
+            founderName = migratedFounderName,
+            militia = migratedArmy.total(),
+            army = migratedArmy,
+            people = migratedPeople,
+            worldRegions = mergedRegions
+        )
     }
 
     fun alivePeople(state: V3GameState): List<V3Person> = state.people.filter { it.alive }
@@ -152,6 +186,9 @@ object V3GameEngine {
     }
 
     fun upgradeEstate(state: V3GameState, type: V3EstateType): V3GameState {
+        if (!isEstateUnlocked(state, type)) {
+            return state.copy(pendingReports = listOf("${type.label}尚未开放：宗族达到${estateRequiredRank(type)}级后解锁。"))
+        }
         val current = state.estateAssets.firstOrNull { it.type == type }
         if ((current?.level ?: 0) >= 5) return state.copy(pendingReports = listOf("${type.label}已达最高等级。"))
         val cost = estateUpgradeCost(state, type)
@@ -291,11 +328,11 @@ object V3GameEngine {
             route = V3Route.Warlord,
             tier = V3EndingTier.Historic,
             score = power + state.unificationProgress,
-            title = "李氏定鼎天下",
-            body = "李氏由一人起家，娶妻生子、置田开铺、修祠建学、团练征伐，最终从清河县扩张到州府、京畿与天下。旧朝崩裂之际，家族不再只是求活，而是以宗族、产业与兵权重塑秩序。",
+            title = "${state.surname}氏定鼎天下",
+            body = "${state.surname}氏由一人起家，娶妻生子、置田开铺、修祠建学、团练征伐，最终从清河县扩张到州府、京畿与天下。旧朝崩裂之际，家族不再只是求活，而是以宗族、产业与兵权重塑秩序。",
             stats = listOf("统一进度：${state.unificationProgress}", "控制地域：$controlled / ${state.worldRegions.size}", "家产总等级：${estateLevelTotal(state)}", "家族人口：${alivePeople(state).size}", "乡勇：${state.militia}", "族望：${state.influence}")
         )
-        return state.copy(finalEnding = ending, activeEvent = null, conquestState = null, pendingReports = listOf("天下归一，李氏家乘写入新朝开篇。"))
+        return state.copy(finalEnding = ending, activeEvent = null, conquestState = null, pendingReports = listOf("天下归一，${state.surname}氏家乘写入新朝开篇。"))
     }
 
     fun canRankUp(state: V3GameState): Boolean {
@@ -413,7 +450,8 @@ object V3GameEngine {
             gender = candidate.gender,
             generation = target.generation,
             spouseId = target.id,
-            spouseSinceMonth = state.year * 12 + state.month
+            spouseSinceMonth = state.year * 12 + state.month,
+            surname = candidate.surname
         )
         val people = state.people.map { person ->
             if (person.id == target.id) person.copy(spouseId = spouseId, spouseSinceMonth = state.year * 12 + state.month) else person
@@ -452,6 +490,7 @@ object V3GameEngine {
 
     fun canUpgrade(state: V3GameState, siteId: String): Boolean {
         val site = state.sites.firstOrNull { it.id == siteId } ?: return false
+        if (!isSiteUnlocked(state, site.type)) return false
         val cost = upgradeCost(site) ?: return false
         val limit = 1 + state.clanRank * 2
         val wouldAddBuiltSite = site.level == 0 && site.type != V3CountySiteType.Shrine
@@ -461,6 +500,9 @@ object V3GameEngine {
 
     fun upgradeSite(state: V3GameState, siteId: String): V3GameState {
         val site = state.sites.firstOrNull { it.id == siteId } ?: return state
+        if (!isSiteUnlocked(state, site.type)) {
+            return state.copy(pendingReports = listOf("${site.name}尚未开放：宗族达到${siteRequiredRank(site.type)}级后解锁。"))
+        }
         val cost = upgradeCost(site) ?: return state.copy(pendingReports = listOf("${site.name}已达最高等级。"))
         val limit = 1 + state.clanRank * 2
         if (site.level == 0 && site.type != V3CountySiteType.Shrine && builtSiteCount(state) >= limit) {
@@ -491,6 +533,9 @@ object V3GameEngine {
 
     fun siteSpecialAction(state: V3GameState, siteId: String): V3GameState {
         val site = state.sites.firstOrNull { it.id == siteId } ?: return state
+        if (!isSiteUnlocked(state, site.type)) {
+            return state.copy(pendingReports = listOf("${site.name}尚未开放：宗族达到${siteRequiredRank(site.type)}级后解锁。"))
+        }
         if (site.level <= 0) return state.copy(pendingReports = listOf("【${site.name}】尚未建成，先营建后才能执行专属事务。"))
         var silver = state.silver
         var grain = state.grain
@@ -594,6 +639,10 @@ object V3GameEngine {
     fun assignTask(state: V3GameState, personId: Int, siteId: String, task: V3TaskType): V3GameState {
         val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
         val site = state.sites.firstOrNull { it.id == siteId && it.taskTypes.contains(task) } ?: return state
+        if (!isSiteUnlocked(state, site.type)) {
+            val rank = siteRequiredRank(site.type)
+            return state.copy(pendingReports = listOf("${site.name}尚未开放：宗族达到${rank}级后才能经营。"))
+        }
         if (person.age < 12) return state.copy(pendingReports = listOf("${person.name}尚年幼，不能外出办事。"))
         val training = person.trainingFocus
         if (training != null) return state.copy(pendingReports = listOf("${person.name}本月正在${training.label}，不能同时外出办事。"))
@@ -736,12 +785,38 @@ object V3GameEngine {
         )
     }
 
+    fun requiredRank(feature: String): Int = when (feature) {
+        "Strategy", "Council", "Recruit", "CivicSites", "BasicEstate" -> 2
+        "World", "AdvancedTroops", "Conquest", "MilitarySites", "AdvancedEstate" -> 3
+        "RaiseBanner" -> 4
+        "Unification" -> 5
+        else -> 1
+    }
+
+    fun siteRequiredRank(type: V3CountySiteType): Int = when (type) {
+        V3CountySiteType.Shrine, V3CountySiteType.Farmland, V3CountySiteType.Market -> 1
+        V3CountySiteType.Yamen, V3CountySiteType.Academy, V3CountySiteType.Clinic -> 2
+        V3CountySiteType.Fort, V3CountySiteType.Dock, V3CountySiteType.MountainPass -> 3
+    }
+
+    fun estateRequiredRank(type: V3EstateType): Int = when (type) {
+        V3EstateType.TenantLand -> 1
+        V3EstateType.Shop, V3EstateType.Warehouse -> 2
+        V3EstateType.Workshop, V3EstateType.Caravan, V3EstateType.Barracks -> 3
+    }
+
+    fun isSiteUnlocked(state: V3GameState, type: V3CountySiteType): Boolean =
+        state.clanRank >= siteRequiredRank(type)
+
+    fun isEstateUnlocked(state: V3GameState, type: V3EstateType): Boolean =
+        state.clanRank >= estateRequiredRank(type)
+
     fun isUnlocked(state: V3GameState, feature: String): Boolean = when (feature) {
-        "Recruit" -> state.clanRank >= 2 || state.sites.any { it.type == V3CountySiteType.Fort && it.level > 0 }
-        "AdvancedTroops" -> state.clanRank >= 3 && state.estateAssets.any { it.type == V3EstateType.Barracks && it.level > 0 }
-        "Conquest" -> state.clanRank >= 3 && controlledRegionCount(state) >= 1
-        "RaiseBanner" -> state.clanRank >= 4 && state.militia >= 80
-        else -> true
+        "Recruit" -> state.clanRank >= requiredRank(feature)
+        "AdvancedTroops" -> state.clanRank >= requiredRank(feature) && state.estateAssets.any { it.type == V3EstateType.Barracks && it.level > 0 }
+        "Conquest" -> state.clanRank >= requiredRank(feature) && controlledRegionCount(state) >= 1
+        "RaiseBanner" -> state.clanRank >= requiredRank(feature) && state.militia >= 80
+        else -> state.clanRank >= requiredRank(feature)
     }
 
     fun recruitTroops(state: V3GameState, type: V3TroopType, amount: Int): V3GameState {
@@ -1003,7 +1078,7 @@ object V3GameEngine {
         if (power < 140) {
             return state.copy(pendingReports = listOf("举旗条件不足：需乡勇、族望、稳定据点共同支撑。当前举旗评估 $power / 140。"))
         }
-        val message = "李氏在县中举起义旗，接管粮仓与城门。官府关系大降，割据路线大幅推进，后续会引来官军与周边家族压力。"
+        val message = "${state.surname}氏在县中举起义旗，接管粮仓与城门。官府关系大降，割据路线大幅推进，后续会引来官军与周边家族压力。"
         return state.copy(
             rebelHeat = (state.rebelHeat + 35).coerceAtMost(100),
             influence = (state.influence + 8).coerceIn(0, 100),
@@ -1409,7 +1484,8 @@ object V3GameEngine {
         if (tick % 8 != 0) return state
         val childId = state.nextPersonId
         val gender = if (childId % 2 == 0) V3Gender.Male else V3Gender.Female
-        val childName = "${state.clanName.firstOrNull() ?: '李'}${if (gender == V3Gender.Male) boyNames[(childId + state.year) % boyNames.size] else girlNames[(childId + state.year) % girlNames.size]}"
+        val childSurname = husband.surname.ifBlank { state.surname }
+        val childName = "$childSurname${if (gender == V3Gender.Male) boyNames[(childId + state.year) % boyNames.size] else girlNames[(childId + state.year) % girlNames.size]}"
         val child = V3Person(
             id = childId,
             name = childName,
@@ -1426,7 +1502,8 @@ object V3GameEngine {
             gender = gender,
             generation = max(husband.generation, wife.generation) + 1,
             parentId = husband.id,
-            motherId = wife.id
+            motherId = wife.id,
+            surname = childSurname
         )
         val people = state.people.map {
             when (it.id) {

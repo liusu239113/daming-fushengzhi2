@@ -57,6 +57,21 @@ object GameImages {
         "female_elder" to "image/avatars/v3_avatar_female_elder.png"
     )
 
+    val v3SpousePortraits = mapOf(
+        "farmer" to "image/avatars/spouses/wang_chunniang.png",
+        "merchant" to "image/avatars/spouses/shen_yuniang.png",
+        "scholar" to "image/avatars/spouses/chen_wanyi.png",
+        "martial" to "image/avatars/spouses/zhao_yueying.png",
+        "healer" to "image/avatars/spouses/gu_suwen.png",
+        "gentry" to "image/avatars/spouses/zhou_minghui.png",
+        "sea" to "image/avatars/spouses/lin_haitang.png",
+        "chieftain" to "image/avatars/spouses/qin_zhaoxue.png",
+        "scholar_male" to "image/avatars/spouses/shen_yanqiu.png",
+        "merchant_male" to "image/avatars/spouses/gu_xingzhou.png",
+        "martial_male" to "image/avatars/spouses/zhao_changge.png",
+        "gentry_male" to "image/avatars/spouses/zhou_huaijin.png"
+    )
+
     val v3EnemyPortraits = listOf(
         "image/avatars/enemies/v3_enemy_ref_01.png",
         "image/avatars/enemies/v3_enemy_ref_02.png",

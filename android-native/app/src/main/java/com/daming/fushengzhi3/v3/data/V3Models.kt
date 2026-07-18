@@ -328,7 +328,8 @@ data class V3SpouseCandidate(
     val route: V3Route,
     val gender: V3Gender = V3Gender.Female,
     val age: Int = 19,
-    val avatarKey: String = "female_youth"
+    val avatarKey: String = "female_youth",
+    val surname: String = name.take(1)
 )
 
 @Serializable
@@ -370,6 +371,8 @@ data class V3MonthlyForecast(
 
 @Serializable
 data class V3GameState(
+    val surname: String = "李",
+    val founderName: String = "李慎行",
     val clanName: String = "李氏宗族",
     val root: String = "没落士族",
     val county: String = "江南水乡",
@@ -449,7 +452,8 @@ data class V3Person(
     val assignedSiteId: String? = null,
     val spouseSinceMonth: Int? = null,
     val lastBirthMonth: Int? = null,
-    val ageMonths: Int = -1
+    val ageMonths: Int = -1,
+    val surname: String = ""
 )
 
 @Serializable

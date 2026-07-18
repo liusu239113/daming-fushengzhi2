@@ -46,10 +46,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playBgm(BgmKey.V3County)
     }
 
-    fun newGame(root: String, county: String, creed: String, crisis: String, clanName: String = "李氏宗族") {
+    fun newGame(root: String, county: String, creed: String, crisis: String, surname: String = "李") {
         audio.playSfx(SfxKey.V3ScrollOpen)
         ensureV3Bgm()
-        state = V3Content.newGame(root, county, creed, crisis, clanName)
+        state = V3Content.newGame(root, county, creed, crisis, surname)
         saveStore.save(state)
         screen = V3Screen.County
         timeSpeed = 0
@@ -64,6 +64,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         ensureV3Bgm()
         state = V3GameEngine.normalizeState(saveStore.load() ?: state)
         screen = V3Screen.County
+        timeSpeed = 0
         latestReport = null
         message = "案卷已启封，旧日县域局势重归案前。"
     }
@@ -336,7 +337,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun advanceMonth(showReport: Boolean = true) {
         audio.playSfx(SfxKey.V3ResourceSettle)
         val report = V3GameEngine.advanceMonth(state)
-        val generatedEvent = if (shouldGenerateEventThisMonth(report.nextState)) V3EventEngine.generateEvent(report.nextState) else null
+        val generatedEvent = if (shouldGenerateEventThisMonth(report.nextState)) {
+            V3EventEngine.generateEvent(report.nextState)?.let { event ->
+                V3EventEngine.personalizeEvent(event, report.nextState)
+            }
+        } else {
+            null
+        }
         val withEnding = if (V3GameEngine.shouldAutoEnd(report.nextState)) {
             report.nextState.copy(finalEnding = V3GameEngine.finalizeEnding(report.nextState), activeEvent = null)
         } else {
@@ -365,9 +372,11 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun restartAfterEnding() {
         audio.click()
-        state = V3Content.newGame(state.root, state.county, state.creed, state.crisis, state.clanName)
+        state = V3Content.newGame(state.root, state.county, state.creed, state.crisis, state.surname)
         saveStore.save(state)
         latestReport = null
+        timeSpeed = 0
+        settingsVisible = false
         message = "新一轮县域宗族沙盘已重开。"
         screen = V3Screen.County
     }
@@ -390,7 +399,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun openPlayGuide() {
         audio.playSfx(SfxKey.UiSelect)
-        message = "族老札记：立户之后，先娶妻安家，再置田庄、开集市、修书院、筑寨堡。孩童可培养，成年可派差；学识可入科举，武艺可讨流寇。等族望、乡勇和地域控制足够，李氏便能在乱世中择路而行。"
+        message = "族老札记：立户之后，先娶妻安家，再置田庄、开集市、修书院、筑寨堡。孩童可培养，成年可派差；学识可入科举，武艺可讨流寇。等族望、乡勇和地域控制足够，${state.surname}氏便能在乱世中择路而行。"
     }
 
     fun openAudioVisualGuide() {

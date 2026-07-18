@@ -11,6 +11,21 @@ import kotlin.math.max
 import kotlin.math.min
 
 object V3EventEngine {
+    fun personalizeEvent(event: V3ActiveEvent, state: V3GameState): V3ActiveEvent {
+        val clanLabel = "${state.surname}氏"
+        fun personalize(text: String): String =
+            text
+                .replace("李慎行", state.founderName)
+                .replace("李氏", clanLabel)
+        return event.copy(
+            title = personalize(event.title),
+            body = personalize(event.body),
+            choices = event.choices.map { choice ->
+                choice.copy(label = personalize(choice.label), desc = personalize(choice.desc))
+            }
+        )
+    }
+
     fun generateEvent(state: V3GameState): V3ActiveEvent? {
         if (state.activeEvent != null) return state.activeEvent
         if (V3GameEngine.alivePeople(state).size < 2 && state.year == 1601 && state.month <= 3) return null
@@ -29,9 +44,11 @@ object V3EventEngine {
         followUpEvent(state)?.let { return it }
         if (!shouldRoutineEvent(state, totalRisk)) return null
 
-        val staticCandidates = V3EventContent.allEvents.filter { event ->
-            eventMatchesState(event, state) && state.eventLog.take(10).none { it.contains(event.title) }
-        }
+        val staticCandidates = V3EventContent.allEvents
+            .map { event -> personalizeEvent(event, state) }
+            .filter { event ->
+                eventMatchesState(event, state) && state.eventLog.take(10).none { it.contains(event.title) }
+            }
         val dynamicCandidates = dynamicProgressEvents(state, totalRisk)
         val ranked = (staticCandidates + dynamicCandidates)
             .map { it to eventFitScore(it, state, totalRisk) }
