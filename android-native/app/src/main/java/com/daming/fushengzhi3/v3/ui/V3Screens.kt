@@ -169,9 +169,9 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     LaunchedEffect(controller.timeSpeed, controller.state.year, controller.state.month, controller.latestReport, controller.message, controller.state.activeEvent, controller.settingsVisible, controller.state.examSession, controller.state.battleState, controller.state.conquestState) {
         if (controller.shouldAutoTick()) {
             val interval = when (controller.timeSpeed) {
-                3 -> 5200L
-                2 -> 7600L
-                else -> 11000L
+                3 -> 7300L
+                2 -> 11000L
+                else -> 22000L
             }
             delay(interval)
             controller.autoAdvanceTime()
@@ -610,19 +610,28 @@ private fun V3ClanPage(state: V3GameState, controller: V3GameController) {
         }
     }
     val options = V3GameEngine.marriageOptions(state)
-    if (options.isNotEmpty()) {
+    val eligible = V3GameEngine.marriageEligiblePeople(state)
+    if (options.isNotEmpty() || eligible.any { it.id != 1 && V3GameEngine.marriageCandidatesFor(it, state).isNotEmpty() }) {
         V3Panel {
             Text("婚配", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("娶妻后才会有添丁机会，这是家族模拟的第一步。", color = V3Ink, fontSize = 13.sp)
-            options.take(3).forEach { option ->
-                Card(colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Gold), shape = V3SoftShape) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(option.name, color = V3Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text("银${option.silverCost}/粮${option.grainCost}", color = V3Red, fontSize = 12.sp)
+            Text("适龄未婚男女都可以婚配：男族人迎娶，女族人可按入赘规则成家。儿童每月成长，成年后才可婚配和出战。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+            val target = eligible.firstOrNull { V3GameEngine.marriageCandidatesFor(it, state).isNotEmpty() } ?: eligible.firstOrNull()
+            target?.let { person ->
+                Text("当前婚配人选：${person.name} · ${person.gender.label} · ${person.age}岁 · ${V3GameEngine.lifeStage(person)}", color = V3Red, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                V3GameEngine.marriageCandidatesFor(person, state).take(8).forEach { option ->
+                    Card(colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Gold), shape = V3SoftShape) {
+                        Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AssetImage(GameImages.v3AvatarPortraits[option.avatarKey] ?: GameImages.v3AvatarPortraits.getValue("female_youth"), option.name, Modifier.size(58.dp).background(V3Rice, CircleShape).border(2.dp, V3Gold, CircleShape).padding(3.dp), ContentScale.Fit)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(option.name, color = V3Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    Text("${option.gender.label} · ${option.age}岁", color = V3Red, fontSize = 12.sp)
+                                }
+                                Text("银${option.silverCost}/粮${option.grainCost} · ${option.route.label}", color = V3Red, fontSize = 12.sp)
+                                Text(option.desc, color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
+                                V3SmallButton("${person.name}与其婚配", Modifier.fillMaxWidth(), enabled = V3GameEngine.canMarry(state, option.id)) { controller.marry(option.id, person.id) }
+                            }
                         }
-                        Text(option.desc, color = V3Muted, fontSize = 13.sp)
-                        V3SmallButton("迎娶", Modifier.fillMaxWidth(), enabled = V3GameEngine.canMarry(state, option.id)) { controller.marry(option.id) }
                     }
                 }
             }
@@ -817,9 +826,20 @@ private fun V3StrategyPage(state: V3GameState, controller: V3GameController, for
                     repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                V3SmallButton("讨伐流寇", Modifier.weight(1f), enabled = recruitUnlocked && state.battleState == null) { controller.startBattle() }
-                V3SmallButton("举旗造反", Modifier.weight(1f), enabled = bannerUnlocked) { controller.raiseBanner() }
+            Text("装备与兵册", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("兵册决定每名将领能带的部曲规模；装备只对已穿戴的族人计入战攻与防御。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("库存：${state.equipment.count { it.ownerId == null }} 件 · 已装备：${state.equipment.count { it.ownerId != null }} 件", color = V3Ink, fontSize = 13.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.daming.fushengzhi3.v3.data.V3EquipmentSlot.entries.forEach { slot ->
+                    V3SmallButton("购${slot.label}", Modifier.weight(1f)) { controller.buyEquipment(slot, com.daming.fushengzhi3.v3.data.V3EquipmentQuality.Common) }
+                }
+            }
+            state.equipment.filter { it.ownerId == null }.take(6).forEach { item ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("${item.name} · 攻${item.attack}/防${item.defense}", color = V3Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    V3SmallButton("修复", Modifier.width(58.dp), enabled = item.durability < item.maxDurability) { controller.repairEquipment(item.id) }
+                    V3SmallButton("给武将", Modifier.width(72.dp), enabled = V3GameEngine.adultPeople(state).isNotEmpty()) { controller.equipEquipment(item.id, V3GameEngine.adultPeople(state).first().id) }
+                }
             }
         }
         else -> V3Panel {
@@ -1171,6 +1191,10 @@ private fun V3PersonCard(person: V3Person, state: V3GameState, controller: V3Gam
                     Text(if (person.currentTask == null && person.trainingFocus == null) "待命${if (titleBits.isBlank()) "" else " · $titleBits"}" else "${person.currentTask?.label ?: person.trainingFocus?.label}@${assignedSite?.name ?: "家中"}", color = if (person.currentTask == null && person.trainingFocus == null) V3Muted else V3Green, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
                 }
                 Text("${person.trait.label}：${person.trait.desc}", color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
+                Text("阶段：${V3GameEngine.lifeStage(person)} · ${V3GameEngine.marriageStatus(person, state)}", color = V3Red, fontSize = 12.sp, lineHeight = 17.sp)
+                if (person.age < 16) {
+                    Text("距离成年约 ${V3GameEngine.monthsUntilAdult(person)} 个月；1倍速每月推进1个月。", color = V3Muted, fontSize = 11.sp)
+                }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1597,7 +1621,17 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
             Text("敌势 ${battle.enemyPower} · 风险 ${battle.risk} · 第${battle.turn + 1}阵。${if (battle.turn % 2 == 0) "我方先手" else "敌方先手"}", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
             if (battle.phase == V3BattlePhase.Draft) {
                 Text("先点选最多6名成年族人，确认后进入战斗。战斗界面只显示上下两阵，不再显示候选人。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-                Text("已选 ${battle.selectedPersonIds.size}/6", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("已选 ${battle.selectedPersonIds.size}/6 · 每名族人必须配置一个兵种；兵册只是总部曲，出战时按6名将领均分所选兵种编制。", color = V3Red, fontSize = 12.sp, lineHeight = 18.sp)
+                    battle.selectedPersonIds.forEach { id ->
+                        val person = state.people.firstOrNull { it.id == id } ?: return@forEach
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AssetImage(v3AvatarFor(person), person.name, Modifier.size(34.dp).background(V3Rice, CircleShape).border(1.dp, V3Gold, CircleShape).padding(2.dp), ContentScale.Fit)
+                            Text(person.name, color = V3Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            V3TroopType.entries.forEach { troop ->
+                                V3SmallButton(troop.label, Modifier.weight(1f), selected = battle.selectedTroops[id] == troop, enabled = state.army.count(troop) > 0) { controller.selectBattleTroop(id, troop) }
+                            }
+                        }
+                    }
                 Box(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         V3GameEngine.adultPeople(state).chunked(2).forEach { row ->
@@ -1730,7 +1764,7 @@ private fun V3CombatantCard(
                 }
             }
             Text(fighter.name, color = if (enemy) V3Red else V3Green, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text("${fighter.role} · 战${fighter.power}", color = V3Ink, fontSize = 10.sp, maxLines = 1)
+            Text("${fighter.role} · ${fighter.troopType?.label ?: "敌军"} ${fighter.troopCount}人 · 战${fighter.power} 防${fighter.defense}", color = V3Ink, fontSize = 10.sp, maxLines = 1)
             Box(Modifier.fillMaxWidth().height(5.dp).background(V3Border.copy(alpha = 0.25f), V3SoftShape)) {
                 Box(Modifier.fillMaxWidth(hpRatio.coerceIn(0.03f, 1f)).height(5.dp).background(if (enemy) V3Red else V3Green, V3SoftShape))
             }

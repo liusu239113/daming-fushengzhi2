@@ -128,9 +128,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         sfxVolume = audio.currentSfxVolume
     }
 
-    fun marry(candidateId: String) {
+    fun marry(candidateId: String, targetPersonId: Int? = null) {
         audio.playSfx(SfxKey.V3Edict)
-        state = V3GameEngine.marry(state, candidateId)
+        state = V3GameEngine.marry(state, candidateId, targetPersonId)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
@@ -249,6 +249,25 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun buyEquipment(slot: com.daming.fushengzhi3.v3.data.V3EquipmentSlot, quality: com.daming.fushengzhi3.v3.data.V3EquipmentQuality) {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.buyEquipment(state, slot, quality)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun repairEquipment(equipmentId: String) {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.repairEquipment(state, equipmentId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+    fun equipEquipment(equipmentId: String, personId: Int) {
+        audio.select()
+        state = V3GameEngine.equipEquipment(state, equipmentId, personId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
     fun startBattle() {
         audio.playSfx(SfxKey.V3Dispute)
         state = V3GameEngine.startBattle(state)
@@ -263,6 +282,12 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun selectBattleTroop(personId: Int, troopType: V3TroopType) {
+        audio.select()
+        state = V3GameEngine.selectBattleTroop(state, personId, troopType)
+        message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
+        saveStore.save(state)
+    }
     fun confirmBattleLineup() {
         audio.playSfx(SfxKey.V3Edict)
         state = V3GameEngine.confirmBattleLineup(state)

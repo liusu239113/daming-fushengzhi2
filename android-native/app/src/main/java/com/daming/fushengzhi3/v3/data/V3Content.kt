@@ -18,8 +18,11 @@ object V3Content {
         V3SpouseCandidate("healer", "顾素问", "医家之女，识药理、善抚幼，能在灾疫年景稳住族人和乡里。", silverCost = 38, grainCost = 28, influenceReq = 14, studyBonus = 10, commerceBonus = 3, diplomacyBonus = 10, route = V3Route.Hermit),
         V3SpouseCandidate("gentry", "周明徽", "县中士绅旁支之女，熟礼法与人情，能替家族打开官绅门路。", silverCost = 72, grainCost = 35, influenceReq = 28, studyBonus = 12, commerceBonus = 4, diplomacyBonus = 16, route = V3Route.Loyalist),
         V3SpouseCandidate("sea", "林海棠", "闽商船主之女，懂海货、识风信，婚后可为远海路线积攒人脉。", silverCost = 88, grainCost = 30, influenceReq = 35, studyBonus = 4, commerceBonus = 18, diplomacyBonus = 12, route = V3Route.Overseas),
-        V3SpouseCandidate("chieftain", "秦照雪", "山寨盟主遗女，性情果决，能聚拢乡勇，却也容易引来官府猜疑。", silverCost = 65, grainCost = 55, influenceReq = 42, martialBonus = 20, commerceBonus = 3, diplomacyBonus = 9, route = V3Route.Warlord)
-    )
+        V3SpouseCandidate("chieftain", "秦照雪", "山寨盟主遗女，性情果决，能聚拢乡勇，却也容易引来官府猜疑。", silverCost = 65, grainCost = 55, influenceReq = 42, martialBonus = 20, commerceBonus = 3, diplomacyBonus = 9, route = V3Route.Warlord),
+        V3SpouseCandidate("scholar_male", "沈砚秋", "寒门书生，熟经义与乡约，婚后可替家族稳住书院与士绅关系。", silverCost = 42, grainCost = 22, influenceReq = 12, studyBonus = 16, diplomacyBonus = 10, route = V3Route.Scholar, gender = V3Gender.Male, avatarKey = "male_youth"),
+        V3SpouseCandidate("merchant_male", "顾行舟", "河埠商户之子，善算账、通船路，适合把田庄和码头连成商路。", silverCost = 48, grainCost = 24, influenceReq = 10, commerceBonus = 17, diplomacyBonus = 8, route = V3Route.Merchant, gender = V3Gender.Male, avatarKey = "male_youth"),
+        V3SpouseCandidate("martial_male", "赵长戈", "边地军户之后，熟弓马和营伍，可为家族补上军务骨干。", silverCost = 38, grainCost = 32, influenceReq = 14, martialBonus = 18, diplomacyBonus = 4, route = V3Route.Fortress, gender = V3Gender.Male, avatarKey = "male_youth"),
+        V3SpouseCandidate("gentry_male", "周怀瑾", "士绅旁支子弟，知礼守约，能为女族人争取体面婚盟与官绅门路。", silverCost = 68, grainCost = 30, influenceReq = 28, studyBonus = 10, diplomacyBonus = 18, route = V3Route.Loyalist, gender = V3Gender.Male, avatarKey = "male_youth")    )
 
     val initialBranches = listOf(
         V3Branch("main", "主房", "李慎行", V3Route.Hermit, loyalty = 86, wealth = 18, influence = 20, grievance = 0, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。")
@@ -375,7 +378,7 @@ object V3Content {
             cohesion = 62,
             militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3,
             army = V3ArmyRoster(militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3),
-            people = initialPeople.map { if (it.id == 1) it.copy(name = founderName) else it },
+            people = initialPeople.map { if (it.id == 1) it.copy(name = founderName, ageMonths = it.age * 12) else it },
             branches = initialBranches.map { if (it.id == "main") it.copy(leaderName = founderName, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。") else it },
             sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${clanSurname}氏宗祠") else it },
             annualGoals = goalsFor(creed, crisis),

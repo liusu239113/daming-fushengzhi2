@@ -42,6 +42,40 @@ import kotlin.math.max
 import kotlin.math.min
 
 object V3GameEngine {
+    private const val CHILD_ADULT_AGE = 16
+    private const val CHILD_BIRTH_INTERVAL_MONTHS = 30
+    private const val MAX_MARRIAGE_AGE = 55
+
+    fun lifeStage(person: V3Person): String = when {
+        person.age < 6 -> "幼儿"
+        person.age < 12 -> "童年"
+        person.age < CHILD_ADULT_AGE -> "少年"
+        person.age < 55 -> "成年"
+        person.age < 70 -> "老成"
+        else -> "高龄"
+    }
+
+    fun monthsUntilAdult(person: V3Person): Int = (CHILD_ADULT_AGE * 12 - person.ageMonths.coerceAtLeast(person.age * 12)).coerceAtLeast(0)
+
+    fun marriageEligiblePeople(state: V3GameState): List<V3Person> = alivePeople(state).filter {
+        it.age in 18..MAX_MARRIAGE_AGE && it.spouseId == null
+    }
+
+    fun marriageCandidatesFor(person: V3Person, state: V3GameState): List<V3SpouseCandidate> {
+        if (person.age !in 18..MAX_MARRIAGE_AGE || person.spouseId != null) return emptyList()
+        return V3Content.spouseCandidates.filter {
+            it.gender != person.gender && kotlin.math.abs(it.age - person.age) <= 18 && state.influence >= it.influenceReq
+        }
+    }
+
+    fun marriageStatus(person: V3Person, state: V3GameState): String = when {
+        person.spouseId != null -> "已婚"
+        person.age < 18 -> "${monthsUntilAdult(person)}个月后可婚配"
+        person.age > MAX_MARRIAGE_AGE -> "已过适婚期"
+        marriageCandidatesFor(person, state).isEmpty() -> "等待合适婚配对象"
+        else -> "可婚配"
+    }
+
     fun normalizeState(state: V3GameState): V3GameState {
         val migratedArmy = if (
             state.army == V3ArmyRoster() &&
@@ -51,15 +85,18 @@ object V3GameEngine {
         } else {
             state.army
         }
+        val migratedPeople = state.people.map { person ->
+            if (person.ageMonths >= 0) person else person.copy(ageMonths = person.age * 12)
+        }
         val existingRegionIds = state.worldRegions.map { it.id }.toSet()
         val mergedRegions = state.worldRegions + V3Content.initialWorldRegions.filter { it.id !in existingRegionIds }
-        if (migratedArmy.total() == state.militia && mergedRegions.size == state.worldRegions.size) return state
-        return state.copy(militia = migratedArmy.total(), army = migratedArmy, worldRegions = mergedRegions)
+        if (migratedArmy.total() == state.militia && mergedRegions.size == state.worldRegions.size && migratedPeople == state.people) return state
+        return state.copy(militia = migratedArmy.total(), army = migratedArmy, people = migratedPeople, worldRegions = mergedRegions)
     }
 
     fun alivePeople(state: V3GameState): List<V3Person> = state.people.filter { it.alive }
 
-    fun adultPeople(state: V3GameState): List<V3Person> = alivePeople(state).filter { it.age >= 15 }
+    fun adultPeople(state: V3GameState): List<V3Person> = alivePeople(state).filter { it.age >= CHILD_ADULT_AGE }
 
     fun clanRankName(state: V3GameState): String = when (state.clanRank) {
         1 -> "立户"
@@ -334,53 +371,61 @@ object V3GameEngine {
     }
 
     fun marriageOptions(state: V3GameState): List<V3SpouseCandidate> {
-        if (hasSpouse(state)) return emptyList()
-        return V3Content.spouseCandidates.filter { state.influence >= it.influenceReq }
+        val patriarch = state.people.firstOrNull { it.id == 1 && it.alive } ?: return emptyList()
+        return marriageCandidatesFor(patriarch, state)
     }
 
     fun canMarry(state: V3GameState, candidateId: String): Boolean {
         val candidate = V3Content.spouseCandidates.firstOrNull { it.id == candidateId } ?: return false
-        return !hasSpouse(state) && state.silver >= candidate.silverCost && state.grain >= candidate.grainCost && state.influence >= candidate.influenceReq
+        val target = marriageEligiblePeople(state).firstOrNull { marriageCandidatesFor(it, state).any { option -> option.id == candidateId } }
+            ?: return false
+        return state.silver >= candidate.silverCost && state.grain >= candidate.grainCost && state.influence >= candidate.influenceReq && target.age in 18..MAX_MARRIAGE_AGE
     }
 
-    fun marry(state: V3GameState, candidateId: String): V3GameState {
+    fun marry(state: V3GameState, candidateId: String, targetPersonId: Int? = null): V3GameState {
         val candidate = V3Content.spouseCandidates.firstOrNull { it.id == candidateId } ?: return state
-        if (hasSpouse(state)) return state.copy(pendingReports = listOf("家主已成婚，后续重点应放在添丁、产业与子嗣培养。"))
-        if (!canMarry(state, candidateId)) {
-            return state.copy(pendingReports = listOf("迎娶【${candidate.name}】不足：需银${candidate.silverCost}、粮${candidate.grainCost}、族望${candidate.influenceReq}。"))
+        val target = state.people.firstOrNull { it.id == (targetPersonId ?: 1) && it.alive }
+            ?: return state.copy(pendingReports = listOf("没有找到可婚配的族人。"))
+        if (target.spouseId != null || target.age !in 18..MAX_MARRIAGE_AGE || candidate.gender == target.gender) {
+            return state.copy(pendingReports = listOf("${target.name}当前不符合婚配条件：需要18—${MAX_MARRIAGE_AGE}岁、未婚，并与对象性别不同。"))
         }
-        val patriarch = state.people.firstOrNull { it.id == 1 } ?: state.people.first()
+        if (!marriageCandidatesFor(target, state).any { it.id == candidateId } || state.silver < candidate.silverCost || state.grain < candidate.grainCost || state.influence < candidate.influenceReq) {
+            return state.copy(pendingReports = listOf("婚配【${candidate.name}】的银粮、族望或适配条件不足。"))
+        }
         val spouseId = state.nextPersonId
         val spouse = V3Person(
             id = spouseId,
             name = candidate.name,
-            age = 19,
-            branch = "主房",
-            identity = "主母",
+            age = candidate.age,
+            branch = target.branch,
+            identity = if (target.gender == V3Gender.Male) "主母" else "入赘夫",
             trait = when (candidate.route) {
-                V3Route.Merchant -> com.daming.fushengzhi3.v3.data.V3Trait.Cunning
-                V3Route.Scholar -> com.daming.fushengzhi3.v3.data.V3Trait.Studious
-                V3Route.Fortress -> com.daming.fushengzhi3.v3.data.V3Trait.Martial
-                else -> com.daming.fushengzhi3.v3.data.V3Trait.Honest
+                V3Route.Merchant -> V3Trait.Cunning
+                V3Route.Scholar -> V3Trait.Studious
+                V3Route.Fortress -> V3Trait.Martial
+                else -> V3Trait.Honest
             },
             study = 18 + candidate.studyBonus,
             martial = 10 + candidate.martialBonus,
             commerce = 18 + candidate.commerceBonus,
             diplomacy = 18 + candidate.diplomacyBonus,
             loyalty = 88,
-            gender = V3Gender.Female,
-            spouseId = patriarch.id
+            gender = candidate.gender,
+            generation = target.generation,
+            spouseId = target.id,
+            spouseSinceMonth = state.year * 12 + state.month
         )
-        val people = state.people.map { if (it.id == patriarch.id) it.copy(spouseId = spouseId) else it } + spouse
-        val message = "${patriarch.name}迎娶【${candidate.name}】：${candidate.desc} 家族人口+1，后续月结有机会添丁。"
-        val routeScore = (state.routeScores[candidate.route] ?: 0) + 5
+        val people = state.people.map { person ->
+            if (person.id == target.id) person.copy(spouseId = spouseId, spouseSinceMonth = state.year * 12 + state.month) else person
+        } + spouse
+        val message = "${target.name}与${candidate.name}结为夫妻：${if (target.gender == V3Gender.Female) "按入赘规则留在${target.branch}" else "配偶入主房"}。婚后双方可共同经营并等待生育间隔。"
         return state.copy(
             silver = state.silver - candidate.silverCost,
             grain = state.grain - candidate.grainCost,
             people = people,
             nextPersonId = spouseId + 1,
             cohesion = (state.cohesion + 5).coerceAtMost(100),
-            routeScores = state.routeScores + (candidate.route to routeScore),
+            routeScores = state.routeScores + (candidate.route to ((state.routeScores[candidate.route] ?: 0) + 5)),
             pendingReports = listOf(message),
             eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
         )
@@ -721,6 +766,36 @@ object V3GameEngine {
         )
     }
 
+    fun buyEquipment(state: V3GameState, slot: com.daming.fushengzhi3.v3.data.V3EquipmentSlot, quality: com.daming.fushengzhi3.v3.data.V3EquipmentQuality): V3GameState {
+        val base = when (slot) {
+            com.daming.fushengzhi3.v3.data.V3EquipmentSlot.Weapon -> Triple("精铁刀", 12, 4)
+            com.daming.fushengzhi3.v3.data.V3EquipmentSlot.Armor -> Triple("锁子甲", 4, 12)
+            com.daming.fushengzhi3.v3.data.V3EquipmentSlot.Mount -> Triple("军马", 8, 6)
+            com.daming.fushengzhi3.v3.data.V3EquipmentSlot.Shield -> Triple("藤牌", 2, 10)
+        }
+        val price = (base.second + base.third) * quality.multiplier * 2
+        if (state.silver < price) return state.copy(pendingReports = listOf("购置${slot.label}需要银$price。"))
+        val item = com.daming.fushengzhi3.v3.data.V3EquipmentItem("equip_${state.year}_${state.month}_${state.equipment.size}", "${quality.label}${base.first}", slot, quality, base.second * quality.multiplier, base.third * quality.multiplier, price)
+        return state.copy(silver = state.silver - price, equipment = state.equipment + item, pendingReports = listOf("购置【${item.name}】，可在出战编阵中发挥战力。"))
+    }
+    fun repairEquipment(state: V3GameState, equipmentId: String): V3GameState {
+        val item = state.equipment.firstOrNull { it.id == equipmentId } ?: return state
+        val cost = ((item.maxDurability - item.durability).coerceAtLeast(0) / 10 + 1) * 2
+        if (state.silver < cost) return state.copy(pendingReports = listOf("修复${item.name}需要银$cost。"))
+        return state.copy(silver = state.silver - cost, equipment = state.equipment.map { if (it.id == item.id) it.copy(durability = it.maxDurability) else it }, pendingReports = listOf("${item.name}已修复，耐久恢复。"))
+    }
+    fun equipEquipment(state: V3GameState, equipmentId: String, personId: Int): V3GameState {
+        val item = state.equipment.firstOrNull { it.id == equipmentId && it.ownerId == null } ?: return state
+        val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
+        val equipment = state.equipment.map {
+            when {
+                it.slot == item.slot && it.ownerId == personId -> it.copy(ownerId = null)
+                it.id == item.id -> it.copy(ownerId = personId)
+                else -> it
+            }
+        }
+        return state.copy(equipment = equipment, pendingReports = listOf("${person.name}装备【${item.name}】：战斗时计入攻击与防御。"))
+    }
     fun startBattle(state: V3GameState): V3GameState {
         if (state.battleState != null) return state
         if (!isUnlocked(state, "Recruit")) return state.copy(pendingReports = listOf("军务尚未成形：先升为小族，或修建寨堡后再讨伐。"))
@@ -741,21 +816,37 @@ object V3GameEngine {
     fun selectBattlePerson(state: V3GameState, personId: Int): V3GameState {
         val battle = state.battleState ?: return state
         if (battle.finished || battle.phase != V3BattlePhase.Draft) return state
-        val person = alivePeople(state).firstOrNull { it.id == personId && it.age >= 15 } ?: return state
+        val person = alivePeople(state).firstOrNull { it.id == personId && it.age >= CHILD_ADULT_AGE } ?: return state
         val selected = battle.selectedPersonIds.toMutableList()
         if (selected.contains(personId)) selected.remove(personId) else {
             if (selected.size >= 6) return state.copy(pendingReports = listOf("本阵最多派出6名族人。"))
             selected.add(personId)
         }
-        val allies = selected.mapNotNull { id -> alivePeople(state).firstOrNull { it.id == id } }.map { battleCombatant(it) }
-        return state.copy(battleState = battle.copy(selectedPersonIds = selected, allies = allies))
+        val troops = battle.selectedTroops.filterKeys { it in selected }
+        val allies = selected.mapNotNull { id -> alivePeople(state).firstOrNull { it.id == id } }.map { battleCombatant(it, troops[it] ?: V3TroopType.Militia, state.army.count(troops[it] ?: V3TroopType.Militia) / selected.size.coerceAtLeast(1), state) }
+        return state.copy(battleState = battle.copy(selectedPersonIds = selected, selectedTroops = troops, allies = allies))
     }
 
+    fun selectBattleTroop(state: V3GameState, personId: Int, troopType: V3TroopType): V3GameState {
+        val battle = state.battleState ?: return state
+        if (battle.phase != V3BattlePhase.Draft || personId !in battle.selectedPersonIds) return state
+        if (state.army.count(troopType) <= 0) return state.copy(pendingReports = listOf("兵册中没有可供${troopType.label}编入的兵力。"))
+        val updated = battle.selectedTroops.toMutableMap()
+        updated[personId] = troopType
+        val allies = battle.selectedPersonIds.mapNotNull { id -> alivePeople(state).firstOrNull { it.id == id } }.map { person -> battleCombatant(person, updated[person.id] ?: V3TroopType.Militia, state.army.count(updated[person.id] ?: V3TroopType.Militia) / battle.selectedPersonIds.size.coerceAtLeast(1), state) }
+        return state.copy(battleState = battle.copy(selectedTroops = updated, allies = allies))
+    }
     fun confirmBattleLineup(state: V3GameState): V3GameState {
         val battle = state.battleState ?: return state
         if (battle.selectedPersonIds.isEmpty()) return state.copy(pendingReports = listOf("至少选择1名族人出战。"))
-        val allies = battle.selectedPersonIds.mapNotNull { id -> alivePeople(state).firstOrNull { it.id == id } }.map { battleCombatant(it) }
-        return state.copy(battleState = battle.copy(phase = V3BattlePhase.Fighting, allies = allies, turn = 0, roundLog = emptyList()))
+        val troopAssignments = battle.selectedPersonIds.associateWith { battle.selectedTroops[it] ?: V3TroopType.Militia }
+        val invalid = troopAssignments.values.firstOrNull { state.army.count(it) <= 0 }
+        if (invalid != null) return state.copy(pendingReports = listOf("${invalid.label}兵册为空，不能编入战阵。"))
+        val allies = battle.selectedPersonIds.mapNotNull { id -> alivePeople(state).firstOrNull { it.id == id } }.map { person ->
+            val troop = troopAssignments[person.id] ?: V3TroopType.Militia
+            battleCombatant(person, troop, state.army.count(troop) / battle.selectedPersonIds.size.coerceAtLeast(1), state)
+        }
+        return state.copy(battleState = battle.copy(selectedTroops = troopAssignments, phase = V3BattlePhase.Fighting, allies = allies, turn = 0, roundLog = emptyList()))
     }
 
     fun advanceBattleRound(state: V3GameState): V3GameState {
@@ -778,7 +869,7 @@ object V3GameEngine {
                 val defender = defenders[targetIndex]
                 val variance = ((battle.turn + index + attacker.power) % 9) - 4
                 val crit = ((battle.turn + index + attacker.power) % 11) == 0
-                val damage = max(4, attacker.power + variance + if (crit) 10 else 0 - defender.power / 5)
+                val damage = max(4, attacker.power + variance + (if (crit) 10 else 0) - defender.defense / 5)
                 val text = if (allyTurn) "${attacker.name}先手${attacker.role}击${defender.name}，${if (crit) "会心" else "伤"}$damage。" else "${attacker.name}反攻${defender.name}，${if (crit) "重创" else "伤"}$damage。"
                 if (allyTurn) nextEnemies = nextEnemies.map { if (it.name == defender.name) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
                 else nextAllies = nextAllies.map { if (it.name == defender.name) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
@@ -854,10 +945,24 @@ object V3GameEngine {
         )
     }
 
-    private fun battleCombatant(person: V3Person): V3Combatant {
-        val power = person.martial * 2 + person.diplomacy / 2 + person.merit / 5 + if (person.trait == V3Trait.Martial || person.trait == V3Trait.Fierce) 10 else 0
-        val role = if (person.study > person.martial && person.diplomacy > 45) "谋" else "刀"
-        return V3Combatant(person.name, hp = 70 + person.martial / 2 + person.loyalty / 4, maxHp = 70 + person.martial / 2 + person.loyalty / 4, power = power.coerceAtLeast(12), role = role, personId = person.id)
+    private fun battleCombatant(person: V3Person, troopType: V3TroopType = V3TroopType.Militia, troopCount: Int = 0, state: V3GameState): V3Combatant {
+        val owned = troopCount.coerceAtLeast(1)
+        val equipment = state.equipment.filter { it.ownerId == person.id && it.durability > 0 }
+        val equipmentAttack = equipment.sumOf { it.attack }
+        val equipmentDefense = equipment.sumOf { it.defense }
+        val troopAttack = owned * troopType.power / 8
+        val command = person.martial + person.diplomacy / 2 + person.merit / 5
+        val power = command + troopAttack + equipmentAttack + if (person.trait == V3Trait.Martial || person.trait == V3Trait.Fierce) 10 else 0
+        val defense = person.loyalty / 3 + owned * troopType.power / 12 + equipmentDefense
+        val role = when (troopType) {
+            V3TroopType.Archer -> "弓"
+            V3TroopType.Shield -> "盾"
+            V3TroopType.Cavalry -> "骑"
+            V3TroopType.Spear -> "枪"
+            V3TroopType.Militia -> if (person.study > person.martial && person.diplomacy > 45) "谋" else "刀"
+        }
+        val maxHp = 70 + person.martial / 2 + person.loyalty / 4 + owned * 2 + defense / 2
+        return V3Combatant(person.name, hp = maxHp, maxHp = maxHp, power = power.coerceAtLeast(12), defense = defense, role = role, personId = person.id, troopType = troopType, troopCount = owned)
     }
 
     private fun enemyLineup(target: String, enemyPower: Int): List<V3Combatant> {
@@ -873,7 +978,7 @@ object V3GameEngine {
             val nameSeed = (target.hashCode() + enemyPower + index * 17).let { if (it < 0) -it else it }
             val name = "${target}${faction}·${surnames[nameSeed % surnames.size]}${given[(nameSeed / 7) % given.size]}"
             val power = enemyPower / 8 + index * 3
-            V3Combatant(name, hp = 58 + enemyPower / 8 + index * 4, maxHp = 58 + enemyPower / 8 + index * 4, power = power, role = if (index % 3 == 0) "刀" else if (index % 3 == 1) "弓" else "枪")
+            V3Combatant(name, hp = 58 + enemyPower / 8 + index * 4, maxHp = 58 + enemyPower / 8 + index * 4, power = power, role = if (index % 3 == 0) "刀" else if (index % 3 == 1) "弓" else "枪", defense = power / 3)
         }
     }
 
@@ -1052,7 +1157,7 @@ object V3GameEngine {
         val nextYear = if (state.month == 12) state.year + 1 else state.year
         if (state.month == 12) {
             influenceDelta += 2
-            detailLines += "岁末修谱，族望+2，所有族人年长一岁。"
+            detailLines += "岁末修谱，所有族人年龄按月历推进，当前成年门槛为16岁。"
         }
 
         val nextRoutes = state.routeScores.mapValues { (route, value) -> value + (routeDelta[route] ?: 0) }
@@ -1189,16 +1294,20 @@ object V3GameEngine {
 
     private fun growPeople(people: List<V3Person>, assignments: Map<Int, V3TaskType>, lines: MutableList<String>, yearEnded: Boolean): List<V3Person> {
         return people.map { person ->
-            val baseAge = if (yearEnded) person.age + 1 else person.age
+            val nextAgeMonths = (person.ageMonths.coerceAtLeast(person.age * 12) + 1)
+            val baseAge = nextAgeMonths / 12
+            val becameAdult = person.age < CHILD_ADULT_AGE && baseAge >= CHILD_ADULT_AGE
+            if (becameAdult) lines += "${person.name}已满${CHILD_ADULT_AGE}岁成年，可婚配、科举、派差和出战。"
             val task = assignments[person.id]
             if (task == null) {
                 val training = person.trainingFocus
                 if (training == null) {
-                    person.copy(age = baseAge, fatigue = (person.fatigue - 8).coerceAtLeast(0), currentTask = null, assignedSiteId = null)
+                    person.copy(age = baseAge, ageMonths = nextAgeMonths, fatigue = (person.fatigue - 8).coerceAtLeast(0), currentTask = null, assignedSiteId = null)
                 } else {
                     val grow = trainingGrowth(training, person.trait, person.age)
                     val next = person.copy(
                         age = baseAge,
+                        ageMonths = nextAgeMonths,
                         study = (person.study + grow.study).coerceAtMost(100),
                         martial = (person.martial + grow.martial).coerceAtMost(100),
                         commerce = (person.commerce + grow.commerce).coerceAtMost(100),
@@ -1217,6 +1326,7 @@ object V3GameEngine {
                 val grow = growthFor(task)
                 val next = person.copy(
                     age = baseAge,
+                    ageMonths = nextAgeMonths,
                     study = (person.study + grow.study).coerceAtMost(100),
                     martial = (person.martial + grow.martial).coerceAtMost(100),
                     commerce = (person.commerce + grow.commerce).coerceAtMost(100),
@@ -1269,19 +1379,28 @@ object V3GameEngine {
     }
 
     private fun maybeAddChild(state: V3GameState, lines: MutableList<String>): V3GameState {
-        val husband = state.people.firstOrNull { it.gender == V3Gender.Male && it.spouseId != null && it.age in 16..55 } ?: return state
-        val wife = state.people.firstOrNull { it.id == husband.spouseId && it.age in 16..45 } ?: return state
+        val availableCouples = state.people.filter { it.alive && it.gender == V3Gender.Male && it.spouseId != null && it.age in 18..55 }.mapNotNull { husband ->
+            val wife = state.people.firstOrNull { it.id == husband.spouseId && it.alive && it.age in 18..45 } ?: return@mapNotNull null
+            husband to wife
+        }
+        val couple = availableCouples.firstOrNull { (husband, wife) ->
+            val lastBirth = maxOf(husband.lastBirthMonth ?: 0, wife.lastBirthMonth ?: 0)
+            state.year * 12 + state.month - lastBirth >= CHILD_BIRTH_INTERVAL_MONTHS
+        } ?: return state
+        val husband = couple.first
+        val wife = couple.second
         val limit = 2 + state.clanRank * 4
         if (alivePeople(state).size >= limit) return state
         val tick = state.year * 12 + state.month + state.people.size
         if (tick % 8 != 0) return state
         val childId = state.nextPersonId
         val gender = if (childId % 2 == 0) V3Gender.Male else V3Gender.Female
-        val childName = "李${if (gender == V3Gender.Male) boyNames[(childId + state.year) % boyNames.size] else girlNames[(childId + state.year) % girlNames.size]}"
+        val childName = "${state.clanName.firstOrNull() ?: '李'}${if (gender == V3Gender.Male) boyNames[(childId + state.year) % boyNames.size] else girlNames[(childId + state.year) % girlNames.size]}"
         val child = V3Person(
             id = childId,
             name = childName,
             age = 0,
+            ageMonths = 0,
             branch = "主房",
             identity = "幼子",
             trait = if (gender == V3Gender.Male) com.daming.fushengzhi3.v3.data.V3Trait.Ambitious else com.daming.fushengzhi3.v3.data.V3Trait.Studious,
@@ -1292,11 +1411,13 @@ object V3GameEngine {
             loyalty = 100,
             gender = gender,
             generation = max(husband.generation, wife.generation) + 1,
-            parentId = husband.id
+            parentId = husband.id,
+            motherId = wife.id
         )
         val people = state.people.map {
             when (it.id) {
-                husband.id, wife.id -> it.copy(childrenIds = it.childrenIds + childId)
+                husband.id -> it.copy(childrenIds = it.childrenIds + childId, lastBirthMonth = state.year * 12 + state.month)
+                wife.id -> it.copy(childrenIds = it.childrenIds + childId, lastBirthMonth = state.year * 12 + state.month)
                 else -> it
             }
         } + child

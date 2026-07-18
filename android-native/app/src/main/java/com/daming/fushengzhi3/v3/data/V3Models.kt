@@ -154,7 +154,10 @@ data class V3Combatant(
     val maxHp: Int,
     val power: Int,
     val role: String,
-    val personId: Int? = null
+    val defense: Int = 0,
+    val personId: Int? = null,
+    val troopType: V3TroopType? = null,
+    val troopCount: Int = 0
 )
 
 @Serializable
@@ -177,6 +180,7 @@ data class V3BattleState(
     val risk: String,
     val phase: V3BattlePhase = V3BattlePhase.Draft,
     val selectedPersonIds: List<Int> = emptyList(),
+    val selectedTroops: Map<Int, V3TroopType> = emptyMap(),
     val allies: List<V3Combatant> = emptyList(),
     val enemies: List<V3Combatant> = emptyList(),
     val roundLog: List<V3BattleRound> = emptyList(),
@@ -290,6 +294,26 @@ data class V3AnnualGoal(
 )
 
 @Serializable
+enum class V3EquipmentSlot(val label: String) { Weapon("武器"), Armor("甲胄"), Mount("坐骑"), Shield("盾牌") }
+
+@Serializable
+enum class V3EquipmentQuality(val label: String, val multiplier: Int) { Common("凡品", 1), Fine("良造", 2), Masterwork("名工", 3) }
+
+@Serializable
+data class V3EquipmentItem(
+    val id: String,
+    val name: String,
+    val slot: V3EquipmentSlot,
+    val quality: V3EquipmentQuality,
+    val attack: Int,
+    val defense: Int,
+    val price: Int,
+    val ownerId: Int? = null,
+    val durability: Int = 100,
+    val maxDurability: Int = 100
+)
+
+@Serializable
 data class V3SpouseCandidate(
     val id: String,
     val name: String,
@@ -301,7 +325,10 @@ data class V3SpouseCandidate(
     val martialBonus: Int = 0,
     val commerceBonus: Int = 0,
     val diplomacyBonus: Int = 0,
-    val route: V3Route
+    val route: V3Route,
+    val gender: V3Gender = V3Gender.Female,
+    val age: Int = 19,
+    val avatarKey: String = "female_youth"
 )
 
 @Serializable
@@ -358,6 +385,7 @@ data class V3GameState(
     val cohesion: Int = 60,
     val militia: Int = 20,
     val army: V3ArmyRoster = V3ArmyRoster(),
+    val equipment: List<V3EquipmentItem> = emptyList(),
     val people: List<V3Person> = V3Content.initialPeople,
     val branches: List<V3Branch> = V3Content.initialBranches,
     val sites: List<V3CountySite> = V3Content.initialSites,
@@ -408,6 +436,7 @@ data class V3Person(
     val generation: Int = 1,
     val spouseId: Int? = null,
     val parentId: Int? = null,
+    val motherId: Int? = null,
     val childrenIds: List<Int> = emptyList(),
     val alive: Boolean = true,
     val merit: Int = 0,
@@ -417,7 +446,10 @@ data class V3Person(
     val trainingFocus: V3TrainingType? = null,
     val fatigue: Int = 0,
     val currentTask: V3TaskType? = null,
-    val assignedSiteId: String? = null
+    val assignedSiteId: String? = null,
+    val spouseSinceMonth: Int? = null,
+    val lastBirthMonth: Int? = null,
+    val ageMonths: Int = -1
 )
 
 @Serializable
