@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -972,25 +973,33 @@ private fun V3WorldVisualMap(
                 pan = Offset((pan.x + dragAmount.x).coerceIn(minPanX, 0f), (pan.y + dragAmount.y).coerceIn(minPanY, 0f))
             }
         }) {
-            Box(Modifier.requiredSize(width = mapWidth, height = mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
+            Box(
+                Modifier
+                    .wrapContentSize(Alignment.TopStart, unbounded = true)
+                    .requiredSize(width = mapWidth, height = mapHeight)
+                    .graphicsLayer {
+                        translationX = boundedPan.x
+                        translationY = boundedPan.y
+                    }
+            ) {
                 AssetImage(GameImages.V3WorldMap, null, Modifier.fillMaxSize(), ContentScale.FillBounds, alpha = 0.96f)
                 Canvas(Modifier.matchParentSize()) {
                     fun point(x: Float, y: Float) = Offset(size.width * x, size.height * y)
                     fun route(ax: Float, ay: Float, bx: Float, by: Float, alpha: Float = 0.48f) {
                         drawLine(V3Red.copy(alpha = alpha), point(ax, ay), point(bx, by), strokeWidth = 4f, cap = StrokeCap.Square)
                     }
-                    route(0.10f, 0.73f, 0.26f, 0.72f)
-                    route(0.26f, 0.72f, 0.39f, 0.58f)
-                    route(0.26f, 0.72f, 0.18f, 0.43f)
-                    route(0.39f, 0.58f, 0.43f, 0.39f)
-                    route(0.39f, 0.58f, 0.66f, 0.62f)
-                    route(0.43f, 0.39f, 0.63f, 0.40f)
-                    route(0.63f, 0.40f, 0.67f, 0.25f)
-                    route(0.66f, 0.62f, 0.83f, 0.52f)
-                    route(0.67f, 0.25f, 0.79f, 0.25f)
-                    route(0.79f, 0.25f, 0.88f, 0.12f)
-                    route(0.79f, 0.25f, 0.48f, 0.10f, 0.58f)
-                    route(0.83f, 0.52f, 0.48f, 0.10f, 0.40f)
+                    route(0.10f, 0.82f, 0.29f, 0.80f)
+                    route(0.29f, 0.80f, 0.43f, 0.63f)
+                    route(0.29f, 0.80f, 0.12f, 0.52f)
+                    route(0.43f, 0.63f, 0.36f, 0.40f)
+                    route(0.43f, 0.63f, 0.67f, 0.67f)
+                    route(0.36f, 0.40f, 0.61f, 0.43f)
+                    route(0.61f, 0.43f, 0.66f, 0.24f)
+                    route(0.67f, 0.67f, 0.86f, 0.53f)
+                    route(0.66f, 0.24f, 0.80f, 0.27f)
+                    route(0.80f, 0.27f, 0.88f, 0.09f)
+                    route(0.80f, 0.27f, 0.42f, 0.10f, 0.58f)
+                    route(0.86f, 0.53f, 0.42f, 0.10f, 0.40f)
                 }
                 state.worldRegions.forEach { region ->
                     V3WorldRegionPin(region, worldWidthPx = mapWidthPx, worldHeightPx = mapHeightPx, onClick = { onSelect(region.id) })
@@ -1088,7 +1097,15 @@ private fun V3CountyMapView(
                     }
                 }
             ) {
-                Box(Modifier.requiredSize(width = mapWidth, height = mapHeight).graphicsLayer { translationX = boundedPan.x; translationY = boundedPan.y }) {
+                Box(
+                    Modifier
+                        .wrapContentSize(Alignment.TopStart, unbounded = true)
+                        .requiredSize(width = mapWidth, height = mapHeight)
+                        .graphicsLayer {
+                            translationX = boundedPan.x
+                            translationY = boundedPan.y
+                        }
+                ) {
                     AssetImage(GameImages.V3MapBgPlain, null, Modifier.fillMaxSize(), ContentScale.FillBounds)
                     state.sites.forEach { site ->
                         V3MapSitePin(site, mapWidthPx = mapWidthPx, mapHeightPx = mapHeightPx) { onSelectSite(site.id) }
