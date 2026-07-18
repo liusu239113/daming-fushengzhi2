@@ -823,7 +823,21 @@ object V3GameEngine {
             selected.add(personId)
         }
         val troops = battle.selectedTroops.filterKeys { it in selected }
-        val allies = selected.mapNotNull { id -> alivePeople(state).firstOrNull { it.id == id } }.map { battleCombatant(it, troops[it] ?: V3TroopType.Militia, state.army.count(troops[it] ?: V3TroopType.Militia) / selected.size.coerceAtLeast(1), state) }
+        val allies = selected
+            .mapNotNull { id ->
+                alivePeople(state).firstOrNull { it.id == id }
+            }
+            .map { person ->
+                val troop =
+                    troops[person.id] ?: V3TroopType.Militia
+                battleCombatant(
+                    person,
+                    troop,
+                    state.army.count(troop) /
+                        selected.size.coerceAtLeast(1),
+                    state
+                )
+            }
         return state.copy(battleState = battle.copy(selectedPersonIds = selected, selectedTroops = troops, allies = allies))
     }
 
