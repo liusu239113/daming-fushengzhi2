@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -108,53 +109,105 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
     var creed by remember { mutableStateOf("耕读传家") }
     var crisis by remember { mutableStateOf("官府催税") }
 
+    val profile = V3Content.startProfile(root, county, creed, crisis)
+
     V3Background {
         Column(
-            Modifier.fillMaxSize().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            V3Title("大明浮生志3", "一户起家 · 成婚育子 · 经营宗族")
-            V3Panel {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("宗族", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(54.dp))
-                    TextField(
-                        value = clanName,
-                        onValueChange = { clanName = it.take(8) },
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = V3Rice,
-                            unfocusedContainerColor = V3Rice,
-                            focusedTextColor = V3Ink,
-                            unfocusedTextColor = V3Ink,
-                            focusedIndicatorColor = V3Red,
-                            unfocusedIndicatorColor = V3Border
-                        ),
-                        modifier = Modifier.weight(1f)
+            Column(
+                Modifier
+                    .weight(1f)
+                    .widthIn(max = 760.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                V3Title("大明浮生志3", "一户起家 · 成婚育子 · 经营宗族")
+                V3Panel {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("宗族", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(54.dp))
+                        TextField(
+                            value = clanName,
+                            onValueChange = { clanName = it.take(8) },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = V3Rice,
+                                unfocusedContainerColor = V3Rice,
+                                focusedTextColor = V3Ink,
+                                unfocusedTextColor = V3Ink,
+                                focusedIndicatorColor = V3Red,
+                                unfocusedIndicatorColor = V3Border
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    V3CompactSelector("出身", V3Content.roots, root, ::createRootEffect) { root = it }
+                    V3CompactSelector("县域", V3Content.counties, county, {
+                        V3Content.startProfile(root, it, creed, crisis).countyEffect
+                    }) { county = it }
+                    V3CompactSelector("家训", V3Content.creeds, creed, ::createCreedEffect) { creed = it }
+                    V3CompactSelector("危机", V3Content.crises, crisis, {
+                        V3Content.startProfile(root, county, creed, it).crisisEffect
+                    }) { crisis = it }
+                }
+                V3Panel {
+                    Text("开局实得", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "银两 ${profile.silver} · 粮食 ${profile.grain} · " +
+                            "族望 ${profile.influence} · 凝聚 ${profile.cohesion} · " +
+                            "乡勇 ${profile.militia}",
+                        color = V3Ink,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 20.sp
+                    )
+                    Text(
+                        "出身：${createRootEffect(root)}",
+                        color = V3Muted,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    Text(
+                        "县域：${profile.countyEffect}",
+                        color = V3Muted,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    Text(
+                        "家训：${createCreedEffect(creed)}",
+                        color = V3Muted,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    Text(
+                        "危机：${profile.crisisEffect}",
+                        color = V3Muted,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                    Text(
+                        "首年目标：${profile.annualGoals.joinToString("、") { it.title }}",
+                        color = V3Gold,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
                     )
                 }
-                V3CompactSelector("出身", V3Content.roots, root, ::createRootEffect) { root = it }
-                V3CompactSelector("县域", V3Content.counties, county, ::createCountyEffect) { county = it }
-                V3CompactSelector("家训", V3Content.creeds, creed, ::createCreedEffect) { creed = it }
-                V3CompactSelector("危机", V3Content.crises, crisis, ::createCrisisEffect) { crisis = it }
+                Spacer(Modifier.height(4.dp))
             }
-            V3Panel {
-                Text("开局效果", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    """
-                    ${createRootEffect(root)}
-                    ${createCountyEffect(county)}
-                    ${createCreedEffect(creed)}
-                    ${createCrisisEffect(crisis)}
-                    """.trimIndent(),
-                    color = V3Ink,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp
-                )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 760.dp)
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 V3Button("返回", Modifier.weight(1f), onClick = onBack)
-                V3Button("开宗立户", Modifier.weight(1f)) {
+                V3Button("开宗立户 · 进入游戏", Modifier.weight(1f)) {
                     controller.newGame(root, county, creed, crisis, clanName)
                     onStart()
                 }
@@ -762,7 +815,13 @@ private fun v3AvatarFor(person: V3Person): String {
 @Composable
 private fun V3PersonDetailDialog(person: V3Person, state: V3GameState, controller: V3GameController, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
-        V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 480.dp)) {
+        V3ImagePanel(
+            GameImages.V3UiEventPanel,
+            Modifier
+                .widthIn(max = 480.dp)
+                .heightIn(max = 680.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             V3PersonCard(person, state, controller)
             V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
         }
@@ -1105,7 +1164,13 @@ private fun siteMapPoint(siteId: String): Offset = expandedMapPoint(when (siteId
 @Composable
 private fun V3SiteManageDialog(site: V3CountySite, state: V3GameState, controller: V3GameController, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
-        V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 470.dp)) {
+        V3ImagePanel(
+            GameImages.V3UiEventPanel,
+            Modifier
+                .widthIn(max = 470.dp)
+                .heightIn(max = 680.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             Text("${site.name} 管理", color = V3Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             V3SiteCard(site, state, controller)
             V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
@@ -1399,39 +1464,21 @@ private fun V3CompactSelector(title: String, values: List<String>, selected: Str
 }
 
 private fun createRootEffect(value: String): String = when (value) {
-    "寒门佃户" -> "粮食略多，银两少，适合稳田养家。"
-    "没落士族" -> "族望较高，读书路线更顺。"
-    "边地军户" -> "开局乡勇较多，适合自保军务。"
-    "江南商族" -> "银两较多，商路起步快。"
-    "山中堡寨" -> "粮勇平衡，流寇压力更可控。"
-    else -> "商路与海外路线更早成型。"
-}
-
-private fun createCountyEffect(value: String): String = when (value) {
-    "江南水乡" -> "田粮和商路均衡。"
-    "中原灾地" -> "饥荒压力更重，赈济价值更高。"
-    "西北边堡" -> "军务与寨堡更重要。"
-    "湖广粮仓" -> "粮食经营更稳。"
-    "闽粤海路" -> "码头和海外路线更强。"
-    else -> "边防、军镇和勤王压力更早出现。"
+    "寒门佃户" -> "基础银 58 · 粮 120 · 族望 6 · 乡勇 3"
+    "没落士族" -> "基础银 76 · 粮 95 · 族望 14 · 乡勇 3"
+    "边地军户" -> "基础银 68 · 粮 100 · 族望 8 · 乡勇 12"
+    "江南商族" -> "基础银 110 · 粮 80 · 族望 10 · 乡勇 3"
+    "山中堡寨" -> "基础银 74 · 粮 110 · 族望 6 · 乡勇 12"
+    else -> "基础银 70 · 粮 95 · 族望 6 · 乡勇 3"
 }
 
 private fun createCreedEffect(value: String): String = when (value) {
-    "耕读传家" -> "书院、科举、士绅路线加成。"
-    "重商逐利" -> "集市、铺面、商帮路线加成。"
-    "聚族自保" -> "寨堡、凝聚、保族路线加成。"
-    "忠君报国" -> "官府、军镇、勤王路线加成。"
-    "开海远行" -> "码头、海商、海外路线加成。"
-    else -> "低风险、保香火路线加成。"
-}
-
-private fun createCrisisEffect(value: String): String = when (value) {
-    "饥荒将至" -> "粮仓压力提高，蓄粮目标优先。"
-    "流寇逼近" -> "高风险地点更危险，寨堡更关键。"
-    "官府催税" -> "银两和县衙关系更重要。"
-    "族产争端" -> "凝聚不足会引发房支矛盾。"
-    "商路断绝" -> "需要尽快重开集市与码头。"
-    else -> "医馆和赈济可降低损耗。"
+    "耕读传家" -> "耕读路线 +12"
+    "重商逐利" -> "富商路线 +12"
+    "聚族自保" -> "自保路线 +12"
+    "忠君报国" -> "勤王路线 +12"
+    "开海远行" -> "海外路线 +12"
+    else -> "避祸路线 +12"
 }
 
 @Composable

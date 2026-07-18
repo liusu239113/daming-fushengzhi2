@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Slider
@@ -59,7 +62,13 @@ fun MainMenuScreen(
         AssetImage(GameImages.V3MainMenuBg, null, Modifier.fillMaxSize(), ContentScale.Crop, alpha = 1f)
         Box(Modifier.fillMaxSize().background(Color(0x88F4E0B5)))
         Column(
-            modifier = Modifier.align(Alignment.Center).fillMaxWidth(0.9f).widthIn(max = 560.dp).padding(top = 28.dp),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth(0.9f)
+                .widthIn(max = 560.dp)
+                .safeDrawingPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(15.dp)
         ) {

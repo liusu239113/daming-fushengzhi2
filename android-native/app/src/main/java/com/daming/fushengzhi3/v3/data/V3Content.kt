@@ -1,5 +1,20 @@
 package com.daming.fushengzhi3.v3.data
 
+data class V3StartProfile(
+    val silver: Int,
+    val grain: Int,
+    val influence: Int,
+    val cohesion: Int,
+    val militia: Int,
+    val relations: V3Relations,
+    val rebelHeat: Int,
+    val routeScores: Map<V3Route, Int>,
+    val routeBonuses: List<Pair<V3Route, Int>>,
+    val annualGoals: List<V3AnnualGoal>,
+    val countyEffect: String,
+    val crisisEffect: String
+)
+
 object V3Content {
     val roots = listOf("寒门佃户", "没落士族", "边地军户", "江南商族", "山中堡寨", "海商遗族")
     val counties = listOf("江南水乡", "中原灾地", "西北边堡", "湖广粮仓", "闽粤海路", "辽东边地")
@@ -339,12 +354,41 @@ object V3Content {
         V3Route.Hermit to 5
     )
 
-    fun newGame(root: String, county: String, creed: String, crisis: String, clanNameInput: String = "李氏宗族"): V3GameState {
-        val cleanedClanName = clanNameInput.trim().ifBlank { "李氏宗族" }.take(8)
-        val clanSurname = cleanedClanName.firstOrNull()?.toString()?.takeIf { it.isNotBlank() } ?: "李"
-        val founderName = "${clanSurname}慎行"
-        val base = V3GameState(root = root, county = county, creed = creed, crisis = crisis)
-        val routeBoost = when (creed) {
+    fun startProfile(
+        root: String,
+        county: String,
+        creed: String,
+        crisis: String
+    ): V3StartProfile {
+        var silver = when (root) {
+            "寒门佃户" -> 58
+            "没落士族" -> 76
+            "边地军户" -> 68
+            "江南商族" -> 110
+            "山中堡寨" -> 74
+            else -> 70
+        }
+        var grain = when (root) {
+            "寒门佃户" -> 120
+            "边地军户" -> 100
+            "江南商族" -> 80
+            "山中堡寨" -> 110
+            else -> 95
+        }
+        var influence = when (root) {
+            "没落士族" -> 14
+            "江南商族" -> 10
+            "边地军户" -> 8
+            else -> 6
+        }
+        var cohesion = 62
+        var militia =
+            if (root == "边地军户" || root == "山中堡寨") 12 else 3
+        var relations = V3Relations()
+        var rebelHeat = 0
+        val routeBonuses = mutableListOf<Pair<V3Route, Int>>()
+
+        val creedRoute = when (creed) {
             "耕读传家" -> V3Route.Scholar
             "重商逐利" -> V3Route.Merchant
             "聚族自保" -> V3Route.Fortress
@@ -352,37 +396,127 @@ object V3Content {
             "开海远行" -> V3Route.Overseas
             else -> V3Route.Hermit
         }
+        routeBonuses += creedRoute to 12
+
+        val countyEffect = when (county) {
+            "江南水乡" -> {
+                silver += 8
+                grain += 15
+                relations = relations.copy(merchants = relations.merchants + 8)
+                routeBonuses += V3Route.Merchant to 6
+                "银两 +8 · 粮食 +15 · 商帮关系 +8 · 富商路线 +6"
+            }
+            "中原灾地" -> {
+                grain -= 20
+                influence += 4
+                relations = relations.copy(villagers = relations.villagers + 10)
+                routeBonuses += V3Route.Hermit to 6
+                "粮食 -20 · 族望 +4 · 乡民关系 +10 · 避祸路线 +6"
+            }
+            "西北边堡" -> {
+                militia += 5
+                rebelHeat += 5
+                relations = relations.copy(garrison = relations.garrison + 8)
+                routeBonuses += V3Route.Fortress to 6
+                "乡勇 +5 · 军镇关系 +8 · 流寇热度 +5 · 自保路线 +6"
+            }
+            "湖广粮仓" -> {
+                grain += 35
+                relations = relations.copy(villagers = relations.villagers + 6)
+                routeBonuses += V3Route.Merchant to 6
+                "粮食 +35 · 乡民关系 +6 · 富商路线 +6"
+            }
+            "闽粤海路" -> {
+                silver += 20
+                relations = relations.copy(merchants = relations.merchants + 10)
+                routeBonuses += V3Route.Overseas to 6
+                "银两 +20 · 商帮关系 +10 · 海外路线 +6"
+            }
+            else -> {
+                militia += 7
+                rebelHeat += 8
+                relations = relations.copy(garrison = relations.garrison + 10)
+                routeBonuses += V3Route.Loyalist to 6
+                "乡勇 +7 · 军镇关系 +10 · 流寇热度 +8 · 勤王路线 +6"
+            }
+        }
+
+        val crisisEffect = when (crisis) {
+            "饥荒将至" -> {
+                grain -= 25
+                cohesion -= 4
+                "粮食 -25 · 凝聚 -4 · 年度目标偏向蓄粮"
+            }
+            "流寇逼近" -> {
+                rebelHeat += 15
+                militia += 3
+                "流寇热度 +15 · 乡勇 +3 · 年度目标偏向治安"
+            }
+            "官府催税" -> {
+                silver -= 20
+                relations = relations.copy(yamen = relations.yamen - 10)
+                "银两 -20 · 官府关系 -10 · 年度目标偏向积银"
+            }
+            "族产争端" -> {
+                cohesion -= 12
+                influence += 3
+                "凝聚 -12 · 族望 +3 · 年度目标偏向和族"
+            }
+            "商路断绝" -> {
+                silver -= 18
+                relations = relations.copy(merchants = relations.merchants - 12)
+                "银两 -18 · 商帮关系 -12 · 年度目标偏向重开商路"
+            }
+            else -> {
+                grain -= 12
+                cohesion -= 6
+                relations = relations.copy(villagers = relations.villagers - 6)
+                "粮食 -12 · 凝聚 -6 · 乡民关系 -6 · 疫病风险持续"
+            }
+        }
+
+        val routeScores = routeBonuses.fold(initialRouteScores) {
+                scores,
+                (route, amount) ->
+            scores + (route to ((scores[route] ?: 0) + amount))
+        }
+        return V3StartProfile(
+            silver = silver.coerceAtLeast(0),
+            grain = grain.coerceAtLeast(0),
+            influence = influence.coerceAtLeast(0),
+            cohesion = cohesion.coerceIn(0, 100),
+            militia = militia.coerceAtLeast(0),
+            relations = relations,
+            rebelHeat = rebelHeat,
+            routeScores = routeScores,
+            routeBonuses = routeBonuses,
+            annualGoals = goalsFor(creed, crisis),
+            countyEffect = countyEffect,
+            crisisEffect = crisisEffect
+        )
+    }
+
+    fun newGame(root: String, county: String, creed: String, crisis: String, clanNameInput: String = "李氏宗族"): V3GameState {
+        val cleanedClanName = clanNameInput.trim().ifBlank { "李氏宗族" }.take(8)
+        val clanSurname = cleanedClanName.firstOrNull()?.toString()?.takeIf { it.isNotBlank() } ?: "李"
+        val founderName = "${clanSurname}慎行"
+        val base = V3GameState(root = root, county = county, creed = creed, crisis = crisis)
+        val profile = startProfile(root, county, creed, crisis)
         return base.copy(
             clanName = cleanedClanName,
-            silver = when (root) {
-                "寒门佃户" -> 58
-                "没落士族" -> 76
-                "边地军户" -> 68
-                "江南商族" -> 110
-                "山中堡寨" -> 74
-                else -> 70
-            },
-            grain = when (root) {
-                "寒门佃户" -> 120
-                "边地军户" -> 100
-                "江南商族" -> 80
-                "山中堡寨" -> 110
-                else -> 95
-            },
-            influence = when (root) {
-                "没落士族" -> 14
-                "江南商族" -> 10
-                "边地军户" -> 8
-                else -> 6
-            },
-            cohesion = 62,
-            militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3,
-            army = V3ArmyRoster(militia = if (root == "边地军户" || root == "山中堡寨") 12 else 3),
+            silver = profile.silver,
+            grain = profile.grain,
+            influence = profile.influence,
+            cohesion = profile.cohesion,
+            militia = profile.militia,
+            army = V3ArmyRoster(militia = profile.militia),
+            relations = profile.relations,
+            rebelHeat = profile.rebelHeat,
             people = initialPeople.map { if (it.id == 1) it.copy(name = founderName, ageMonths = it.age * 12) else it },
             branches = initialBranches.map { if (it.id == "main") it.copy(leaderName = founderName, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。") else it },
             sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${clanSurname}氏宗祠") else it },
-            annualGoals = goalsFor(creed, crisis),
-            routeScores = base.routeScores + (routeBoost to ((base.routeScores[routeBoost] ?: 0) + 12)),
+            annualGoals = profile.annualGoals,
+            routeScores = profile.routeScores,
             pendingReports = listOf("${county}局势未稳，${crisis}已成眼前第一患。"),
             eventLog = listOf("${root}立于${county}，奉行【${creed}】，却遭【${crisis}】。")
         )
