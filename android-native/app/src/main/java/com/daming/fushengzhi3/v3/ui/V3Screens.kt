@@ -57,7 +57,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.input.pointer.awaitPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -650,16 +649,35 @@ private fun V3ClanPage(
             V3Metric("品", state.clanRank, V3Gold, Modifier.weight(1f))
         }
     }
-    val options = V3GameEngine.marriageOptions(state)
     val eligible = V3GameEngine.marriageEligiblePeople(state)
-    if (options.isNotEmpty() || eligible.any { it.id != 1 && V3GameEngine.marriageCandidatesFor(it, state).isNotEmpty() }) {
-        V3Panel(Modifier.guideTarget(V3GuideFocus.Marriage, guideTargets)) {
-            Text("婚配", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text("适龄未婚男女都可以婚配：男族人迎娶，女族人可按入赘规则成家。儿童每月成长，成年后才可婚配和出战。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
-            val target = eligible.firstOrNull { V3GameEngine.marriageCandidatesFor(it, state).isNotEmpty() } ?: eligible.firstOrNull()
+    var selectedMarriagePersonId by remember { mutableStateOf<Int?>(null) }
+    val target = eligible.firstOrNull { it.id == selectedMarriagePersonId } ?: eligible.firstOrNull()
+    V3Panel(Modifier.guideTarget(V3GuideFocus.Marriage, guideTargets)) {
+        Text("婚配与提亲", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("先选择具体待婚族人，再查看媒人送来的对象。每桩婚事都绑定到所选族人，需支付对应银粮；男族人迎娶，女族人按招赘规则成家。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+        if (eligible.isEmpty()) {
+            Text("当前没有18—55岁的适龄未婚族人。子女年满18岁后会自动进入待婚名单。", color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
+        } else {
+            Text("待婚族人（${eligible.size}人）", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            eligible.chunked(2).forEach { rowPeople ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowPeople.forEach { person ->
+                        V3SmallButton(
+                            "${person.name} · ${person.gender.label} · ${person.age}岁",
+                            Modifier.weight(1f),
+                            selected = target?.id == person.id
+                        ) { selectedMarriagePersonId = person.id }
+                    }
+                    repeat(2 - rowPeople.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
             target?.let { person ->
-                Text("当前婚配人选：${person.name} · ${person.gender.label} · ${person.age}岁 · ${V3GameEngine.lifeStage(person)}", color = V3Red, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                V3GameEngine.marriageCandidatesFor(person, state).take(8).forEach { option ->
+                val candidates = V3GameEngine.marriageCandidatesFor(person, state)
+                Text("正在为 ${person.name}（${person.branch} · ${person.age}岁）议亲", color = V3Red, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                if (candidates.isEmpty()) {
+                    Text("当前没有符合性别、年龄与族望条件的提亲对象。可提升族望后再来查看。", color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
+                }
+                candidates.forEach { option ->
                     Card(colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Gold), shape = V3SoftShape) {
                         Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
                             Box(
@@ -672,7 +690,7 @@ private fun V3ClanPage(
                                 contentAlignment = Alignment.Center
                             ) {
                                 AssetImage(
-                                    GameImages.v3SpousePortraits[option.id]
+                                    GameImages.v3SpousePortraits[option.prototypeId]
                                         ?: GameImages.v3AvatarPortraits[option.avatarKey]
                                         ?: GameImages.v3AvatarPortraits.getValue("female_youth"),
                                     option.name,
@@ -687,9 +705,13 @@ private fun V3ClanPage(
                                     Text(option.name, color = V3Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                     Text("${option.gender.label} · ${option.age}岁", color = V3Red, fontSize = 12.sp)
                                 }
-                                Text("银${option.silverCost}/粮${option.grainCost} · ${option.route.label}", color = V3Red, fontSize = 12.sp)
+                                Text("礼金：银${option.silverCost} / 粮${option.grainCost} · 族望${option.influenceReq}", color = V3Red, fontSize = 12.sp)
                                 Text(option.desc, color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
-                                V3SmallButton("${person.name}与其婚配", Modifier.fillMaxWidth(), enabled = V3GameEngine.canMarry(state, option.id)) { controller.marry(option.id, person.id) }
+                                V3SmallButton(
+                                    "确认：${person.name}与${option.name}成婚",
+                                    Modifier.fillMaxWidth(),
+                                    enabled = V3GameEngine.canMarry(state, option.id, person.id)
+                                ) { controller.marry(option.id, person.id) }
                             }
                         }
                     }
@@ -839,16 +861,20 @@ private fun V3FamilyMiniNode(person: V3Person, x: Int, y: Int, onSelect: (Int) -
 }
 
 private fun v3AvatarFor(person: V3Person): String {
-    val key = when {
-        person.age < 4 -> "baby"
-        person.gender == V3Gender.Male && person.age >= 55 -> "male_elder"
-        person.gender == V3Gender.Male && person.age >= 32 -> "male_middle"
-        person.gender == V3Gender.Male -> "male_youth"
-        person.gender == V3Gender.Female && person.age >= 55 -> "female_elder"
-        person.gender == V3Gender.Female && person.age >= 32 -> "female_middle"
-        else -> "female_youth"
+    val spousePrototypeId = person.spouseCandidateId?.substringBefore('@')
+    spousePrototypeId?.let { id -> GameImages.v3SpousePortraits[id] }?.let { return it }
+    val stageKey = when {
+        person.age <= 2 -> "baby"
+        person.age <= 12 -> if (person.gender == V3Gender.Male) "male_child" else "female_child"
+        person.age <= 20 -> if (person.gender == V3Gender.Male) "male_youth" else "female_youth"
+        person.age <= 35 -> if (person.gender == V3Gender.Male) "male_adult" else "female_adult"
+        person.age <= 55 -> if (person.gender == V3Gender.Male) "male_middle" else "female_middle"
+        else -> if (person.gender == V3Gender.Male) "male_elder" else "female_elder"
     }
-    return GameImages.v3AvatarPortraits[key] ?: GameImages.v3AvatarPortraits.getValue("male_youth")
+    val variants = GameImages.v3AvatarVariants[stageKey]
+        ?: GameImages.v3AvatarVariants.getValue("baby")
+    val stableIndex = Math.floorMod(person.id * 31 + stageKey.hashCode(), variants.size)
+    return variants[stableIndex]
 }
 
 @Composable
@@ -2123,11 +2149,13 @@ private fun monthlyReportTitle(baseTitle: String, lines: List<String>): String =
 private fun nextAdvice(state: V3GameState): String {
     val founder = state.people.firstOrNull { it.id == 1 }
     val hasSpouse = founder?.spouseId != null
+    val waitingMarriage = V3GameEngine.marriageEligiblePeople(state).firstOrNull()
     val builtSites = V3GameEngine.builtSiteCount(state)
     val hasAssignment = state.people.any { it.currentTask != null || it.trainingFocus != null }
     val advancedFromOpeningMonth = state.year > 1601 || state.month > 1
     return when {
         !hasSpouse -> "前往【宗族】为${state.founderName}完成婚配；完成后解锁添丁传承。"
+        waitingMarriage != null -> "${waitingMarriage.name}已到适婚年龄，可前往【宗族】选择此人并查看提亲对象。"
         builtSites < 2 -> "在【家业】点县域集市并营建第二处产业；完成后形成银粮双收入。"
         !hasAssignment -> "前往【族人】点${state.founderName}，安排培养或派差；月结时获得成长与收益。"
         !advancedFromOpeningMonth -> "返回【家业】点继续或倍速，推进首月结算；倒计时会显示距下月秒数。"

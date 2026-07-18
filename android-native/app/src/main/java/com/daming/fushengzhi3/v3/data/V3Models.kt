@@ -329,7 +329,8 @@ data class V3SpouseCandidate(
     val gender: V3Gender = V3Gender.Female,
     val age: Int = 19,
     val avatarKey: String = "female_youth",
-    val surname: String = name.take(1)
+    val surname: String = name.take(1),
+    val prototypeId: String = id
 )
 
 @Serializable
@@ -453,7 +454,8 @@ data class V3Person(
     val spouseSinceMonth: Int? = null,
     val lastBirthMonth: Int? = null,
     val ageMonths: Int = -1,
-    val surname: String = ""
+    val surname: String = "",
+    val spouseCandidateId: String? = null
 )
 
 @Serializable

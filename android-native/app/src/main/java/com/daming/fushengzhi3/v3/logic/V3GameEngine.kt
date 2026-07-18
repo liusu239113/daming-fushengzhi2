@@ -43,6 +43,7 @@ import kotlin.math.min
 
 object V3GameEngine {
     private const val CHILD_ADULT_AGE = 16
+    private const val CHILD_FIRST_BIRTH_WAIT_MONTHS = 10
     private const val CHILD_BIRTH_INTERVAL_MONTHS = 30
     private const val MAX_MARRIAGE_AGE = 55
 
@@ -57,20 +58,54 @@ object V3GameEngine {
 
     fun monthsUntilAdult(person: V3Person): Int = (CHILD_ADULT_AGE * 12 - person.ageMonths.coerceAtLeast(person.age * 12)).coerceAtLeast(0)
 
+    private fun monthsUntilMarriage(person: V3Person): Int =
+        (18 * 12 - person.ageMonths.coerceAtLeast(person.age * 12)).coerceAtLeast(0)
+
     fun marriageEligiblePeople(state: V3GameState): List<V3Person> = alivePeople(state).filter {
         it.age in 18..MAX_MARRIAGE_AGE && it.spouseId == null
     }
 
+    private fun claimedSpouseCandidateIds(state: V3GameState): Set<String> =
+        state.people.mapNotNull { it.spouseCandidateId }.toSet()
+
+    private val proposalSurnames = listOf("王", "沈", "陈", "赵", "顾", "周", "林", "秦", "许", "陆", "韩", "苏")
+    private val femaleProposalNames = listOf("春娘", "玉娘", "婉仪", "月英", "素问", "明徽", "海棠", "照雪", "清婉", "兰心", "知夏", "静姝")
+    private val maleProposalNames = listOf("砚秋", "行舟", "长戈", "怀瑾", "景明", "修远", "云川", "承安", "子衡", "彦章", "明远", "庭轩")
+
+    private fun proposalCandidate(prototype: V3SpouseCandidate, person: V3Person, index: Int, state: V3GameState): V3SpouseCandidate {
+        val marriageRound = state.people.count { it.spouseId == person.id && it.spouseCandidateId != null }
+        val seed = Math.floorMod(person.id * 37 + index * 11 + marriageRound * 23, proposalSurnames.size)
+        val surname = proposalSurnames[seed]
+        val givenNames = if (prototype.gender == V3Gender.Female) femaleProposalNames else maleProposalNames
+        val givenName = givenNames[Math.floorMod(person.id * 19 + index * 7, givenNames.size)]
+        val ageOffset = Math.floorMod(person.id + index * 3, 7) - 3
+        val candidateAge = (person.age + ageOffset).coerceIn(18, MAX_MARRIAGE_AGE)
+        return prototype.copy(
+            id = "${prototype.id}@${person.id}@$marriageRound",
+            name = surname + givenName,
+            age = candidateAge,
+            surname = surname,
+            prototypeId = prototype.id,
+            desc = "媒人为${person.name}说合：${prototype.desc}"
+        )
+    }
+
     fun marriageCandidatesFor(person: V3Person, state: V3GameState): List<V3SpouseCandidate> {
         if (person.age !in 18..MAX_MARRIAGE_AGE || person.spouseId != null) return emptyList()
-        return V3Content.spouseCandidates.filter {
-            it.gender != person.gender && kotlin.math.abs(it.age - person.age) <= 18 && state.influence >= it.influenceReq
+        val claimedIds = claimedSpouseCandidateIds(state)
+        return V3Content.spouseCandidates.mapIndexed { index, prototype ->
+            proposalCandidate(prototype, person, index, state)
+        }.filter {
+            it.id !in claimedIds &&
+                it.gender != person.gender &&
+                kotlin.math.abs(it.age - person.age) <= 18 &&
+                state.influence >= it.influenceReq
         }
     }
 
     fun marriageStatus(person: V3Person, state: V3GameState): String = when {
         person.spouseId != null -> "已婚"
-        person.age < 18 -> "${monthsUntilAdult(person)}个月后可婚配"
+        person.age < 18 -> "${monthsUntilMarriage(person)}个月后可婚配"
         person.age > MAX_MARRIAGE_AGE -> "已过适婚期"
         marriageCandidatesFor(person, state).isEmpty() -> "等待合适婚配对象"
         else -> "可婚配"
@@ -103,10 +138,23 @@ object V3GameEngine {
         val migratedPeople = state.people.map { person ->
             val migratedAgeMonths = if (person.ageMonths >= 0) person.ageMonths else person.age * 12
             val migratedSurname = if (person.surname.isNotBlank()) person.surname else migratedStateSurname
-            if (migratedAgeMonths == person.ageMonths && migratedSurname == person.surname) {
+            val migratedCandidateId = person.spouseCandidateId ?: if (person.spouseId != null) {
+                V3Content.spouseCandidates.firstOrNull { candidate -> candidate.name == person.name }?.id
+            } else {
+                null
+            }
+            if (
+                migratedAgeMonths == person.ageMonths &&
+                migratedSurname == person.surname &&
+                migratedCandidateId == person.spouseCandidateId
+            ) {
                 person
             } else {
-                person.copy(ageMonths = migratedAgeMonths, surname = migratedSurname)
+                person.copy(
+                    ageMonths = migratedAgeMonths,
+                    surname = migratedSurname,
+                    spouseCandidateId = migratedCandidateId
+                )
             }
         }
         val existingRegionIds = state.worldRegions.map { it.id }.toSet()
@@ -412,17 +460,22 @@ object V3GameEngine {
         return marriageCandidatesFor(patriarch, state)
     }
 
-    fun canMarry(state: V3GameState, candidateId: String): Boolean {
-        val candidate = V3Content.spouseCandidates.firstOrNull { it.id == candidateId } ?: return false
-        val target = marriageEligiblePeople(state).firstOrNull { marriageCandidatesFor(it, state).any { option -> option.id == candidateId } }
-            ?: return false
-        return state.silver >= candidate.silverCost && state.grain >= candidate.grainCost && state.influence >= candidate.influenceReq && target.age in 18..MAX_MARRIAGE_AGE
+    fun canMarry(state: V3GameState, candidateId: String, targetPersonId: Int): Boolean {
+        val target = state.people.firstOrNull { it.id == targetPersonId && it.alive } ?: return false
+        val candidate = marriageCandidatesFor(target, state).firstOrNull { it.id == candidateId } ?: return false
+        return state.silver >= candidate.silverCost &&
+            state.grain >= candidate.grainCost &&
+            state.influence >= candidate.influenceReq
     }
 
+    fun canMarry(state: V3GameState, candidateId: String): Boolean =
+        marriageEligiblePeople(state).any { person -> canMarry(state, candidateId, person.id) }
+
     fun marry(state: V3GameState, candidateId: String, targetPersonId: Int? = null): V3GameState {
-        val candidate = V3Content.spouseCandidates.firstOrNull { it.id == candidateId } ?: return state
         val target = state.people.firstOrNull { it.id == (targetPersonId ?: 1) && it.alive }
             ?: return state.copy(pendingReports = listOf("没有找到可婚配的族人。"))
+        val candidate = marriageCandidatesFor(target, state).firstOrNull { it.id == candidateId }
+            ?: return state.copy(pendingReports = listOf("这门亲事已失效，请重新选择对象。"))
         if (target.spouseId != null || target.age !in 18..MAX_MARRIAGE_AGE || candidate.gender == target.gender) {
             return state.copy(pendingReports = listOf("${target.name}当前不符合婚配条件：需要18—${MAX_MARRIAGE_AGE}岁、未婚，并与对象性别不同。"))
         }
@@ -451,7 +504,9 @@ object V3GameEngine {
             generation = target.generation,
             spouseId = target.id,
             spouseSinceMonth = state.year * 12 + state.month,
-            surname = candidate.surname
+            ageMonths = candidate.age * 12,
+            surname = candidate.surname,
+            spouseCandidateId = candidate.id
         )
         val people = state.people.map { person ->
             if (person.id == target.id) person.copy(spouseId = spouseId, spouseSinceMonth = state.year * 12 + state.month) else person
@@ -1386,7 +1441,7 @@ object V3GameEngine {
             val nextAgeMonths = (person.ageMonths.coerceAtLeast(person.age * 12) + 1)
             val baseAge = nextAgeMonths / 12
             val becameAdult = person.age < CHILD_ADULT_AGE && baseAge >= CHILD_ADULT_AGE
-            if (becameAdult) lines += "${person.name}已满${CHILD_ADULT_AGE}岁成年，可婚配、科举、派差和出战。"
+            if (becameAdult) lines += "${person.name}已满${CHILD_ADULT_AGE}岁成年，可开始培养；年满18岁后可婚配。"
             val task = assignments[person.id]
             if (task == null) {
                 val training = person.trainingFocus
@@ -1446,7 +1501,8 @@ object V3GameEngine {
                 person.copy(branch = "${leader.name.takeLast(2)}房", identity = "分房支主")
             } else person
         }
-        return branchAdjusted.map { person ->
+        var livingCount = living.size
+        val processed = branchAdjusted.map { person ->
             if (!person.alive) return@map person
             val ageRisk = when {
                 person.age < 55 -> 0
@@ -1456,13 +1512,30 @@ object V3GameEngine {
             }
             val fatigueRisk = if (person.fatigue >= 80) 2 else if (person.fatigue >= 60) 1 else 0
             val plagueRisk = if (state.crisis == "瘟疫初起") 1 else 0
+            val totalRisk = ageRisk + fatigueRisk + plagueRisk
             val seed = (state.year + state.month + person.id * 17 + person.age * 3) % 24
-            if (ageRisk + fatigueRisk + plagueRisk > 0 && seed < ageRisk + fatigueRisk + plagueRisk && living.size > 1) {
+            if (totalRisk > 0 && seed < totalRisk && livingCount > 1) {
+                livingCount -= 1
                 lines += "${person.name}因年高劳病离世，族谱记入卒年。"
-                person.copy(alive = false, currentTask = null, assignedSiteId = null, trainingFocus = null)
+                person.copy(
+                    alive = false,
+                    spouseId = null,
+                    spouseSinceMonth = null,
+                    currentTask = null,
+                    assignedSiteId = null,
+                    trainingFocus = null
+                )
             } else if (person.fatigue >= 70) {
                 lines += "${person.name}积劳过重，族老建议暂缓派遣。"
                 person.copy(loyalty = (person.loyalty - 2).coerceAtLeast(0))
+            } else person
+        }
+        val peopleById = processed.associateBy { it.id }
+        return processed.map { person ->
+            val departedSpouse = person.spouseId?.let(peopleById::get)?.takeIf { !it.alive }
+            if (person.alive && departedSpouse != null) {
+                lines += "${person.name}与${departedSpouse.name}阴阳两隔，今后可另议婚配。"
+                person.copy(spouseId = null, spouseSinceMonth = null)
             } else person
         }
     }
@@ -1473,25 +1546,36 @@ object V3GameEngine {
             husband to wife
         }
         val couple = availableCouples.firstOrNull { (husband, wife) ->
-            val lastBirth = maxOf(husband.lastBirthMonth ?: 0, wife.lastBirthMonth ?: 0)
-            state.year * 12 + state.month - lastBirth >= CHILD_BIRTH_INTERVAL_MONTHS
+            val marriedSince = maxOf(husband.spouseSinceMonth ?: 0, wife.spouseSinceMonth ?: 0)
+            val lastBirth = maxOf(
+                husband.lastBirthMonth ?: marriedSince,
+                wife.lastBirthMonth ?: marriedSince,
+                marriedSince
+            )
+            val requiredWait = if (husband.lastBirthMonth == null && wife.lastBirthMonth == null) {
+                CHILD_FIRST_BIRTH_WAIT_MONTHS
+            } else {
+                CHILD_BIRTH_INTERVAL_MONTHS
+            }
+            state.year * 12 + state.month - lastBirth >= requiredWait
         } ?: return state
         val husband = couple.first
         val wife = couple.second
+        val householdParent = if (husband.identity == "入赘夫") wife else husband
         val limit = 2 + state.clanRank * 4
         if (alivePeople(state).size >= limit) return state
         val tick = state.year * 12 + state.month + state.people.size
         if (tick % 8 != 0) return state
         val childId = state.nextPersonId
         val gender = if (childId % 2 == 0) V3Gender.Male else V3Gender.Female
-        val childSurname = husband.surname.ifBlank { state.surname }
+        val childSurname = householdParent.surname.ifBlank { state.surname }
         val childName = "$childSurname${if (gender == V3Gender.Male) boyNames[(childId + state.year) % boyNames.size] else girlNames[(childId + state.year) % girlNames.size]}"
         val child = V3Person(
             id = childId,
             name = childName,
             age = 0,
             ageMonths = 0,
-            branch = "主房",
+            branch = householdParent.branch,
             identity = "幼子",
             trait = if (gender == V3Gender.Male) com.daming.fushengzhi3.v3.data.V3Trait.Ambitious else com.daming.fushengzhi3.v3.data.V3Trait.Studious,
             study = 1,

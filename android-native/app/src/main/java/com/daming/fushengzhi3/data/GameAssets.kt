@@ -57,6 +57,120 @@ object GameImages {
         "female_elder" to "image/avatars/v3_avatar_female_elder.png"
     )
 
+    val v3AvatarVariants = mapOf(
+        "baby" to listOf(
+            v3AvatarPortraits.getValue("baby"),
+            "image/avatars/pd_baby_1_20260511205339.png",
+            "image/avatars/pd_baby_2_20260511205608.png",
+            "image/avatars/av_baby_a_20260511210946.png",
+            "image/avatars/av_baby_b_20260511210956.png",
+            "image/avatars/av_baby_c_20260511210945.png",
+            "image/avatars/av_baby_d_20260511211009.png"
+        ),
+        "male_child" to listOf(
+            "image/avatars/pd_boy_1_20260511205352.png",
+            "image/avatars/av_boy_a_20260511211044.png",
+            "image/avatars/av_boy_b_20260511211028.png",
+            "image/avatars/av_boy_c_20260511211027.png"
+        ),
+        "female_child" to listOf(
+            "image/avatars/pd_girl_1_20260511205347.png",
+            "image/avatars/av_girl_a_20260511211029.png",
+            "image/avatars/av_girl_b_20260511211030.png",
+            "image/avatars/av_girl_c_20260511211029.png"
+        ),
+        "male_youth" to listOf(
+            v3AvatarPortraits.getValue("male_youth"),
+            "image/avatars/paperdoll_base_v2_20260511205100.png",
+            "image/avatars/pd_male_youth_2_20260511205513.png",
+            "image/avatars/pd_male_youth_3_20260511205510.png",
+            "image/avatars/av_m_youth_a_20260511210138.png",
+            "image/avatars/av_m_youth_b_20260511210150.png",
+            "image/avatars/av_m_youth_c_20260511210141.png",
+            "image/avatars/av_m_youth_d_20260511210142.png",
+            "image/avatars/av_m_youth_e_20260511210149.png"
+        ),
+        "female_youth" to listOf(
+            v3AvatarPortraits.getValue("female_youth"),
+            "image/avatars/pd_female_youth_1_20260511205344.png",
+            "image/avatars/pd_female_youth_2_20260511205502.png",
+            "image/avatars/pd_female_youth_3_20260511205503.png",
+            "image/avatars/av_f_youth_a_20260511210215.png",
+            "image/avatars/av_f_youth_b_20260511210208.png",
+            "image/avatars/av_f_youth_c_20260511210207.png",
+            "image/avatars/av_f_youth_d_20260511210212.png",
+            "image/avatars/av_f_youth_e_20260511210213.png"
+        ),
+        "male_adult" to listOf(
+            "image/avatars/av_m_adult_a_20260512082153.png",
+            "image/avatars/av_m_adult_b_20260512081743.png",
+            "image/avatars/av_m_adult_c_20260512082336.png",
+            "image/avatars/av_m_adult_d_20260512081652.png",
+            "image/avatars/av_m_adult_e_20260512082337.png",
+            "image/avatars/av_m_adult_f_20260512082413.png",
+            "image/avatars/av_m_adult_g_20260512141103.png",
+            "image/avatars/av_m_adult_h_20260512141024.png",
+            "image/avatars/av_m_adult_i_20260512141023.png",
+            "image/avatars/av_m_adult_j_20260512141026.png",
+            "image/avatars/av_m_adult_k_20260512141046.png",
+            "image/avatars/av_m_adult_l_20260512141023.png"
+        ),
+        "female_adult" to listOf(
+            "image/avatars/av_f_adult_a_20260512081928.png",
+            "image/avatars/av_f_adult_b_20260512081939.png",
+            "image/avatars/av_f_adult_d_20260512081643.png",
+            "image/avatars/av_f_adult_e_20260512081750.png",
+            "image/avatars/av_f_adult_g_20260512140907.png",
+            "image/avatars/av_f_adult_h_20260512140928.png",
+            "image/avatars/av_f_adult_i_20260512140617.png",
+            "image/avatars/av_f_adult_i_20260512140909.png",
+            "image/avatars/av_f_adult_j_20260512140918.png",
+            "image/avatars/av_f_adult_k_20260512140915.png",
+            "image/avatars/av_f_adult_l_20260512140905.png",
+            "image/avatars/av_f_adult_m_20260512141240.png",
+            "image/avatars/av_f_adult_n_20260512141227.png",
+            "image/avatars/av_f_adult_o_20260512141249.png",
+            "image/avatars/av_f_adult_p_20260512141234.png",
+            "image/avatars/av_f_adult_q_20260512141242.png"
+        ),
+        "male_middle" to listOf(
+            v3AvatarPortraits.getValue("male_middle"),
+            "image/avatars/pd_male_mid_1_20260511205341.png",
+            "image/avatars/pd_male_mid_2_20260511205501.png",
+            "image/avatars/av_m_mid_a_20260511210341.png",
+            "image/avatars/av_m_mid_b_20260511210335.png",
+            "image/avatars/av_m_mid_c_20260511210326.png",
+            "image/avatars/av_m_mid_d_20260511210339.png",
+            "image/avatars/av_m_mid_e_20260511210333.png"
+        ),
+        "female_middle" to listOf(
+            v3AvatarPortraits.getValue("female_middle"),
+            "image/avatars/pd_female_mid_1_20260511205341.png",
+            "image/avatars/pd_female_mid_2_20260511205504.png",
+            "image/avatars/av_f_mid_a_20260511210407.png",
+            "image/avatars/av_f_mid_b_20260511210401.png",
+            "image/avatars/av_f_mid_c_20260511210413.png",
+            "image/avatars/av_f_mid_d_20260511210435.png",
+            "image/avatars/av_f_mid_e_20260511210400.png"
+        ),
+        "male_elder" to listOf(
+            v3AvatarPortraits.getValue("male_elder"),
+            "image/avatars/pd_male_elder_1_20260511205340.png",
+            "image/avatars/av_m_elder_a_20260511210559.png",
+            "image/avatars/av_m_elder_b_20260511210551.png",
+            "image/avatars/av_m_elder_c_20260511210536.png",
+            "image/avatars/av_m_elder_d_20260511210556.png"
+        ),
+        "female_elder" to listOf(
+            v3AvatarPortraits.getValue("female_elder"),
+            "image/avatars/pd_female_elder_1_20260511205338.png",
+            "image/avatars/av_f_elder_a_20260511210642.png",
+            "image/avatars/av_f_elder_b_20260511210618.png",
+            "image/avatars/av_f_elder_c_20260511210617.png",
+            "image/avatars/av_f_elder_d_20260511210616.png"
+        )
+    )
+
     val v3SpousePortraits = mapOf(
         "farmer" to "image/avatars/spouses/wang_chunniang.png",
         "merchant" to "image/avatars/spouses/shen_yuniang.png",
