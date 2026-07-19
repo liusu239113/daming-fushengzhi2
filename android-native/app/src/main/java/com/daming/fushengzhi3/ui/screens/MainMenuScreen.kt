@@ -109,28 +109,28 @@ fun MainMenuScreen(
 
 @Composable
 private fun MenuButton(text: String, subtitle: String = "", enabled: Boolean = true, primary: Boolean = false, onClick: () -> Unit) {
-    val bg = when {
-        !enabled -> Color(0xFF34344F)
-        primary -> MenuRed
-        else -> MenuSurface2
-    }
-    val border = if (primary) MenuGold else MenuCyan
-    Card(
-        modifier = Modifier.fillMaxWidth().then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
-        colors = CardDefaults.cardColors(containerColor = bg),
-        border = BorderStroke(2.dp, border),
-        shape = MenuButtonShape
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
+        AssetImage(
+            when {
+                !enabled -> GameImages.MingyunSmallButtonDisabled
+                primary -> GameImages.MingyunPrimaryButton
+                else -> GameImages.MingyunSmallButton
+            },
+            null,
+            Modifier.matchParentSize(),
+            ContentScale.FillBounds
+        )
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 15.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(text, color = when {
-                !enabled -> MenuMuted
-                primary -> Color(0xFFFFF4D8)
-                else -> MenuInk
-            }, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(text, color = if (enabled) MenuInk else MenuMuted, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             if (subtitle.isNotBlank()) Text(subtitle, color = if (enabled) MenuMuted else MenuMuted.copy(alpha = 0.6f), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }
@@ -138,13 +138,9 @@ private fun MenuButton(text: String, subtitle: String = "", enabled: Boolean = t
 
 @Composable
 private fun MenuPanel(content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MenuSurface),
-        border = BorderStroke(2.dp, MenuGold),
-        shape = MenuShape,
-        modifier = Modifier.fillMaxWidth().widthIn(max = 460.dp)
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+    Box(Modifier.fillMaxWidth().widthIn(max = 460.dp)) {
+        AssetImage(GameImages.MingyunDialog, null, Modifier.matchParentSize(), ContentScale.FillBounds)
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
     }
 }
 
@@ -171,14 +167,26 @@ private fun MenuSettingsDialog(controller: V3GameController, fontPreference: Fon
 
 @Composable
 private fun MenuChoice(text: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Text(
-        text,
-        modifier = modifier.background(if (selected) MenuRed else MenuSurface2, MenuButtonShape).clickable(onClick = onClick).padding(vertical = 10.dp),
-        color = if (selected) Color(0xFFFFF4D8) else MenuInk,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
-    )
+    Box(
+        modifier
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        AssetImage(
+            if (selected) GameImages.MingyunSmallButtonSelected else GameImages.MingyunSmallButton,
+            null,
+            Modifier.matchParentSize(),
+            ContentScale.FillBounds
+        )
+        Text(
+            text,
+            color = if (selected) Color(0xFFFFF4D8) else MenuInk,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(vertical = 10.dp)
+        )
+    }
 }
 
 @Composable

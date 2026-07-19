@@ -95,18 +95,18 @@ import com.daming.fushengzhi3.v3.logic.V3GameController
 import com.daming.fushengzhi3.v3.logic.V3GameEngine
 import kotlinx.coroutines.delay
 
-private val V3Ink = Color(0xFF2B2016)
-private val V3Paper = Color(0xFFF4E7C7)
-private val V3PaperDeep = Color(0xFFE6D2A4)
-private val V3Red = Color(0xFFA83224)
-private val V3Gold = Color(0xFF8A5A19)
-private val V3Muted = Color(0xFF6E5D46)
-private val V3Green = Color(0xFF2F7D55)
-private val V3Blue = Color(0xFF426B67)
-private val V3Bg = Color(0xFFB98E59)
-private val V3Border = Color(0xFF8A5A19)
-private val V3SealRed = Color(0xFFB33A2F)
-private val V3Rice = Color(0xFFFFF4D8)
+private val V3Ink = Color(0xFFE8D8B8)
+private val V3Paper = Color(0xE6181511)
+private val V3PaperDeep = Color(0xE629241D)
+private val V3Red = Color(0xFF9F3E2D)
+private val V3Gold = Color(0xFFC7A66A)
+private val V3Muted = Color(0xFFB3A58E)
+private val V3Green = Color(0xFF83A878)
+private val V3Blue = Color(0xFF7E9FA0)
+private val V3Bg = Color(0xFF0E0D0B)
+private val V3Border = Color(0xFF8F7447)
+private val V3SealRed = Color(0xFFB34A35)
+private val V3Rice = Color(0xFF171511)
 private val V3SoftShape = RoundedCornerShape(16.dp)
 private val V3PanelShape = RoundedCornerShape(20.dp)
 private val V3ButtonShape = RoundedCornerShape(14.dp)
@@ -124,7 +124,7 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
 
     val profile = V3Content.startProfile(root, county, creed, crisis)
 
-    V3Background {
+    V3Background(GameImages.MingyunClanBg) {
         Column(
             Modifier
                 .fillMaxSize()
@@ -372,7 +372,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             contentScroll.scrollTo(targetScroll)
         }
     }
-    V3Background {
+    V3Background(controller.screen.backgroundAsset()) {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 V3TopBar(
@@ -1625,40 +1625,43 @@ private fun V3TopBar(
     guideTargets: MutableMap<V3GuideFocus, Rect>,
     secondsToNextMonth: Int
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(V3Rice.copy(alpha = 0.96f))
-            .guideTarget(V3GuideFocus.TopBar, guideTargets)
-            .padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(state.clanName, color = V3Gold, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Text("${mingEraLabel(state.year)}${state.month}月 · ${V3GameEngine.clanRankName(state)} · ${state.crisis}", color = V3Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                V3SmallButton("设置", Modifier.width(66.dp)) { controller.openSettings() }
-                V3SmallButton("菜单", Modifier.width(66.dp)) { onRequestBackToMenu() }
-            }
-        }
-        V3TimeControls(controller, guideTargets, secondsToNextMonth)
-        Text(
-            "当前目标：${nextAdvice(state)}",
-            color = V3Red,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            lineHeight = 17.sp
-        )
-        Row(
+    Box(Modifier.fillMaxWidth().guideTarget(V3GuideFocus.TopBar, guideTargets)) {
+        AssetImage(GameImages.MingyunPanel, null, Modifier.matchParentSize(), ContentScale.FillBounds)
+        Column(
             Modifier
                 .fillMaxWidth()
-                .guideTarget(V3GuideFocus.Resources, guideTargets),
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            V3ResourceMetric(GameImages.V3IconSilver, "银两", state.silver, V3Gold, Modifier.weight(1f))
-            V3ResourceMetric(GameImages.V3IconGrain, "粮食", state.grain, V3Green, Modifier.weight(1f))
-            V3ResourceMetric(GameImages.V3IconPopulation, "人口", V3GameEngine.alivePeople(state).size, V3Blue, Modifier.weight(1f))
-            V3ResourceMetric(GameImages.V3IconIndustry, "产业", V3GameEngine.builtSiteCount(state), V3Red, Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text(state.clanName, color = V3Gold, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text("${mingEraLabel(state.year)}${state.month}月 · ${V3GameEngine.clanRankName(state)} · ${state.crisis}", color = V3Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    V3SmallButton("设置", Modifier.width(66.dp)) { controller.openSettings() }
+                    V3SmallButton("菜单", Modifier.width(66.dp)) { onRequestBackToMenu() }
+                }
+            }
+            V3TimeControls(controller, guideTargets, secondsToNextMonth)
+            Text(
+                "当前目标：${nextAdvice(state)}",
+                color = V3Red,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 17.sp
+            )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .guideTarget(V3GuideFocus.Resources, guideTargets),
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                V3ResourceMetric(GameImages.V3IconSilver, "银两", state.silver, V3Gold, Modifier.weight(1f))
+                V3ResourceMetric(GameImages.V3IconGrain, "粮食", state.grain, V3Green, Modifier.weight(1f))
+                V3ResourceMetric(GameImages.V3IconPopulation, "人口", V3GameEngine.alivePeople(state).size, V3Blue, Modifier.weight(1f))
+                V3ResourceMetric(GameImages.V3IconIndustry, "产业", V3GameEngine.builtSiteCount(state), V3Red, Modifier.weight(1f))
+            }
         }
     }
 }
@@ -1725,23 +1728,35 @@ private fun V3BottomNav(
     controller: V3GameController,
     guideTargets: MutableMap<V3GuideFocus, Rect>
 ) {
-    Row(
+    Box(
         Modifier
             .fillMaxWidth()
-            .background(V3Rice.copy(alpha = 0.97f))
             .guideTarget(V3GuideFocus.BottomNav, guideTargets)
-            .padding(horizontal = 8.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        V3Screen.entries.forEach { screen ->
-            V3SmallButton(V3GameEngine.screenTitle(screen), Modifier.weight(1f), selected = controller.screen == screen) { controller.switchScreen(screen) }
+    ) {
+        AssetImage(GameImages.MingyunPanel, null, Modifier.matchParentSize(), ContentScale.FillBounds)
+        Row(
+            Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            V3Screen.entries.forEach { screen ->
+                V3SmallButton(V3GameEngine.screenTitle(screen), Modifier.weight(1f), selected = controller.screen == screen) { controller.switchScreen(screen) }
+            }
         }
     }
 }
 
+private fun V3Screen.backgroundAsset(): String = when (this) {
+    V3Screen.County -> GameImages.MingyunHomeBg
+    V3Screen.Clan -> GameImages.MingyunClanBg
+    V3Screen.People -> GameImages.MingyunPeopleBg
+    V3Screen.Strategy -> GameImages.MingyunStrategyBg
+}
+
 @Composable
-private fun V3Background(content: @Composable () -> Unit) {
+private fun V3Background(backgroundAsset: String, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(V3Bg)) {
-        AssetImage(GameImages.V3DossierBg, null, Modifier.fillMaxSize(), ContentScale.Crop, alpha = 0.32f)
-        Box(Modifier.fillMaxSize().background(Color(0x99F4E0B5)))
+        AssetImage(backgroundAsset, null, Modifier.fillMaxSize(), ContentScale.Crop, alpha = 1f)
+        Box(Modifier.fillMaxSize().background(Color(0x55100E0B)))
         content()
     }
 }
@@ -1765,25 +1780,21 @@ private fun V3Section(title: String, subtitle: String) {
 
 @Composable
 private fun V3Panel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Gold), shape = V3PanelShape) {
-        Box(Modifier.background(V3Paper.copy(alpha = 0.98f))) {
-            V3CornerOrnaments()
-            Box(Modifier.matchParentSize().padding(5.dp).border(1.dp, V3Red.copy(alpha = 0.34f), V3SoftShape))
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
-        }
+    Box(modifier = modifier.fillMaxWidth()) {
+        AssetImage(GameImages.MingyunPanel, null, Modifier.matchParentSize(), ContentScale.FillBounds)
+        Column(
+            Modifier.padding(horizontal = 22.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            content = content
+        )
     }
 }
 
 @Composable
 private fun V3ImagePanel(imagePath: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier = modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3Paper), border = BorderStroke(2.dp, V3Gold), shape = V3PanelShape) {
-        Box {
-            AssetImage(imagePath, null, Modifier.matchParentSize(), ContentScale.Crop, alpha = 0.55f)
-            Box(Modifier.matchParentSize().background(Color(0xDDF8EBCB)))
-            V3CornerOrnaments()
-            Box(Modifier.matchParentSize().padding(6.dp).border(1.dp, V3Red.copy(alpha = 0.35f), V3SoftShape))
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
-        }
+    Box(modifier.fillMaxWidth()) {
+        AssetImage(GameImages.MingyunDialog, null, Modifier.matchParentSize(), ContentScale.FillBounds)
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
     }
 }
 
@@ -1866,18 +1877,15 @@ private fun V3Metric(label: String, value: Int, color: Color, modifier: Modifier
 
 @Composable
 private fun V3ResourceMetric(iconPath: String, label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
-    Row(
-        modifier
-            .background(V3Paper.copy(alpha = 0.92f), V3SoftShape)
-            .border(1.5.dp, V3Gold.copy(alpha = 0.64f), V3SoftShape)
-            .padding(horizontal = 7.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        AssetImage(iconPath, label, Modifier.size(20.dp), ContentScale.Fit)
-        Column(horizontalAlignment = Alignment.Start) {
+    Box(modifier) {
+        AssetImage(GameImages.MingyunResourcePlaque, null, Modifier.matchParentSize(), ContentScale.FillBounds)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            AssetImage(iconPath, null, Modifier.size(21.dp), ContentScale.Fit)
             Text(value.toString(), color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(label, color = V3Muted, fontSize = 10.sp, maxLines = 1)
         }
     }
 }
@@ -1907,47 +1915,50 @@ private fun V3GoalRow(state: V3GameState, goal: V3AnnualGoal) {
 private fun V3Button(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         modifier = modifier
-            .background(if (enabled) V3Red else V3Muted.copy(alpha = 0.35f), V3ButtonShape)
-            .border(2.dp, if (enabled) V3Gold else V3Muted, V3ButtonShape)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(3.dp),
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Box(Modifier.matchParentSize().border(1.dp, V3Rice.copy(alpha = 0.52f), V3SoftShape))
-        Text("❖ $text ❖", color = if (enabled) V3Rice else V3Muted, fontSize = 16.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp))
+        AssetImage(
+            if (enabled) GameImages.MingyunPrimaryButton else GameImages.MingyunPrimaryButtonDisabled,
+            null,
+            Modifier.matchParentSize(),
+            ContentScale.FillBounds
+        )
+        Text(
+            text,
+            color = if (enabled) V3Ink else V3Muted,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp)
+        )
     }
 }
 
 @Composable
 private fun V3SmallButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, selected: Boolean = false, onClick: () -> Unit) {
-    val bg = when {
-        selected -> V3Red
-        enabled -> V3PaperDeep
-        else -> V3Muted.copy(alpha = 0.28f)
-    }
-    val fg = when {
-        selected -> V3Rice
-        enabled -> V3Ink
-        else -> V3Muted.copy(alpha = 0.75f)
-    }
-    val edge = when {
-        selected -> V3Gold
-        enabled -> V3Border.copy(alpha = 0.72f)
-        else -> V3Muted.copy(alpha = 0.35f)
-    }
     Box(
-        modifier = modifier
-            .background(bg, V3SoftShape)
-            .border(1.dp, edge, V3SoftShape)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(3.dp),
+        modifier = modifier.clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Box(Modifier.matchParentSize().border(1.dp, if (selected) V3Rice.copy(alpha = 0.35f) else V3Gold.copy(alpha = 0.25f), V3SoftShape))
+        AssetImage(
+            when {
+                !enabled -> GameImages.MingyunSmallButtonDisabled
+                selected -> GameImages.MingyunSmallButtonSelected
+                else -> GameImages.MingyunSmallButton
+            },
+            null,
+            Modifier.matchParentSize(),
+            ContentScale.FillBounds
+        )
         Text(
             text,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp),
-            color = fg,
+            color = when {
+                !enabled -> V3Muted.copy(alpha = 0.75f)
+                selected -> V3Ink
+                else -> V3Ink
+            },
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             textAlign = TextAlign.Center,
