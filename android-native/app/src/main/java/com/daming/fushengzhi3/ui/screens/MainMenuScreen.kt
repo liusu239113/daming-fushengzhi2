@@ -43,6 +43,9 @@ private val MenuSurface = Color(0xFFF4E7C7)
 private val MenuSurface2 = Color(0xFFE6D2A4)
 private val MenuInk = Color(0xFF2B2016)
 private val MenuMuted = Color(0xFF6E5D46)
+private val MenuButtonText = Color(0xFFFFF4D8)
+private val MenuButtonSecondary = Color(0xFFE8D8B8)
+private val MenuButtonDisabled = Color(0xFFC0B39B)
 private val MenuGold = Color(0xFF8A5A19)
 private val MenuRed = Color(0xFFA83224)
 private val MenuCyan = Color(0xFF426B67)
@@ -126,12 +129,28 @@ private fun MenuButton(text: String, subtitle: String = "", enabled: Boolean = t
             ContentScale.FillBounds
         )
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 15.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 13.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(text, color = if (enabled) MenuInk else MenuMuted, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            if (subtitle.isNotBlank()) Text(subtitle, color = if (enabled) MenuMuted else MenuMuted.copy(alpha = 0.6f), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(
+                text,
+                color = if (enabled) MenuButtonText else MenuButtonDisabled,
+                fontSize = 21.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    subtitle,
+                    color = if (enabled) MenuButtonSecondary else MenuButtonDisabled.copy(alpha = 0.82f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -180,7 +199,7 @@ private fun MenuChoice(text: String, selected: Boolean, modifier: Modifier, onCl
         )
         Text(
             text,
-            color = if (selected) Color(0xFFFFF4D8) else MenuInk,
+            color = MenuButtonText,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,

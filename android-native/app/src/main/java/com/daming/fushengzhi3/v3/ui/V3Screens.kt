@@ -95,17 +95,17 @@ import com.daming.fushengzhi3.v3.logic.V3GameController
 import com.daming.fushengzhi3.v3.logic.V3GameEngine
 import kotlinx.coroutines.delay
 
-private val V3Ink = Color(0xFFE8D8B8)
-private val V3Paper = Color(0xE6181511)
-private val V3PaperDeep = Color(0xE629241D)
-private val V3Red = Color(0xFF9F3E2D)
-private val V3Gold = Color(0xFFC7A66A)
-private val V3Muted = Color(0xFFB3A58E)
-private val V3Green = Color(0xFF83A878)
-private val V3Blue = Color(0xFF7E9FA0)
+private val V3Ink = Color(0xFFFFF1D2)
+private val V3Paper = Color(0xF0181511)
+private val V3PaperDeep = Color(0xF229241D)
+private val V3Red = Color(0xFFE06B55)
+private val V3Gold = Color(0xFFE2C17E)
+private val V3Muted = Color(0xFFD1C4AD)
+private val V3Green = Color(0xFFA8D29C)
+private val V3Blue = Color(0xFFA5C9CA)
 private val V3Bg = Color(0xFF0E0D0B)
-private val V3Border = Color(0xFF8F7447)
-private val V3SealRed = Color(0xFFB34A35)
+private val V3Border = Color(0xFFB89A62)
+private val V3SealRed = Color(0xFFF07A61)
 private val V3Rice = Color(0xFF171511)
 private val V3SoftShape = RoundedCornerShape(16.dp)
 private val V3PanelShape = RoundedCornerShape(20.dp)
@@ -161,10 +161,11 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
                                 unfocusedContainerColor = V3Rice,
                                 focusedTextColor = V3Ink,
                                 unfocusedTextColor = V3Ink,
-                                focusedIndicatorColor = V3Red,
-                                unfocusedIndicatorColor = V3Border
+                                focusedIndicatorColor = V3Gold,
+                                unfocusedIndicatorColor = V3Border,
+                                cursorColor = V3Ink
                             ),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f).height(50.dp)
                         )
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -186,10 +187,11 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
                                 unfocusedContainerColor = V3Rice,
                                 focusedTextColor = V3Ink,
                                 unfocusedTextColor = V3Ink,
-                                focusedIndicatorColor = V3Red,
-                                unfocusedIndicatorColor = V3Border
+                                focusedIndicatorColor = V3Gold,
+                                unfocusedIndicatorColor = V3Border,
+                                cursorColor = V3Ink
                             ),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f).height(50.dp)
                         )
                     }
                     nameError?.let { Text(it, color = V3Red, fontSize = 12.sp, lineHeight = 17.sp) }
@@ -900,7 +902,7 @@ private fun V3GenealogyTree(
             Box(
                 Modifier
                     .wrapContentSize(Alignment.TopStart, unbounded = true)
-                    .requiredSize(with(density) { contentWidth.toDp() }, with(density) { contentHeight.toDp() })
+                    .requiredSize(contentWidth.dp, contentHeight.dp)
                     .graphicsLayer {
                         translationX = pan.x + centeredX
                         translationY = pan.y
@@ -1442,7 +1444,7 @@ private fun V3SiteManageDialog(site: V3CountySite, state: V3GameState, controlle
                 .heightIn(max = 680.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            Text("${site.name} 管理", color = V3Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text("${site.name} 管理", color = V3Ink, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             V3SiteCard(site, state, controller)
             V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
         }
@@ -1793,8 +1795,17 @@ private fun V3Panel(modifier: Modifier = Modifier, content: @Composable ColumnSc
 @Composable
 private fun V3ImagePanel(imagePath: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Box(modifier.fillMaxWidth()) {
-        AssetImage(GameImages.MingyunDialog, null, Modifier.matchParentSize(), ContentScale.FillBounds)
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(9.dp), content = content)
+        AssetImage(imagePath, null, Modifier.matchParentSize(), ContentScale.FillBounds)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+                .background(V3Rice.copy(alpha = 0.94f), V3SoftShape)
+                .border(1.dp, V3Border.copy(alpha = 0.85f), V3SoftShape)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+            content = content
+        )
     }
 }
 
@@ -1915,6 +1926,7 @@ private fun V3GoalRow(state: V3GameState, goal: V3AnnualGoal) {
 private fun V3Button(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
         modifier = modifier
+            .heightIn(min = 48.dp)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -1938,7 +1950,9 @@ private fun V3Button(text: String, modifier: Modifier = Modifier, enabled: Boole
 @Composable
 private fun V3SmallButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, selected: Boolean = false, onClick: () -> Unit) {
     Box(
-        modifier = modifier.clickable(enabled = enabled, onClick = onClick),
+        modifier = modifier
+            .heightIn(min = 40.dp)
+            .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         AssetImage(
@@ -1955,7 +1969,7 @@ private fun V3SmallButton(text: String, modifier: Modifier = Modifier, enabled: 
             text,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 6.dp),
             color = when {
-                !enabled -> V3Muted.copy(alpha = 0.75f)
+                !enabled -> V3Muted
                 selected -> V3Ink
                 else -> V3Ink
             },
