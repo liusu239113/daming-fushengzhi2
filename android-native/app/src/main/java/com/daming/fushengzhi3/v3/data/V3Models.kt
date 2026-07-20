@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 const val V3_SAVE_VERSION = 2
 
 @Serializable
-enum class V3Screen { County, Clan, People, Strategy }
+enum class V3Screen { County, Clan, People, Strategy, Military }
 
 @Serializable
 enum class V3Gender(val label: String) { Male("男"), Female("女") }
@@ -102,7 +102,7 @@ enum class V3TroopType(val label: String, val desc: String, val silverCost: Int,
 
 @Serializable
 data class V3ArmyRoster(
-    val militia: Int = 20,
+    val militia: Int = 0,
     val spear: Int = 0,
     val archer: Int = 0,
     val shield: Int = 0,
@@ -388,7 +388,7 @@ data class V3GameState(
     val influence: Int = 35,
     val cohesion: Int = 60,
     val militia: Int = 20,
-    val army: V3ArmyRoster = V3ArmyRoster(),
+    val army: V3ArmyRoster = V3ArmyRoster(militia = 20),
     val equipment: List<V3EquipmentItem> = emptyList(),
     val people: List<V3Person> = V3Content.initialPeople,
     val branches: List<V3Branch> = V3Content.initialBranches,
@@ -405,6 +405,8 @@ data class V3GameState(
     val rebelHeat: Int = 0,
     val finalEnding: V3FinalEnding? = null,
     val activeEvent: V3ActiveEvent? = null,
+    val tutorialStep: Int = 0,
+    val tutorialCompleted: Boolean = false,
     val pendingReports: List<String> = listOf("县域初定，族老请你先审视祠堂、田庄、集市与县衙。"),
     val eventLog: List<String> = listOf("万历二十九年，宗族重立谱牒，县域沙盘由此展开。")
 )
@@ -455,7 +457,13 @@ data class V3Person(
     val lastBirthMonth: Int? = null,
     val ageMonths: Int = -1,
     val surname: String = "",
-    val spouseCandidateId: String? = null
+    val spouseCandidateId: String? = null,
+    val pregnancyDueMonth: Int? = null,
+    val illness: String? = null,
+    val illnessMonths: Int = 0,
+    val deathYear: Int? = null,
+    val deathMonth: Int? = null,
+    val deathCause: String? = null
 )
 
 @Serializable

@@ -28,6 +28,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         private set
 
     private var lastActiveSpeed = 1
+    private var resumeSpeedAfterModal: Int? = null
 
     var latestReport by mutableStateOf<V3MonthlyReport?>(null)
         private set
@@ -56,7 +57,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
         screen = V3Screen.County
         timeSpeed = 0
+        lastActiveSpeed = 1
+        resumeSpeedAfterModal = null
         latestReport = null
+        settingsVisible = false
         message = "你从一户起家。先娶妻成家，再置产业、养子嗣、派族人经营。时间默认暂停，处理完家业后再点继续。"
     }
 
@@ -68,7 +72,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         state = V3GameEngine.normalizeState(saveStore.load() ?: state)
         screen = V3Screen.County
         timeSpeed = 0
+        lastActiveSpeed = 1
+        resumeSpeedAfterModal = null
         latestReport = null
+        settingsVisible = false
         message = "案卷已启封，旧日县域局势重归案前。"
     }
 
@@ -110,13 +117,14 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun openSettings() {
         audio.click()
-        timeSpeed = 0
+        pauseForModal()
         settingsVisible = true
     }
 
     fun closeSettings() {
         audio.click()
         settingsVisible = false
+        resumeAfterModalIfClear()
     }
 
     fun pageTurn() {
@@ -154,9 +162,19 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun autoArrangeMonth() {
+        audio.playSfx(SfxKey.V3Edict)
+        state = V3GameEngine.autoArrangeMonth(state)
+        if (state.people.any { it.alive && (it.currentTask != null || it.trainingFocus != null) }) completeTutorialAction(2)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun assignTask(personId: Int, siteId: String, task: V3TaskType) {
         audio.select()
         state = V3GameEngine.assignTask(state, personId, siteId, task)
+        val assigned = state.people.firstOrNull { it.id == personId }
+        if (assigned?.assignedSiteId == siteId && assigned.currentTask == task) completeTutorialAction(2)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
@@ -357,12 +375,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
         val shouldShowReport = showReport || report.nextState.month == 1 || report.lines.any { it.contains("目标达成") || it.contains("添丁") || it.contains("终局") || it.contains("岁末") }
         latestReport = if (shouldShowReport) report.copy(nextState = withEnding) else null
-        if (withEnding.activeEvent != null || latestReport != null) timeSpeed = 0
+        completeTutorialAction(3)
+        if (withEnding.activeEvent != null || latestReport != null) pauseForModal()
     }
 
     fun chooseEvent(choice: V3EventChoice) {
         audio.playSfx(SfxKey.V3Edict)
-        timeSpeed = 0
+        pauseForModal()
         state = V3EventEngine.choose(state, choice)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
@@ -376,29 +395,92 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun restartAfterEnding() {
         audio.click()
-        state = V3Content.newGame(state.root, state.county, state.creed, state.crisis, state.surname)
+        val founder = state.people.firstOrNull { it.id == 1 }?.name.orEmpty()
+        val givenName = founder.removePrefix(state.surname).ifBlank { "慎行" }
+        state = V3Content.newGame(state.root, state.county, state.creed, state.crisis, state.surname, givenName)
         saveStore.save(state)
         latestReport = null
-        timeSpeed = 0
-        settingsVisible = false
         message = "新一轮县域宗族沙盘已重开。"
+        timeSpeed = 0
+        lastActiveSpeed = 1
+        resumeSpeedAfterModal = null
+        settingsVisible = false
         screen = V3Screen.County
     }
 
     fun clearReport() {
         audio.click()
         latestReport = null
+        resumeAfterModalIfClear()
     }
 
     fun clearMessage() {
         audio.click()
         message = null
+        resumeAfterModalIfClear()
+    }
+
+    fun showInfo(text: String) {
+        audio.click()
+        pauseForModal()
+        message = text
+    }
+
+    private fun pauseForModal() {
+        if (timeSpeed > 0 && resumeSpeedAfterModal == null) resumeSpeedAfterModal = timeSpeed
+        timeSpeed = 0
+    }
+
+    private fun resumeAfterModalIfClear() {
+        val blocked = latestReport != null || message != null || settingsVisible || state.activeEvent != null ||
+            state.examSession != null || state.battleState != null || state.conquestState != null || state.finalEnding != null
+        if (blocked) return
+        resumeSpeedAfterModal?.let { speed ->
+            timeSpeed = speed
+            lastActiveSpeed = speed
+        }
+        resumeSpeedAfterModal = null
     }
 
     private fun shouldGenerateEventThisMonth(nextState: V3GameState): Boolean {
         if (nextState.month !in listOf(2, 5, 8, 11)) return false
         if (nextState.eventLog.take(2).any { it.contains("事件【") || it.contains("抉择") }) return false
         return true
+    }
+
+    fun observeTutorialLedger() {
+        completeTutorialAction(0)
+    }
+
+    fun observeTutorialSite() {
+        completeTutorialAction(1)
+    }
+
+    fun finishTutorial() {
+        if (state.tutorialStep < 4) return
+        state = state.copy(tutorialStep = 5, tutorialCompleted = true)
+        saveStore.save(state)
+    }
+
+    fun skipTutorial() {
+        state = state.copy(tutorialStep = 5, tutorialCompleted = true)
+        saveStore.save(state)
+    }
+
+    fun reopenTutorial() {
+        state = state.copy(tutorialStep = 0, tutorialCompleted = false)
+        screen = V3Screen.County
+        saveStore.save(state)
+    }
+
+    private fun completeTutorialAction(requiredStep: Int) {
+        if (state.tutorialCompleted || state.tutorialStep != requiredStep) return
+        val nextStep = requiredStep + 1
+        state = state.copy(
+            tutorialStep = nextStep,
+            tutorialCompleted = nextStep >= 5
+        )
+        saveStore.save(state)
     }
 
     fun openPlayGuide() {

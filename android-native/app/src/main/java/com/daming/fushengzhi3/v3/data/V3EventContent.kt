@@ -73,7 +73,7 @@ object V3EventContent {
     )
 
     val personEvents = listOf(
-        V3ActiveEvent("族长夜议", "李慎行夜召族老，认为当前局势须定一条主线，否则各房各行其是。", listOf(
+        V3ActiveEvent("族长夜议", "开族祖夜召族老，认为当前局势须定一条主线，否则各房各行其是。", listOf(
             V3EventChoice("定下家法", "主房威望上升，凝聚稳定。", cohesionDelta = 5, influenceDelta = 3, personId = 1, personFatigueDelta = 6, personMeritDelta = 2, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("main", influenceDelta = 3))),
             V3EventChoice("广听诸房", "房支怨气下降，但决断放缓。", cohesionDelta = 4, personId = 1, personFatigueDelta = 4, route = V3Route.Scholar, branchImpacts = listOf(V3BranchImpact("merchant", grievanceDelta = -2), V3BranchImpact("martial", grievanceDelta = -2), V3BranchImpact("scholar", grievanceDelta = -2)))
         )),
@@ -188,7 +188,7 @@ object V3EventContent {
     )
 
     private val personArcSeeds = listOf(
-        PersonArcSeed(1, "李慎行", "main", "shrine", V3Route.Hermit, "整肃族规", "主房权威与诸房利益难以两全"),
+        PersonArcSeed(1, "开族祖", "main", "shrine", V3Route.Hermit, "整肃族规", "主房权威与诸房利益难以两全"),
         PersonArcSeed(2, "李承岳", "martial", "fort", V3Route.Fortress, "操练乡勇", "武备扩张会招来县衙猜忌"),
         PersonArcSeed(3, "李若兰", "scholar", "academy", V3Route.Scholar, "主持讲会", "清议声名越高，党争牵连越深"),
         PersonArcSeed(4, "李仲财", "merchant", "market", V3Route.Merchant, "重整商号", "银钱流转越快，账目越难服众"),

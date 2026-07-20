@@ -112,8 +112,8 @@ object V3EventEngine {
             state.army.lose(-choice.militiaDelta)
         }
         return state.copy(
-            silver = state.silver + choice.silverDelta,
-            grain = state.grain + choice.grainDelta,
+            silver = (state.silver + choice.silverDelta).coerceAtLeast(-999),
+            grain = (state.grain + choice.grainDelta).coerceAtLeast(-999),
             militia = nextArmy.total(),
             army = nextArmy,
             cohesion = (state.cohesion + choice.cohesionDelta).coerceIn(0, 100),
@@ -178,8 +178,10 @@ object V3EventEngine {
     }
 
     private fun followUpEvent(state: V3GameState): V3ActiveEvent? {
-        if (state.month % 5 != 2) return null
-        val recent = state.eventLog.take(8).joinToString("｜")
+        val pendingChoice = state.eventLog.take(40).firstOrNull { log ->
+            log.contains("事件【") && log.contains("选择：")
+        } ?: return null
+        val recent = pendingChoice
         if ((recent.contains("开仓") || recent.contains("赈") || recent.contains("义诊")) && !recent.contains("赈济余波")) {
             return V3ActiveEvent(
                 "赈济余波",
@@ -283,6 +285,7 @@ object V3EventEngine {
         events += dynamicResourceEvents(state)
         events += dynamicSiteEvents(state)
         events += dynamicClanEvents(state)
+        events += dynamicPersonEvents(state)
         events += dynamicRouteEvents(state)
         events += dynamicWorldEvents(state)
         events += dynamicEraEvents(state, totalRisk)
@@ -357,6 +360,50 @@ object V3EventEngine {
             ))
         }
         return events
+    }
+
+    private fun dynamicPersonEvents(state: V3GameState): List<V3ActiveEvent> {
+        val founder = state.people.firstOrNull { it.id == 1 && it.alive }
+        val mostTired = V3GameEngine.alivePeople(state).filter { it.fatigue >= 55 }.maxByOrNull { it.fatigue }
+        val mostMeritorious = V3GameEngine.alivePeople(state).filter { it.merit >= 10 }.maxByOrNull { it.merit }
+        return buildList {
+            if (founder != null) {
+                add(
+                    V3ActiveEvent(
+                        "${founder.name}夜定家法",
+                        "${founder.name}夜召族老，眼下各项产业渐开，若仍各行其是，日后房支必争。",
+                        listOf(
+                            V3EventChoice("定下家法", "主房威望上升，凝聚稳定。", cohesionDelta = 5, influenceDelta = 3, personId = founder.id, personFatigueDelta = 5, personMeritDelta = 2, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("main", influenceDelta = 3))),
+                            V3EventChoice("广听族议", "凝聚提升，路线更偏耕读。", cohesionDelta = 4, personId = founder.id, personFatigueDelta = 3, route = V3Route.Scholar)
+                        )
+                    )
+                )
+            }
+            if (mostTired != null) {
+                add(
+                    V3ActiveEvent(
+                        "${mostTired.name}积劳成忧",
+                        "${mostTired.name}连月奔走，脸色已差。若继续压担，可能染病；若让其休养，本月事务会放慢。",
+                        listOf(
+                            V3EventChoice("令其休养", "疲劳下降，忠诚回升。", cohesionDelta = 2, personId = mostTired.id, personFatigueDelta = -25, personLoyaltyDelta = 3, route = V3Route.Hermit, routeDelta = 4),
+                            V3EventChoice("请医馆调理", "花银换健康与功绩。", silverDelta = -20, personId = mostTired.id, personFatigueDelta = -15, personMeritDelta = 2, route = V3Route.Hermit, routeDelta = 3)
+                        )
+                    )
+                )
+            }
+            if (mostMeritorious != null && mostMeritorious.id != founder?.id) {
+                add(
+                    V3ActiveEvent(
+                        "${mostMeritorious.name}功高请命",
+                        "${mostMeritorious.name}已在族中积下${mostMeritorious.merit}点功绩，请求独当一面。答应会壮大其房支，不答应则可能伤忠心。",
+                        listOf(
+                            V3EventChoice("授予职司", "功绩与忠诚提高，家族路线随其所长推进。", influenceDelta = 3, personId = mostMeritorious.id, personMeritDelta = 4, personLoyaltyDelta = 3, route = bestRoute(state), routeDelta = 5),
+                            V3EventChoice("暂缓任命", "主房权威稳定，但本人略有失望。", cohesionDelta = 2, personId = mostMeritorious.id, personLoyaltyDelta = -2, route = V3Route.Hermit, routeDelta = 3)
+                        )
+                    )
+                )
+            }
+        }
     }
 
     private fun dynamicRouteEvents(state: V3GameState): List<V3ActiveEvent> {
@@ -461,8 +508,10 @@ object V3EventEngine {
     private fun historicalEvent(state: V3GameState): V3ActiveEvent? {
         val key = state.year to state.month
         if (state.eventLog.take(30).any { it.contains("史事") && it.contains(state.year.toString()) }) return null
+        fun personalize(text: String): String = text.replace("李慎行", state.founderName).replace("李氏", "${state.surname}氏")
+        fun event(title: String, body: String, choices: List<V3EventChoice>) = V3ActiveEvent(personalize(title), personalize(body), choices.map { choice -> choice.copy(label = personalize(choice.label), desc = personalize(choice.desc)) })
         return when (key) {
-            1601 to 9 -> V3ActiveEvent(
+            1601 to 9 -> event(
                 "史事：矿税余波",
                 "万历末年，矿监税使之弊虽稍退，地方仍以旧账追索。清河县衙重翻商税与田税册，李氏若不表态，集市、田庄都会被牵动。",
                 listOf(
@@ -471,7 +520,7 @@ object V3EventEngine {
                     V3EventChoice("暗改账册", "短期保财，但商路和官府风险变高。", silverDelta = 35, yamenDelta = -8, merchantsDelta = 5, siteId = "market", siteRiskDelta = 10, route = V3Route.Merchant)
                 )
             )
-            1619 to 4 -> V3ActiveEvent(
+            1619 to 4 -> event(
                 "史事：萨尔浒败闻",
                 "辽东大败的消息顺江而下，军需、辽饷、募兵风声一齐压到县中。宗祠议事不再只是家产，已开始牵连边事。",
                 listOf(
@@ -480,7 +529,7 @@ object V3EventEngine {
                     V3EventChoice("扩大商路备银", "以财应变，商路加强。", silverDelta = 60, merchantsDelta = 7, yamenDelta = -3, route = V3Route.Merchant, routeDelta = 8)
                 )
             )
-            1621 to 7 -> V3ActiveEvent(
+            1621 to 7 -> event(
                 "史事：辽事再急",
                 "天启初年，辽东战报频仍，县中军户与商帮都在囤粮避祸。李氏的选择会让家族路线更偏向勤王、自保或逐利。",
                 listOf(
@@ -489,7 +538,7 @@ object V3EventEngine {
                     V3EventChoice("囤货等价", "银两上涨但民心下降。", silverDelta = 90, villagersDelta = -8, merchantsDelta = 8, route = V3Route.Merchant, routeDelta = 8)
                 )
             )
-            1627 to 10 -> V3ActiveEvent(
+            1627 to 10 -> event(
                 "史事：天启崩，崇祯立",
                 "京中传来大行皇帝崩逝、新君即位。清流称新政可期，县衙却催各族重新表忠。李氏该押注朝局，还是守住家业？",
                 listOf(
@@ -498,7 +547,7 @@ object V3EventEngine {
                     V3EventChoice("闭祠修谱", "避开朝局，凝聚上升。", grainDelta = -20, cohesionDelta = 7, route = V3Route.Hermit, routeDelta = 7)
                 )
             )
-            1628 to 6 -> V3ActiveEvent(
+            1628 to 6 -> event(
                 "史事：崇祯清饷",
                 "新政要清理积弊，却也让地方催饷更急。差役登门，士绅观望，商帮怕税，乡民怕役。",
                 listOf(
@@ -507,7 +556,7 @@ object V3EventEngine {
                     V3EventChoice("以商税抵饷", "商路承压但家业保住。", silverDelta = -35, merchantsDelta = -4, yamenDelta = 5, siteId = "market", siteRiskDelta = 6, route = V3Route.Merchant)
                 )
             )
-            1630 to 3 -> V3ActiveEvent(
+            1630 to 3 -> event(
                 "史事：陕北流寇",
                 "西北饥荒与流寇的传闻传入江南，逃户、募兵、粮价一起动荡。李氏需要决定是赈济、练兵，还是趁乱扩财。",
                 listOf(
@@ -516,7 +565,7 @@ object V3EventEngine {
                     V3EventChoice("囤粮抬价", "银两大增，民心大跌。", silverDelta = 120, grainDelta = -25, villagersDelta = -14, merchantsDelta = 8, route = V3Route.Merchant, routeDelta = 9)
                 )
             )
-            1636 to 5 -> V3ActiveEvent(
+            1636 to 5 -> event(
                 "史事：关外称帝",
                 "关外改号称帝的消息震动南北。朝廷催兵催饷，地方豪族开始各谋退路。李氏已不能只做县中小族。",
                 listOf(
@@ -525,7 +574,7 @@ object V3EventEngine {
                     V3EventChoice("筹船留后路", "海外路线增强。", silverDelta = -80, merchantsDelta = 9, siteId = "dock", siteControlDelta = 9, route = V3Route.Overseas, routeDelta = 12)
                 )
             )
-            1642 to 8 -> V3ActiveEvent(
+            1642 to 8 -> event(
                 "史事：天下土崩",
                 "北方城池屡陷，逃官、饥民、败兵接连入境。若李氏已有兵粮，此时可争一方；若根基不足，只能求保香火。",
                 listOf(
@@ -534,7 +583,7 @@ object V3EventEngine {
                     V3EventChoice("南迁海路", "海外路线强推，家族撕裂。", silverDelta = -120, cohesionDelta = -5, merchantsDelta = 12, route = V3Route.Overseas, routeDelta = 16)
                 )
             )
-            1644 to 3 -> V3ActiveEvent(
+            1644 to 3 -> event(
                 "史事：甲申国变",
                 "京师陷落的消息尚未传实，县中已人心惶惶。大明气数将尽，李氏必须选择最后路线：勤王、割据、保族，或远走。",
                 listOf(
@@ -663,7 +712,11 @@ object V3EventEngine {
         }
         val siteOk = event.choices.all { choice -> choice.siteId == null || state.sites.any { it.id == choice.siteId } }
         val branchIds = state.branches.map { it.id }.toSet()
-        val branchOk = event.choices.flatMap { it.branchImpacts }.all { impact -> impact.branchId == "main" || impact.branchId in branchIds }
+        val branchOk = event.choices.flatMap { it.branchImpacts }.all { impact ->
+            impact.branchId == "main" ||
+                impact.branchId in branchIds ||
+                state.branches.any { branch -> branchMatchesImpact(branch.id, branch.focus, impact.branchId) }
+        }
         return personOk && siteOk && branchOk && eventTimeMatches(event, state) && eventProgressMatches(event, state)
     }
 
@@ -714,7 +767,7 @@ object V3EventEngine {
         state.branches
     } else {
         state.branches.map { branch ->
-            val related = impacts.filter { it.branchId == branch.id }
+            val related = impacts.filter { impact -> branchMatchesImpact(branch.id, branch.focus, impact.branchId) }
             if (related.isEmpty()) {
                 branch
             } else {
@@ -727,6 +780,17 @@ object V3EventEngine {
             }
         }
     }
+
+    private fun branchMatchesImpact(branchId: String, focus: V3Route, impactId: String): Boolean =
+        branchId == impactId || when (impactId) {
+            "main" -> branchId == "main"
+            "merchant" -> focus == V3Route.Merchant
+            "martial" -> focus == V3Route.Fortress || focus == V3Route.Warlord
+            "scholar" -> focus == V3Route.Scholar || focus == V3Route.Loyalist
+            "sea" -> focus == V3Route.Overseas
+            "second" -> branchId != "main"
+            else -> false
+        }
 
     private fun clamp(value: Int): Int = min(100, max(-100, value))
 
