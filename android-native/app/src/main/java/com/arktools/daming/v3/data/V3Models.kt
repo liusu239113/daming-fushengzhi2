@@ -238,7 +238,8 @@ data class V3WorldRegion(
     val control: Int,
     val enemyPower: Int,
     val wealth: Int,
-    val desc: String
+    val desc: String,
+    val accordRoute: V3Route? = null
 )
 
 @Serializable
@@ -409,6 +410,9 @@ data class V3GameState(
     val tutorialVersion: Int = 1,
     val tutorialStep: Int = 0,
     val tutorialCompleted: Boolean = false,
+    val claimedChapterRewards: List<String> = emptyList(),
+    val seenChapterMilestones: List<String> = emptyList(),
+    val completedStoryFlags: List<String> = emptyList(),
     val pendingReports: List<String> = listOf("县域初定，族老请你先审视祠堂、田庄、集市与县衙。"),
     val eventLog: List<String> = listOf("万历二十九年，宗族重立谱牒，县域沙盘由此展开。")
 )
@@ -538,7 +542,12 @@ data class V3EventChoice(
     val personLoyaltyDelta: Int = 0,
     val route: V3Route,
     val routeDelta: Int = 4,
-    val branchImpacts: List<V3BranchImpact> = emptyList()
+    val branchImpacts: List<V3BranchImpact> = emptyList(),
+    val storyFlag: String? = null,
+    val createBranch: V3Branch? = null,
+    val regionId: String? = null,
+    val regionControlDelta: Int = 0,
+    val regionStatus: V3RegionStatus? = null
 )
 
 @Serializable
@@ -572,7 +581,16 @@ data class V3SaveEnvelope(
 data class V3MonthlyReport(
     val title: String,
     val lines: List<String>,
-    val nextState: V3GameState
+    val nextState: V3GameState,
+    val conclusion: String = "",
+    val resourceLines: List<String> = emptyList(),
+    val assignmentLines: List<String> = emptyList(),
+    val goalLines: List<String> = emptyList(),
+    val alertLines: List<String> = emptyList(),
+    val nextActionTitle: String = "",
+    val nextActionReason: String = "",
+    val nextActionLabel: String = "",
+    val nextActionDestination: V3Screen = V3Screen.County
 )
 
 @Serializable

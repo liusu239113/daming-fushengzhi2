@@ -160,6 +160,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun claimChapterReward(chapter: V3Chapter) {
+        audio.playSfx(SfxKey.V3Success)
+        state = V3ProgressionEngine.claimChapterReward(state, chapter)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun holdCouncil(agenda: String) {
         audio.playSfx(SfxKey.V3Edict)
         state = V3GameEngine.holdCouncil(state, agenda)
@@ -375,39 +382,113 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun advanceMonth(showReport: Boolean = true) {
         audio.playSfx(SfxKey.V3ResourceSettle)
         val report = V3GameEngine.advanceMonth(state)
-        val generatedEvent = if (shouldGenerateEventThisMonth(report.nextState)) {
-            V3EventEngine.generateEvent(report.nextState)?.let { event ->
-                V3EventEngine.personalizeEvent(event, report.nextState)
-            }
-        } else {
-            null
+        val isFailureEnding = V3GameEngine.isFailureEnding(report.nextState)
+        val isTimelineEnding = V3GameEngine.isTimelineEnding(report.nextState)
+        val needsFinalDecision =
+            isTimelineEnding &&
+                "final_eve" !in report.nextState.seenChapterMilestones
+        val generatedEvent = when {
+            isFailureEnding -> null
+            needsFinalDecision ->
+                V3EventEngine.finalDecisionEvent(report.nextState)
+                    ?.let { event ->
+                        V3EventEngine.personalizeEvent(
+                            event,
+                            report.nextState
+                        )
+                    }
+            !isTimelineEnding &&
+                shouldGenerateEventThisMonth(report.nextState) ->
+                V3EventEngine.generateEvent(report.nextState)
+                    ?.let { event ->
+                        V3EventEngine.personalizeEvent(
+                            event,
+                            report.nextState
+                        )
+                    }
+            else -> null
         }
-        val withEnding = if (V3GameEngine.shouldAutoEnd(report.nextState)) {
-            report.nextState.copy(finalEnding = V3GameEngine.finalizeEnding(report.nextState), activeEvent = null)
-        } else {
-            report.nextState.copy(activeEvent = generatedEvent)
+        val withEnding = when {
+            isFailureEnding ->
+                report.nextState.copy(
+                    finalEnding =
+                        V3GameEngine.finalizeEnding(
+                            report.nextState
+                        ),
+                    activeEvent = null
+                )
+            isTimelineEnding && !needsFinalDecision ->
+                report.nextState.copy(
+                    finalEnding =
+                        V3GameEngine.finalizeEnding(
+                            report.nextState
+                        ),
+                    activeEvent = null
+                )
+            else ->
+                report.nextState.copy(
+                    activeEvent = generatedEvent
+                )
         }
         state = withEnding
         saveStore.save(state)
-        val shouldShowReport = showReport || report.nextState.month == 1 || report.lines.any { it.contains("目标达成") || it.contains("添丁") || it.contains("终局") || it.contains("岁末") }
-        latestReport = if (shouldShowReport) report.copy(nextState = withEnding) else null
+        val reportRequested =
+            showReport ||
+                report.nextState.month == 1 ||
+                report.lines.any {
+                    it.contains("目标达成") ||
+                        it.contains("添丁") ||
+                        it.contains("终局") ||
+                        it.contains("岁末")
+                }
+        val terminalModalVisible =
+            needsFinalDecision ||
+                withEnding.finalEnding != null
+        latestReport = if (
+            reportRequested && !terminalModalVisible
+        ) {
+            report.copy(nextState = withEnding)
+        } else {
+            null
+        }
         completeTutorialAction(16)
-        if (withEnding.activeEvent != null || latestReport != null) pauseForModal()
+        if (
+            withEnding.activeEvent != null ||
+            withEnding.finalEnding != null ||
+            latestReport != null
+        ) {
+            pauseForModal()
+        }
     }
 
     fun chooseEvent(choice: V3EventChoice) {
         audio.playSfx(SfxKey.V3Edict)
         pauseForModal()
-        state = V3EventEngine.choose(state, choice)
+        val resolved = V3EventEngine.choose(state, choice)
+        state = if (
+            V3GameEngine.isTimelineEnding(resolved) &&
+                "final_eve" in resolved.seenChapterMilestones
+        ) {
+            resolved.copy(
+                finalEnding = V3GameEngine.finalizeEnding(resolved),
+                activeEvent = null
+            )
+        } else {
+            resolved
+        }
         completeTutorialAction(18)
-        message = if (state.tutorialCompleted) state.pendingReports.firstOrNull() else null
+        message = if (
+            state.finalEnding == null &&
+            state.tutorialCompleted
+        ) {
+            state.pendingReports.firstOrNull()
+        } else {
+            null
+        }
         saveStore.save(state)
-    }
-
-    fun finalizeGame() {
-        audio.playSfx(SfxKey.V3Finale)
-        state = state.copy(finalEnding = V3GameEngine.finalizeEnding(state), activeEvent = null)
-        saveStore.save(state)
+        if (message == null && state.finalEnding == null) {
+            resumeAfterModalIfClear()
+        }
     }
 
     fun restartAfterEnding() {
@@ -423,6 +504,17 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         resumeSpeedAfterModal = null
         settingsVisible = false
         screen = V3Screen.County
+    }
+
+    fun clearReportAndNavigate(destination: V3Screen) {
+        audio.click()
+        latestReport = null
+        completeTutorialAction(17)
+        if (state.tutorialStep == 18 && state.activeEvent == null) {
+            completeTutorialAction(18)
+        }
+        screen = destination
+        resumeAfterModalIfClear()
     }
 
     fun clearReport() {

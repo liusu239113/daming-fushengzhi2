@@ -112,6 +112,8 @@ import com.arktools.daming.v3.data.V3TroopType
 import com.arktools.daming.v3.data.V3WorldRegion
 import com.arktools.daming.v3.logic.V3GameController
 import com.arktools.daming.v3.logic.V3GameEngine
+import com.arktools.daming.v3.logic.V3ProgressionEngine
+import com.arktools.daming.v3.logic.V3ProgressionSnapshot
 import kotlinx.coroutines.delay
 
 private val V3Ink = Color(0xFFFFF1D2)
@@ -594,8 +596,10 @@ private fun V3HomePage(
     var selectedSiteId by remember { mutableStateOf<String?>(null) }
     val selectedSite = selectedSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
     val forecast = V3GameEngine.monthlyForecast(state)
+    val progression = V3ProgressionEngine.snapshot(state)
 
-    V3Section("家业", nextAdvice(state))
+    V3Section("家业", "第${progression.chapter.number}章 · ${progression.chapter.title} · ${progression.chapter.theme}")
+    V3ActionCenterPanel(progression, controller)
     V3ClanLedgerPanel(
         state,
         Modifier.guideTarget(V3GuideFocus.MonthlyLedger, guideTargets),
@@ -633,8 +637,9 @@ private fun V3HomePage(
         Text(mingSituationText(state), color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
     }
     V3Panel(Modifier.guideTarget(V3GuideFocus.AnnualGoals, guideTargets)) {
-        Text("眼前目标", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        state.annualGoals.take(3).forEach { goal -> V3GoalRow(state, goal) }
+        Text("年务支线", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("年务提供额外资源与路线奖励，不会取代上方章节主线。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+        state.annualGoals.take(3).forEach { goal -> V3GoalRow(state, goal, controller) }
     }
     V3CountyMapView(
         state,
@@ -660,6 +665,97 @@ private fun V3HomePage(
             tutorialStep = state.tutorialStep,
             onDismiss = { selectedSiteId = null }
         )
+    }
+}
+
+@Composable
+private fun V3ActionCenterPanel(
+    progression: V3ProgressionSnapshot,
+    controller: V3GameController
+) {
+    val quest = progression.mainQuest
+    val primary = progression.primaryAction
+    V3Panel {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("当家要务 · 第${progression.chapter.number}章", color = V3Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(progression.chapter.title, color = V3Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+            Text("${progression.chapterProgress}%", color = V3Green, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Box(Modifier.fillMaxWidth().height(9.dp).background(V3PaperDeep, V3SoftShape)) {
+            Box(
+                Modifier
+                    .fillMaxWidth((progression.chapterProgress.coerceIn(0, 100) / 100f).coerceAtLeast(0.02f))
+                    .height(9.dp)
+                    .background(V3Gold, V3SoftShape)
+            )
+        }
+        Text(quest.title, color = V3Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(quest.description, color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+        quest.conditions.chunked(2).forEach { rowConditions ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                rowConditions.forEach { condition ->
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .background(if (condition.satisfied) V3Green.copy(alpha = 0.16f) else V3PaperDeep, V3SoftShape)
+                            .border(1.dp, if (condition.satisfied) V3Green.copy(alpha = 0.65f) else V3Border.copy(alpha = 0.65f), V3SoftShape)
+                            .padding(7.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(condition.label, color = V3Muted, fontSize = 10.sp, maxLines = 1)
+                        Text(condition.progressText, color = if (condition.satisfied) V3Green else V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                repeat(2 - rowConditions.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        if (quest.rewardText.isNotBlank()) {
+            Text("章节奖励：${quest.rewardText}", color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+        Text("下一解锁：${progression.nextUnlock}", color = V3Blue, fontSize = 11.sp, lineHeight = 16.sp)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(if (primary.priority == com.arktools.daming.v3.logic.V3ActionPriority.Critical) V3Red.copy(alpha = 0.14f) else V3PaperDeep, V3SoftShape)
+                .padding(9.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text("${primary.priority.label} · ${primary.title}", color = if (primary.priority == com.arktools.daming.v3.logic.V3ActionPriority.Critical) V3Red else V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(primary.reason, color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("预期：${primary.expectedImpact}", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+        }
+        progression.claimableReward?.let { reward ->
+            V3SmallButton(
+                "领取第${reward.chapter.number}章奖励 · ${reward.text}",
+                Modifier.fillMaxWidth(),
+                selected = true
+            ) { controller.claimChapterReward(reward.chapter) }
+        } ?: V3SmallButton(primary.actionLabel, Modifier.fillMaxWidth(), enabled = primary.canExecute, selected = true) {
+            controller.switchScreen(primary.destination)
+        }
+        if (progression.recommendedActions.size > 1) {
+            Text("随后可做", color = V3Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            progression.recommendedActions.drop(1).take(2).forEach { action ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { controller.switchScreen(action.destination) }
+                        .background(V3PaperDeep, V3SoftShape)
+                        .padding(horizontal = 9.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("${action.priority.label} · ${action.title}", color = V3Ink, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("前往", color = V3Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 
@@ -1584,7 +1680,7 @@ private fun V3StrategyPage(
             val conquestUnlocked = V3GameEngine.isUnlocked(state, "Conquest")
             val bannerUnlocked = V3GameEngine.isUnlocked(state, "RaiseBanner")
             Text("兵册 ${state.army.total()} · 乡勇 ${state.army.militia} · 枪${state.army.spear} 弓${state.army.archer} 盾${state.army.shield} 骑${state.army.cavalry}。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
-            Text("解锁：募兵 ${if (recruitUnlocked) "已开" else "小族/寨堡"} · 精兵 ${if (advancedUnlocked) "已开" else "望族+团练营"} · 征伐 ${if (conquestUnlocked) "已开" else "望族+控制地域"} · 举旗 ${if (bannerUnlocked) "已开" else "县中大姓+兵80"}", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+            Text("解锁：募兵 ${if (recruitUnlocked) "已开" else "小族/寨堡"} · 精兵 ${if (advancedUnlocked) "已开" else "望族+团练营"} · 征伐 ${if (conquestUnlocked) "已开" else "望族"} · 举旗 ${if (bannerUnlocked) "已开" else "县中大姓+兵80"}", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
             V3TroopType.entries.chunked(2).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { type ->
@@ -1700,6 +1796,15 @@ private fun V3RegionManageDialog(region: V3WorldRegion, state: V3GameState, cont
         Text("${region.name} · ${region.status.label}", color = V3Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Text("控制 ${region.control}/100 · 敌势 ${region.enemyPower} · 财富 ${region.wealth}", color = V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text("控制值越高，县外经营收益越稳定；敌势越高，征伐风险越大。财富决定该地域每月提供的银粮潜力。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            region.accordRoute?.let { route ->
+                Text(
+                    "归附条约：${route.label} · 每月${V3GameEngine.accordBenefitText(route, region.tier)}",
+                    color = V3Red,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 18.sp
+                )
+            }
             Text(region.desc, color = V3Muted, fontSize = 13.sp, lineHeight = 20.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V3SmallButton("结交", Modifier.weight(1f), enabled = region.status == V3RegionStatus.Unknown) { controller.contactRegion(region.id) }
@@ -2342,8 +2447,9 @@ private fun V3TopBar(
                 }
             }
             V3TimeControls(controller, guideTargets)
+            val progression = V3ProgressionEngine.snapshot(state)
             Text(
-                "当前目标：${nextAdvice(state)}",
+                "主线：${progression.mainQuest.title} · ${progression.mainQuest.completedCount}/${progression.mainQuest.totalCount}项",
                 color = V3Red,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -2691,15 +2797,32 @@ private fun V3RelationRow(label: String, value: Int) {
 }
 
 @Composable
-private fun V3GoalRow(state: V3GameState, goal: V3AnnualGoal) {
+private fun V3GoalRow(state: V3GameState, goal: V3AnnualGoal, controller: V3GameController) {
+    val quest = V3ProgressionEngine.snapshot(state).sideQuests.firstOrNull { it.id == goal.id }
     val progress = V3GameEngine.goalProgress(state, goal)
     val reached = progress >= goal.target || goal.completed
-    Column(Modifier.fillMaxWidth().background(if (reached) V3Green.copy(alpha = 0.16f) else V3PaperDeep, V3SoftShape).padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(if (reached) V3Green.copy(alpha = 0.16f) else V3PaperDeep, V3SoftShape)
+            .border(1.dp, if (reached) V3Green.copy(alpha = 0.55f) else V3Border.copy(alpha = 0.55f), V3SoftShape)
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(goal.title, color = V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("年务 · ${goal.title}", color = V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(if (reached) "已成" else "${progress}/${goal.target}", color = if (reached) V3Green else V3Red, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
-        Text(goal.desc, color = V3Muted, fontSize = 12.sp)
+        Text(goal.desc, color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        quest?.let { card ->
+            Text("奖励：${card.rewardText}", color = V3Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (!reached) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(card.blockers.firstOrNull().orEmpty(), color = V3Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    V3SmallButton(card.actionLabel, Modifier.widthIn(min = 86.dp)) { controller.switchScreen(card.destination) }
+                }
+            }
+        }
     }
 }
 
@@ -2817,6 +2940,7 @@ private fun V3EventDialog(event: V3ActiveEvent, controller: V3GameController) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(event.body, color = V3Ink, fontSize = 15.sp, lineHeight = 23.sp)
                         event.choices.forEachIndexed { index, choice ->
+                            val choiceContext = V3ProgressionEngine.eventChoiceContext(controller.state, choice)
                             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = V3PaperDeep), border = BorderStroke(2.dp, V3Red), shape = V3SoftShape) {
                                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -2825,6 +2949,13 @@ private fun V3EventDialog(event: V3ActiveEvent, controller: V3GameController) {
                                     }
                                     Text(choice.desc, color = V3Muted, fontSize = 12.sp)
                                     Text(choiceImpactSummary(choice), color = V3Ink, fontSize = 12.sp)
+                                    Text(
+                                        choiceContext,
+                                        color = if (choiceContext.contains("风险：")) V3Red else V3Gold,
+                                        fontSize = 11.sp,
+                                        lineHeight = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                     V3SmallButton(
                                         "选择此方案",
                                         Modifier
@@ -3023,7 +3154,44 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
         tutorialState = controller.state,
         tutorialController = controller
     ) {
-        report.lines.forEach { Text("· $it", color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp) }
+        if (report.conclusion.isNotBlank()) {
+            Text("本月结论", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(report.conclusion, color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
+        }
+        if (report.resourceLines.isNotEmpty()) {
+            Text("资源变化", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            report.resourceLines.forEach { Text("· $it", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp) }
+        }
+        if (report.assignmentLines.isNotEmpty()) {
+            Text("计划执行", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            report.assignmentLines.forEach { Text("· $it", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp) }
+        }
+        if (report.goalLines.isNotEmpty()) {
+            Text("目标推进", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            report.goalLines.forEach { Text("· $it", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp) }
+        }
+        if (report.alertLines.isNotEmpty()) {
+            Text("风险警告", color = V3Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            report.alertLines.forEach { Text("· $it", color = V3Red, fontSize = 12.sp, lineHeight = 18.sp) }
+        }
+        if (report.nextActionTitle.isNotBlank()) {
+            Column(
+                Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape).padding(9.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("下月首要行动 · ${report.nextActionTitle}", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(report.nextActionReason, color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+                V3SmallButton(report.nextActionLabel.ifBlank { "前往处理" }, Modifier.fillMaxWidth(), selected = true) {
+                    controller.clearReportAndNavigate(report.nextActionDestination)
+                }
+            }
+        }
+        if (report.lines.isNotEmpty()) {
+            Text("完整纪要", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            report.lines.forEach { line ->
+                Text("· $line", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+            }
+        }
         if (!claimed) {
             Text("本月可选机缘", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(offer.subtitle, color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)

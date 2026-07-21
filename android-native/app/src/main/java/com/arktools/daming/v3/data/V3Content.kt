@@ -214,7 +214,16 @@ object V3Content {
         V3AnnualGoal("route_merchant_55", "商号成局", "重商路线达到 55，形成跨县货路。", V3GoalMetric.RouteScore, 55, V3Route.Merchant, rewardSilver = 70),
         V3AnnualGoal("route_fortress_55", "堡寨成盟", "自保路线达到 55，建立守望互助体系。", V3GoalMetric.RouteScore, 55, V3Route.Fortress, rewardGrain = 70, rewardCohesion = 4),
         V3AnnualGoal("region_4", "跨府立名", "控制至少 4 个地域，形成跨府影响。", V3GoalMetric.ControlledRegions, 4, V3Route.Warlord, rewardSilver = 100, rewardInfluence = 10),
-        V3AnnualGoal("unify_60", "逐鹿天下", "统一进度达到 60，具备问鼎京畿的资格。", V3GoalMetric.Unification, 60, V3Route.Warlord, rewardSilver = 140, rewardInfluence = 12)
+        V3AnnualGoal("unify_60", "逐鹿天下", "统一进度达到 60，具备问鼎京畿的资格。", V3GoalMetric.Unification, 60, V3Route.Warlord, rewardSilver = 140, rewardInfluence = 12),
+        V3AnnualGoal("population_12", "十二口分房", "维持至少12名在世族人，让宗族拥有多名可独当一面的成员。", V3GoalMetric.Population, 12, V3Route.Hermit, rewardGrain = 110, rewardCohesion = 6),
+        V3AnnualGoal("estate_10", "六业并举", "把家产总等级提升到10，形成田、铺、仓、作坊、商队和团练体系。", V3GoalMetric.EstateLevel, 10, V3Route.Merchant, rewardSilver = 120, rewardInfluence = 6),
+        V3AnnualGoal("relations_260", "县府同盟", "地方综合关系达到260，让官绅民商军都承认家族影响。", V3GoalMetric.RelationTotal, 260, V3Route.Loyalist, rewardSilver = 85, rewardInfluence = 10),
+        V3AnnualGoal("safe_6", "六地靖安", "让至少6个县域地点风险低于30，建立稳固大后方。", V3GoalMetric.SafeSites, 6, V3Route.Fortress, rewardGrain = 120, rewardCohesion = 6),
+        V3AnnualGoal("route_loyalist_80", "勤王成名", "勤王路线达到80，形成稳定官军网络。", V3GoalMetric.RouteScore, 80, V3Route.Loyalist, rewardInfluence = 12),
+        V3AnnualGoal("route_overseas_80", "海路成脉", "海外路线达到80，形成远海退路。", V3GoalMetric.RouteScore, 80, V3Route.Overseas, rewardSilver = 150),
+        V3AnnualGoal("route_hermit_80", "保族成约", "避祸路线达到80，以族约和粮仓保存香火。", V3GoalMetric.RouteScore, 80, V3Route.Hermit, rewardGrain = 140, rewardCohesion = 8),
+        V3AnnualGoal("region_6", "一方之主", "控制至少6个地域，让县族成为跨省势力。", V3GoalMetric.ControlledRegions, 6, V3Route.Warlord, rewardSilver = 180, rewardInfluence = 14),
+        V3AnnualGoal("unify_85", "天下在望", "统一进度达到85，为最终争鼎完成准备。", V3GoalMetric.Unification, 85, V3Route.Warlord, rewardSilver = 220, rewardInfluence = 15)
     )
 
     fun goalsFor(creed: String, crisis: String): List<V3AnnualGoal> {

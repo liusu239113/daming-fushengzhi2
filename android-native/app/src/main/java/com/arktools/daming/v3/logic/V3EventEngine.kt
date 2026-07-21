@@ -1,6 +1,7 @@
 package com.arktools.daming.v3.logic
 
 import com.arktools.daming.v3.data.V3ActiveEvent
+import com.arktools.daming.v3.data.V3Branch
 import com.arktools.daming.v3.data.V3BranchImpact
 import com.arktools.daming.v3.data.V3EventContent
 import com.arktools.daming.v3.data.V3EventChoice
@@ -11,6 +12,14 @@ import kotlin.math.max
 import kotlin.math.min
 
 object V3EventEngine {
+    private val chapterMilestoneIds = mapOf(
+        "小族立约" to "rooting_covenant",
+        "望族会盟" to "expansion_alliance",
+        "县中争衡" to "county_rivalry",
+        "郡望定策" to "route_council",
+        "甲申前夜" to "final_eve"
+    )
+
     fun personalizeEvent(event: V3ActiveEvent, state: V3GameState): V3ActiveEvent {
         val clanLabel = "${state.surname}氏"
         fun personalize(text: String): String =
@@ -41,6 +50,9 @@ object V3EventEngine {
             else -> null
         }
         if (criticalEvent != null) return criticalEvent
+        chapterMilestoneEvent(state)?.let { return it }
+        regionAccordEvent(state)?.let { return it }
+        branchFoundingEvent(state)?.let { return it }
         followUpEvent(state)?.let { return it }
         if (!shouldRoutineEvent(state, totalRisk)) return null
 
@@ -90,14 +102,51 @@ object V3EventEngine {
                 person.copy(
                     fatigue = (person.fatigue + choice.personFatigueDelta).coerceIn(0, 100),
                     merit = (person.merit + choice.personMeritDelta).coerceIn(0, 999),
-                    loyalty = (person.loyalty + choice.personLoyaltyDelta).coerceIn(0, 100)
+                    loyalty = (person.loyalty + choice.personLoyaltyDelta).coerceIn(0, 100),
+                    branch = choice.createBranch?.name ?: person.branch
                 )
             } else {
                 person
             }
         }
+        val nextRegions = state.worldRegions.map { region ->
+            if (choice.regionId == region.id) {
+                val nextControl = (region.control + choice.regionControlDelta).coerceIn(0, 100)
+                val requestedStatus = choice.regionStatus ?: region.status
+                val nextStatus = if (
+                    requestedStatus == V3RegionStatus.Pacified &&
+                    nextControl < 80
+                ) {
+                    V3RegionStatus.Influenced
+                } else {
+                    requestedStatus
+                }
+                region.copy(
+                    control = nextControl,
+                    status = nextStatus,
+                    accordRoute = if (
+                        choice.storyFlag?.startsWith("region_accord_") == true
+                    ) {
+                        choice.route
+                    } else {
+                        region.accordRoute
+                    }
+                )
+            } else {
+                region
+            }
+        }
+        val nextBranchList = choice.createBranch?.let { branch ->
+            if (state.branches.any { it.id == branch.id }) nextBranches else nextBranches + branch
+        } ?: nextBranches
         val branchNotes = choice.branchImpacts.mapNotNull { it.note.takeIf { note -> note.isNotBlank() } }
         val eventTitle = state.activeEvent?.title ?: "县域抉择"
+        val completedMilestoneId = chapterMilestoneIds[eventTitle]
+        val completedStoryFlags = buildList {
+            addAll(state.completedStoryFlags)
+            choice.storyFlag?.let { add(it) }
+            if (eventTitle == "甲申前夜") add("final_decision_${choice.label}")
+        }.distinct()
         val impactLines = eventChoiceImpactLines(state, choice)
         val report = (listOf(
             "【抉择结算】",
@@ -120,10 +169,22 @@ object V3EventEngine {
             influence = (state.influence + choice.influenceDelta).coerceIn(0, 100),
             sites = nextSites,
             people = nextPeople,
+            worldRegions = nextRegions,
+            unificationProgress = if (choice.regionId == null) {
+                state.unificationProgress
+            } else {
+                V3GameEngine.unificationFor(nextRegions)
+            },
             relations = nextRelations,
-            branches = nextBranches,
+            branches = nextBranchList,
             routeScores = state.routeScores + (choice.route to routeScore),
             activeEvent = null,
+            completedStoryFlags = completedStoryFlags,
+            seenChapterMilestones = if (completedMilestoneId == null) {
+                state.seenChapterMilestones
+            } else {
+                (state.seenChapterMilestones + completedMilestoneId).distinct()
+            },
             pendingReports = listOf(report),
             eventLog = (listOf("${state.year}年${state.month}月 · $logLine") + state.eventLog).take(100)
         )
@@ -164,6 +225,12 @@ object V3EventEngine {
             add("功绩", choice.personMeritDelta)
             add("忠诚", choice.personLoyaltyDelta)
         }
+        val regionName = choice.regionId?.let { id -> state.worldRegions.firstOrNull { it.id == id }?.name }
+        if (regionName != null) {
+            if (choice.regionControlDelta != 0) parts += "$regionName 控制${signed(choice.regionControlDelta)}"
+            choice.regionStatus?.let { parts += "$regionName 转为【${it.label}】" }
+        }
+        choice.createBranch?.let { parts += "新立【${it.name}】" }
         if (choice.routeDelta != 0) parts += "路线【${choice.route.label}】${signed(choice.routeDelta)}"
         return if (parts.isEmpty()) listOf("结算：局势小幅变化，已记入近事。") else listOf("结算：${parts.joinToString("；")}")
     }
@@ -175,6 +242,195 @@ object V3EventEngine {
         if (state.month % 3 == 0 && (totalRisk >= 260 || state.silver < 70 || state.grain < 120)) return true
         if (state.month == 12) return true
         return false
+    }
+
+    private fun chapterMilestoneEvent(state: V3GameState): V3ActiveEvent? {
+        fun unseen(title: String): Boolean {
+            val milestoneId = chapterMilestoneIds.getValue(title)
+            if (milestoneId in state.seenChapterMilestones) return false
+            return state.eventLog.none { it.contains("事件【$title】") }
+        }
+        return when {
+            state.clanRank >= 2 && unseen("小族立约") -> V3ActiveEvent(
+                "小族立约",
+                "宗族终于不再是一人一户。族老请你定下未来数年的家政重心：先修家计、先兴教化，还是先备团练。",
+                listOf(
+                    V3EventChoice("立农商月议", "每月先核银粮与产业。", silverDelta = 35, grainDelta = 45, merchantsDelta = 4, route = V3Route.Merchant, routeDelta = 8),
+                    V3EventChoice("立耕读家法", "延师教子，进入士林。", silverDelta = -30, influenceDelta = 7, gentryDelta = 6, route = V3Route.Scholar, routeDelta = 8),
+                    V3EventChoice("立守望族约", "屯粮练勇，以自保为先。", grainDelta = -30, militiaDelta = 18, cohesionDelta = 5, route = V3Route.Fortress, routeDelta = 8)
+                )
+            )
+
+            state.clanRank >= 3 && unseen("望族会盟") -> V3ActiveEvent(
+                "望族会盟",
+                "邻县数家宗族送来名帖。跨出本县之前，你必须决定靠货路、婚盟还是兵威打开第一道门。",
+                listOf(
+                    V3EventChoice("以货路结盟", "先通商，再逐步经营地域。", silverDelta = -70, merchantsDelta = 10, influenceDelta = 5, route = V3Route.Merchant, routeDelta = 10),
+                    V3EventChoice("以士绅联姻", "官绅关系与声望提升。", silverDelta = -55, grainDelta = -25, gentryDelta = 9, yamenDelta = 5, influenceDelta = 7, route = V3Route.Scholar, routeDelta = 10),
+                    V3EventChoice("以团练护盟", "用武备换取地方敬畏。", silverDelta = -45, grainDelta = -45, militiaDelta = 24, garrisonDelta = 6, route = V3Route.Fortress, routeDelta = 10)
+                )
+            )
+
+            state.clanRank >= 4 && unseen("县中争衡") -> V3ActiveEvent(
+                "县中争衡",
+                "县衙威信衰落，豪族、商帮与军镇都在争夺地方秩序。李氏已经不能只做旁观者。",
+                listOf(
+                    V3EventChoice("代县衙理事", "维持名义秩序，走勤王仕途。", silverDelta = -90, yamenDelta = 12, gentryDelta = 8, influenceDelta = 9, route = V3Route.Loyalist, routeDelta = 12),
+                    V3EventChoice("召集乡约公议", "以民心和族规稳住县域。", grainDelta = -80, villagersDelta = 12, cohesionDelta = 8, route = V3Route.Hermit, routeDelta = 11),
+                    V3EventChoice("接掌城防粮道", "形成实质割据力量。", silverDelta = -80, grainDelta = -70, militiaDelta = 35, yamenDelta = -10, influenceDelta = 12, route = V3Route.Warlord, routeDelta = 14)
+                )
+            )
+
+            state.clanRank >= 5 && unseen("郡望定策") -> V3ActiveEvent(
+                "郡望定策",
+                "李氏已成一方郡望。族中七路主张同时摆上祠堂：入仕、通商、筑寨、勤王、割据、出海或避祸。",
+                listOf(
+                    V3EventChoice("入士林掌文脉", "集中资源完成耕读门第。", silverDelta = -120, influenceDelta = 10, gentryDelta = 12, route = V3Route.Scholar, routeDelta = 15),
+                    V3EventChoice("联商帮通海路", "以财富和船路留足退路。", silverDelta = 140, merchantsDelta = 12, yamenDelta = -5, route = V3Route.Overseas, routeDelta = 15),
+                    V3EventChoice("聚兵粮争天下", "把地域与兵册转为逐鹿资本。", silverDelta = -110, grainDelta = -100, militiaDelta = 45, route = V3Route.Warlord, routeDelta = 16),
+                    V3EventChoice("闭乡屯粮保族", "降低野心，以凝聚和粮仓保存香火。", grainDelta = 100, cohesionDelta = 10, influenceDelta = -3, route = V3Route.Hermit, routeDelta = 15)
+                )
+            )
+
+            state.year >= 1642 && unseen("甲申前夜") ->
+                finalDecisionEvent(state)
+
+            else -> null
+        }
+    }
+
+    fun finalDecisionEvent(state: V3GameState): V3ActiveEvent? {
+        if ("final_eve" in state.seenChapterMilestones) return null
+        return V3ActiveEvent(
+            "甲申前夜",
+            "京畿急报、流寇传闻和南迁船价同时送到宗祠。${state.surname}氏数十年经营已走向【${bestRoute(state).label}】，现在必须决定如何写下家乘最后一页。",
+            finalEveChoices(state)
+        )
+    }
+
+    private fun finalEveChoices(state: V3GameState): List<V3EventChoice> {
+        val route = bestRoute(state)
+        val routeFlag = "final_choice_${route.name.lowercase()}"
+        val routeChoices = when (route) {
+            V3Route.Scholar -> listOf(
+                V3EventChoice("保全书院文脉", "散银藏书，让族学与谱牒渡过兵火。", silverDelta = -150, cohesionDelta = 6, gentryDelta = 12, influenceDelta = 8, route = route, routeDelta = 20, storyFlag = routeFlag),
+                V3EventChoice("入仕维持地方", "以士绅与官府网络维持县域秩序。", silverDelta = -100, yamenDelta = 10, gentryDelta = 8, influenceDelta = 10, route = route, routeDelta = 18, storyFlag = routeFlag),
+                V3EventChoice("携书南迁", "保住族谱与藏书，在江南另续文脉。", silverDelta = -180, cohesionDelta = 8, merchantsDelta = 6, route = V3Route.Overseas, routeDelta = 16, storyFlag = routeFlag)
+            )
+            V3Route.Merchant -> listOf(
+                V3EventChoice("维持漕运商路", "以银本保住南北货路和族中账房。", silverDelta = -120, merchantsDelta = 14, influenceDelta = 6, route = route, routeDelta = 20, storyFlag = routeFlag),
+                V3EventChoice("转资远海", "收缩内地铺面，把财富押向海路。", silverDelta = -220, merchantsDelta = 12, cohesionDelta = 5, route = V3Route.Overseas, routeDelta = 20, storyFlag = routeFlag),
+                V3EventChoice("散财保乡", "以多年积财赈济乡里，换地方长期庇护。", silverDelta = -260, villagersDelta = 15, cohesionDelta = 10, route = V3Route.Hermit, routeDelta = 16, storyFlag = routeFlag)
+            )
+            V3Route.Fortress -> listOf(
+                V3EventChoice("闭寨守谱", "依托寨堡与粮仓固守宗族。", grainDelta = -120, militiaDelta = 25, cohesionDelta = 12, route = route, routeDelta = 20, storyFlag = routeFlag),
+                V3EventChoice("联寨保境", "联合周边堡寨保护乡民与商路。", silverDelta = -90, grainDelta = -100, militiaDelta = 35, villagersDelta = 10, route = route, routeDelta = 18, storyFlag = routeFlag),
+                V3EventChoice("纳流民入堡", "以粮换人口与民心，承受更大口粮压力。", grainDelta = -180, cohesionDelta = 10, villagersDelta = 14, route = V3Route.Hermit, routeDelta = 18, storyFlag = routeFlag)
+            )
+            V3Route.Loyalist -> listOf(
+                V3EventChoice("整军北上", "押注勤王与军功。", silverDelta = -160, grainDelta = -150, militiaDelta = 50, garrisonDelta = 12, influenceDelta = 10, route = route, routeDelta = 22, storyFlag = routeFlag),
+                V3EventChoice("护送宗室南下", "用商路与兵册保存朝廷血脉。", silverDelta = -180, grainDelta = -100, garrisonDelta = 10, merchantsDelta = 6, route = route, routeDelta = 19, storyFlag = routeFlag),
+                V3EventChoice("保境待命", "不冒进京畿，先守住地方与乡民。", grainDelta = -100, cohesionDelta = 8, villagersDelta = 10, route = V3Route.Fortress, routeDelta = 17, storyFlag = routeFlag)
+            )
+            V3Route.Warlord -> listOf(
+                V3EventChoice("争夺京畿", "踏上定鼎天下的最后道路。", silverDelta = -180, grainDelta = -180, militiaDelta = 65, yamenDelta = -15, influenceDelta = 12, route = route, routeDelta = 22, storyFlag = routeFlag),
+                V3EventChoice("立盟主旗", "召集各地豪族，共推一方盟主。", silverDelta = -140, grainDelta = -120, militiaDelta = 45, gentryDelta = 8, route = route, routeDelta = 20, storyFlag = routeFlag),
+                V3EventChoice("据县自保", "收敛天下野心，先把控制地域变成稳固根据地。", grainDelta = -120, cohesionDelta = 8, villagersDelta = 8, route = V3Route.Fortress, routeDelta = 16, storyFlag = routeFlag)
+            )
+            V3Route.Overseas -> listOf(
+                V3EventChoice("举族南渡", "以船队、商号和银本保存主支。", silverDelta = -220, merchantsDelta = 14, cohesionDelta = 8, route = route, routeDelta = 22, storyFlag = routeFlag),
+                V3EventChoice("保留内地商号", "主支出海、旁支守土，让家业分散风险。", silverDelta = -140, merchantsDelta = 10, villagersDelta = 6, route = route, routeDelta = 19, storyFlag = routeFlag),
+                V3EventChoice("护送乡民出海", "牺牲更多粮银，为海上新族争取人心。", silverDelta = -190, grainDelta = -140, cohesionDelta = 10, villagersDelta = 12, route = route, routeDelta = 20, storyFlag = routeFlag)
+            )
+            V3Route.Hermit -> listOf(
+                V3EventChoice("封山修谱", "闭门守业，把族谱与粮种传给后人。", grainDelta = -90, cohesionDelta = 14, route = route, routeDelta = 22, storyFlag = routeFlag),
+                V3EventChoice("义仓保民", "用粮食换取乡民共同守望。", grainDelta = -160, villagersDelta = 15, cohesionDelta = 10, route = route, routeDelta = 20, storyFlag = routeFlag),
+                V3EventChoice("分支避祸", "各房分散迁居，以牺牲凝聚换取香火不断。", silverDelta = -90, grainDelta = -80, cohesionDelta = -4, merchantsDelta = 8, route = route, routeDelta = 18, storyFlag = routeFlag)
+            )
+        }
+        return routeChoices
+    }
+
+    private fun regionAccordEvent(state: V3GameState): V3ActiveEvent? {
+        val region = state.worldRegions.firstOrNull {
+            it.id != "home_county" &&
+                it.control >= 80 &&
+                it.status in setOf(
+                    V3RegionStatus.Influenced,
+                    V3RegionStatus.Controlled,
+                    V3RegionStatus.Pacified
+                ) &&
+                it.accordRoute == null &&
+                "region_accord_${it.id}" !in state.completedStoryFlags
+        } ?: return null
+        val storyFlag = "region_accord_${region.id}"
+        val choices = when (region.id) {
+            "river_prefecture", "lake_province", "shandong_corridor" -> listOf(
+                V3EventChoice("设漕运总号", "以商队接管水陆转运，银路与商帮共同增长。", silverDelta = -80, merchantsDelta = 10, influenceDelta = 5, route = V3Route.Merchant, routeDelta = 12, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 16, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("立府县义仓", "以粮换民心，让该地成为乱世后方。", grainDelta = -110, villagersDelta = 12, cohesionDelta = 5, route = V3Route.Hermit, routeDelta = 11, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 18, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("护送官粮北上", "经营官军粮道，积累勤王声望。", silverDelta = -45, grainDelta = -70, yamenDelta = 8, garrisonDelta = 10, influenceDelta = 7, route = V3Route.Loyalist, routeDelta = 12, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 14, regionStatus = V3RegionStatus.Pacified)
+            )
+
+            "coast_province", "jiangsea_gate" -> listOf(
+                V3EventChoice("合股远海船队", "以银本换船路，为宗族留下海外退路。", silverDelta = -120, merchantsDelta = 12, influenceDelta = 5, route = V3Route.Overseas, routeDelta = 14, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 18, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("整编海防乡勇", "守港护商，提升军镇关系与兵册。", silverDelta = -70, grainDelta = -55, militiaDelta = 28, garrisonDelta = 10, route = V3Route.Fortress, routeDelta = 12, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 15, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("接纳南迁族户", "用粮安置族户，增强凝聚和地方民心。", grainDelta = -120, cohesionDelta = 8, villagersDelta = 10, route = V3Route.Hermit, routeDelta = 12, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 16, regionStatus = V3RegionStatus.Pacified)
+            )
+
+            "mountain_prefecture", "liaodong_front", "north_capital", "all_realm" -> listOf(
+                V3EventChoice("联寨共守", "把各寨纳入守望体系，形成稳定防线。", silverDelta = -65, grainDelta = -75, militiaDelta = 24, cohesionDelta = 5, route = V3Route.Fortress, routeDelta = 13, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 18, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("收编地方武力", "用兵威建立实质秩序，加深割据路线。", silverDelta = -95, grainDelta = -85, militiaDelta = 38, yamenDelta = -5, influenceDelta = 8, route = V3Route.Warlord, routeDelta = 15, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 20, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("请官军驻防", "保留朝廷名义，以军镇关系换取安定。", silverDelta = -70, grainDelta = -65, yamenDelta = 8, garrisonDelta = 12, influenceDelta = 6, route = V3Route.Loyalist, routeDelta = 13, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 16, regionStatus = V3RegionStatus.Pacified)
+            )
+
+            else -> listOf(
+                V3EventChoice("联姻结保", "以宗族与士绅关系稳住新地域。", silverDelta = -60, grainDelta = -35, gentryDelta = 9, influenceDelta = 6, route = V3Route.Scholar, routeDelta = 11, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 16, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("开设商栈", "将地方财富接入家族商路。", silverDelta = -70, merchantsDelta = 10, route = V3Route.Merchant, routeDelta = 12, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 17, regionStatus = V3RegionStatus.Pacified),
+                V3EventChoice("编户设约", "以乡约和义仓建立长期秩序。", grainDelta = -75, villagersDelta = 10, cohesionDelta = 5, route = V3Route.Hermit, routeDelta = 11, storyFlag = storyFlag, regionId = region.id, regionControlDelta = 18, regionStatus = V3RegionStatus.Pacified)
+            )
+        }
+        return V3ActiveEvent(
+            "${region.name}归附条约",
+            "${region.name}的豪族、乡民与地方武力愿意承认${state.surname}氏秩序，但要求你明确今后如何治理。这项条约将永久决定该地的路线收益。",
+            choices
+        )
+    }
+
+    private fun branchFoundingEvent(state: V3GameState): V3ActiveEvent? {
+        if (state.branches.size >= 4) return null
+        val leader = state.people
+            .filter {
+                it.alive &&
+                    it.generation >= 2 &&
+                    it.age >= 16 &&
+                    it.branch == "主房" &&
+                    it.merit >= 20 &&
+                    "branch_founder_${it.id}" !in state.completedStoryFlags
+            }
+            .maxByOrNull { it.merit + maxOf(it.study, it.martial, it.commerce, it.diplomacy) }
+            ?: return null
+        val storyFlag = "branch_founder_${leader.id}"
+        fun branch(id: String, name: String, focus: V3Route, desc: String) = V3Branch(
+            id = "${id}_${leader.id}",
+            name = name,
+            leaderName = leader.name,
+            focus = focus,
+            loyalty = leader.loyalty.coerceIn(55, 95),
+            wealth = (15 + leader.commerce / 3).coerceIn(0, 100),
+            influence = (12 + leader.merit / 6).coerceIn(0, 100),
+            grievance = 5,
+            desc = desc
+        )
+        return V3ActiveEvent(
+            "${leader.name}请命立支",
+            "${leader.name}已经成年并积累功绩，请求从主房分出一支、承担长期家业。选择将改变其所属房支，也会在往后的房支议事中形成新的利益重心。",
+            listOf(
+                V3EventChoice("立书香房", "主持族学、科举与士绅往来。", silverDelta = -45, gentryDelta = 5, influenceDelta = 4, personId = leader.id, personMeritDelta = 5, personLoyaltyDelta = 3, route = V3Route.Scholar, routeDelta = 10, storyFlag = storyFlag, createBranch = branch("scholar", "书香房", V3Route.Scholar, "以族学、科举和士林名望争取宗族席位。")),
+                V3EventChoice("立商务房", "主持铺面、账房与跨县商路。", silverDelta = 55, merchantsDelta = 5, personId = leader.id, personMeritDelta = 5, personLoyaltyDelta = 2, route = V3Route.Merchant, routeDelta = 10, storyFlag = storyFlag, createBranch = branch("merchant", "商务房", V3Route.Merchant, "掌管铺面、账房和商队，重视分润与家产。")),
+                V3EventChoice("立武备房", "主持寨堡、乡勇与征伐。", silverDelta = -40, grainDelta = -35, militiaDelta = 18, personId = leader.id, personMeritDelta = 7, personLoyaltyDelta = 3, route = V3Route.Fortress, routeDelta = 10, storyFlag = storyFlag, createBranch = branch("martial", "武备房", V3Route.Fortress, "负责寨堡、乡勇和征伐，主张以武力护族。")),
+                V3EventChoice("留在主房", "暂不分支，以凝聚为先。", cohesionDelta = 5, personId = leader.id, personLoyaltyDelta = 5, route = V3Route.Hermit, routeDelta = 6, storyFlag = storyFlag)
+            )
+        )
     }
 
     private fun followUpEvent(state: V3GameState): V3ActiveEvent? {

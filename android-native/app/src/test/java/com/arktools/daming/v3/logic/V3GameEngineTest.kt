@@ -7,8 +7,13 @@ import com.arktools.daming.v3.data.V3EquipmentSlot
 import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3Gender
 import com.arktools.daming.v3.data.V3Person
+import com.arktools.daming.v3.data.V3RegionStatus
+import com.arktools.daming.v3.data.V3Route
 import com.arktools.daming.v3.data.V3Trait
 import com.arktools.daming.v3.data.V3TroopType
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -119,6 +124,466 @@ class V3GameEngineTest {
 
         state = V3GameEngine.equipEquipment(state, "missing", 1)
         assertTrue(state.pendingReports.single().contains("没有找到"))
+    }
+
+    @Test
+    fun progressionChaptersFollowRealRankAndEndgameState() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        assertEquals(V3Chapter.Founding, V3ProgressionEngine.currentChapter(base))
+
+        val rooted = base.copy(clanRank = 2, year = 1602)
+        assertEquals(V3Chapter.Rooting, V3ProgressionEngine.currentChapter(rooted))
+
+        val expanded = rooted.copy(clanRank = 3, year = 1605)
+        assertEquals(V3Chapter.Expansion, V3ProgressionEngine.currentChapter(expanded))
+
+        val countyPower = expanded.copy(clanRank = 4)
+        assertEquals(V3Chapter.CountyRivalry, V3ProgressionEngine.currentChapter(countyPower))
+
+        val choosing = countyPower.copy(clanRank = 5, year = 1638)
+        assertEquals(V3Chapter.ChoosingPath, V3ProgressionEngine.currentChapter(choosing))
+
+        val final = choosing.copy(year = 1642)
+        assertEquals(V3Chapter.FinalLegacy, V3ProgressionEngine.currentChapter(final))
+    }
+
+    @Test
+    fun foundingQuestUsesExactPromotionThresholds() {
+        val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+            .copy(year = 1601, month = 9, silver = 179, grain = 260, influence = 45)
+        val child = V3Person(
+            id = 2,
+            name = "李承业",
+            age = 1,
+            branch = "主房",
+            identity = "嫡长子",
+            trait = V3Trait.Honest,
+            study = 5,
+            martial = 5,
+            commerce = 5,
+            diplomacy = 5,
+            loyalty = 90,
+            generation = 2,
+            parentId = 1,
+            ageMonths = 12,
+            surname = base.surname
+        )
+        val secondChild = child.copy(id = 3, name = "李承平")
+        val state = base.copy(
+            people = base.people + child + secondChild,
+            nextPersonId = 4,
+            sites = base.sites.map { site ->
+                if (site.id == "market") site.copy(level = 1) else site
+            }
+        )
+        val snapshot = V3ProgressionEngine.snapshot(state)
+        assertEquals(V3Chapter.Founding, snapshot.chapter)
+        assertTrue(snapshot.mainQuest.conditions.first { it.label == "银两" }.satisfied.not())
+        assertEquals("银两还差1", snapshot.mainQuest.blockers.first { it.startsWith("银两") })
+        assertTrue(V3GameEngine.canRankUp(state).not())
+
+        val ready = state.copy(silver = 180)
+        assertTrue(V3GameEngine.canRankUp(ready))
+        assertTrue(V3ProgressionEngine.snapshot(ready).mainQuest.completed)
+    }
+
+    @Test
+    fun chapterRewardsCanOnlyBeClaimedOnce() {
+        val state = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+            .copy(clanRank = 2, silver = 100, grain = 100, cohesion = 50)
+        val reward = requireNotNull(V3ProgressionEngine.claimableReward(state))
+        assertEquals(V3Chapter.Founding, reward.chapter)
+
+        val claimed = V3ProgressionEngine.claimChapterReward(state, V3Chapter.Founding)
+        assertEquals(140, claimed.silver)
+        assertEquals(160, claimed.grain)
+        assertEquals(54, claimed.cohesion)
+        assertTrue(V3Chapter.Founding.name in claimed.claimedChapterRewards)
+
+        val claimedAgain = V3ProgressionEngine.claimChapterReward(claimed, V3Chapter.Founding)
+        assertEquals(claimed.silver, claimedAgain.silver)
+        assertEquals(claimed.grain, claimedAgain.grain)
+        assertTrue(claimedAgain.pendingReports.single().contains("已经领取"))
+    }
+
+    @Test
+    fun criticalResourceRiskOverridesMainQuestRecommendation() {
+        val state = V3Content.newGame("寒门佃户", "中原灾地", "明哲保身", "饥荒将至")
+            .copy(
+                grain = 20,
+                sites = V3Content.initialSites.map { site ->
+                    if (site.id == "farmland") site.copy(risk = 70) else site
+                }
+            )
+        val snapshot = V3ProgressionEngine.snapshot(state)
+        assertEquals(V3ActionPriority.Critical, snapshot.primaryAction.priority)
+        assertTrue(snapshot.primaryAction.title.contains("粮") || snapshot.primaryAction.title.contains("治理"))
+    }
+
+    @Test
+    fun controlledHomeCountyDoesNotSatisfyExternalExpansionMilestone() {
+        val base = V3Content.newGame("边地军户", "西北边堡", "聚族自保", "流寇逼近")
+            .copy(clanRank = 3, year = 1606)
+        assertEquals(V3Chapter.Expansion, V3ProgressionEngine.currentChapter(base))
+        assertTrue(V3ProgressionEngine.snapshot(base).mainQuest.conditions.first { it.label == "控制县外地域" }.satisfied.not())
+
+        val withExternal = base.copy(
+            worldRegions = base.worldRegions.map { region ->
+                if (region.id == "neighbor_county") region.copy(status = V3RegionStatus.Controlled, control = 85) else region
+            }
+        )
+        assertTrue(V3ProgressionEngine.snapshot(withExternal).mainQuest.conditions.first { it.label == "控制县外地域" }.satisfied)
+    }
+
+    @Test
+    fun rankThreeCanStartFirstExternalConquest() {
+        val state = V3Content.newGame("边地军户", "西北边堡", "聚族自保", "流寇逼近")
+            .copy(
+                clanRank = 3,
+                militia = 90,
+                army = V3ArmyRoster(militia = 90)
+            )
+        assertTrue(V3GameEngine.isUnlocked(state, "Conquest"))
+        assertEquals(0, V3GameEngine.externalControlledRegionCount(state))
+
+        val prepared = V3GameEngine.startConquest(state, "neighbor_county")
+        assertNotNull(prepared.conquestState)
+        assertEquals("neighbor_county", prepared.conquestState?.regionId)
+    }
+
+    @Test
+    fun chapterMilestoneIsPersistedAndCannotRepeatAfterLogTruncation() {
+        val base = V3Content.newGame("边地军户", "西北边堡", "聚族自保", "流寇逼近")
+            .copy(
+                clanRank = 2,
+                year = 1602,
+                month = 5,
+                silver = 1_000,
+                grain = 1_000,
+                cohesion = 80,
+                sites = V3Content.initialSites.map { it.copy(risk = 10) }
+            )
+        val milestone = requireNotNull(V3EventEngine.generateEvent(base))
+        assertEquals("小族立约", milestone.title)
+
+        val resolved = V3EventEngine.choose(
+            base.copy(activeEvent = milestone),
+            milestone.choices.first()
+        )
+        assertTrue(resolved.seenChapterMilestones.isNotEmpty())
+
+        val afterLongHistory = resolved.copy(
+            activeEvent = null,
+            eventLog = List(120) { index -> "普通纪要$index" }
+        )
+        assertTrue(V3EventEngine.generateEvent(afterLongHistory)?.title != "小族立约")
+    }
+
+    @Test
+    fun monthlyReportKeepsStructuredSummaryAndFullLedger() {
+        val state = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+        val report = V3GameEngine.advanceMonth(state)
+
+        assertTrue(report.conclusion.isNotBlank())
+        assertTrue(report.resourceLines.isNotEmpty())
+        assertTrue(report.goalLines.any { it.contains("章节") })
+        assertTrue(report.lines.any { it.contains("生活消耗") })
+        assertTrue(report.lines.any { it.contains("本月账本") })
+    }
+
+    @Test
+    fun oldStateJsonLoadsWithNewProgressionFieldsDefaulted() {
+        val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
+        val state = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+        val legacyJson = json.encodeToString(state)
+            .replace(",\"claimedChapterRewards\":[]", "")
+            .replace(",\"seenChapterMilestones\":[]", "")
+            .replace(",\"completedStoryFlags\":[]", "")
+            .replace(",\"accordRoute\":null", "")
+
+        val restored = json.decodeFromString<V3GameState>(legacyJson)
+        assertTrue(restored.claimedChapterRewards.isEmpty())
+        assertTrue(restored.seenChapterMilestones.isEmpty())
+        assertTrue(restored.completedStoryFlags.isEmpty())
+        assertEquals(state.surname, restored.surname)
+    }
+
+    @Test
+    fun finalActShowsExactCountdownUntilAutomaticEnding() {
+        val routeScores = V3Content.initialRouteScores + (V3Route.Scholar to 90)
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(
+                clanRank = 5,
+                year = 1642,
+                month = 1,
+                cohesion = 80,
+                routeScores = routeScores
+            )
+        val opening = V3ProgressionEngine.snapshot(base)
+        assertEquals(V3Chapter.FinalLegacy, opening.chapter)
+        assertTrue(opening.mainQuest.description.contains("还剩28个月"))
+        assertEquals(0, opening.mainQuest.conditions.first { it.label == "终章历程（月）" }.current)
+        assertTrue(V3GameEngine.shouldAutoEnd(base).not())
+
+        val eve = base.copy(year = 1644, month = 4)
+        val finalMonth = V3ProgressionEngine.snapshot(eve)
+        assertTrue(finalMonth.mainQuest.description.contains("还剩1个月"))
+        assertEquals(27, finalMonth.mainQuest.conditions.first { it.label == "终章历程（月）" }.current)
+        assertTrue(V3GameEngine.shouldAutoEnd(eve).not())
+
+        val endingMonth = eve.copy(month = 5)
+        assertTrue(V3GameEngine.shouldAutoEnd(endingMonth))
+        assertEquals(28, V3ProgressionEngine.snapshot(endingMonth).mainQuest.conditions.first { it.label == "终章历程（月）" }.current)
+    }
+
+    @Test
+    fun highUnificationOnlyStartsFinalActForWarlordRoute() {
+        val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+            .copy(clanRank = 5, year = 1638, unificationProgress = 75)
+        assertEquals(V3Chapter.ChoosingPath, V3ProgressionEngine.currentChapter(base))
+
+        val warlord = base.copy(
+            militia = 240,
+            army = V3ArmyRoster(militia = 240),
+            routeScores = V3Content.initialRouteScores + (V3Route.Warlord to 90),
+            worldRegions = base.worldRegions.mapIndexed { index, region ->
+                if (index < 6) region.copy(status = V3RegionStatus.Controlled, control = 90) else region
+            }
+        )
+        assertTrue(V3ProgressionEngine.snapshot(warlord.copy(unificationProgress = 60)).mainQuest.completed)
+        assertEquals(V3Chapter.FinalLegacy, V3ProgressionEngine.currentChapter(warlord))
+    }
+
+    @Test
+    fun regionAccordRequiresControlAndCreatesPersistentRouteYield() {
+        val lowControl = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+            .copy(
+                clanRank = 3,
+                year = 1606,
+                month = 5,
+                seenChapterMilestones = listOf("rooting_covenant", "expansion_alliance"),
+                worldRegions = V3Content.initialWorldRegions.map { region ->
+                    if (region.id == "neighbor_county") {
+                        region.copy(
+                            status = V3RegionStatus.Influenced,
+                            control = 79
+                        )
+                    } else {
+                        region
+                    }
+                }
+            )
+        assertTrue(
+            V3EventEngine.generateEvent(lowControl)?.title !=
+                "临水县归附条约"
+        )
+
+        val ready = lowControl.copy(
+            worldRegions = lowControl.worldRegions.map { region ->
+                if (region.id == "neighbor_county") {
+                    region.copy(control = 80)
+                } else {
+                    region
+                }
+            }
+        )
+        val accord = requireNotNull(V3EventEngine.generateEvent(ready))
+        assertEquals("临水县归附条约", accord.title)
+        val merchantChoice =
+            accord.choices.first { it.route == V3Route.Merchant }
+        val resolved = V3EventEngine.choose(
+            ready.copy(activeEvent = accord),
+            merchantChoice
+        )
+        val resolvedRegion = resolved.worldRegions.first {
+            it.id == "neighbor_county"
+        }
+        assertTrue(
+            "region_accord_neighbor_county" in
+                resolved.completedStoryFlags
+        )
+        assertEquals(V3RegionStatus.Pacified, resolvedRegion.status)
+        assertEquals(V3Route.Merchant, resolvedRegion.accordRoute)
+        assertTrue(
+            V3EventEngine.generateEvent(
+                resolved.copy(activeEvent = null)
+            )?.title != "临水县归附条约"
+        )
+
+        val forecast = V3GameEngine.monthlyForecast(resolved)
+        val withoutAccord = V3GameEngine.monthlyForecast(
+            resolved.copy(
+                worldRegions = resolved.worldRegions.map { region ->
+                    if (region.id == "neighbor_county") {
+                        region.copy(accordRoute = null)
+                    } else {
+                        region
+                    }
+                }
+            )
+        )
+        assertTrue(forecast.silverIncome > withoutAccord.silverIncome)
+        assertEquals(
+            forecast.silverIncome - withoutAccord.silverIncome,
+            V3GameEngine.advanceMonth(resolved).nextState.silver -
+                V3GameEngine.advanceMonth(
+                    resolved.copy(
+                        worldRegions =
+                            resolved.worldRegions.map { region ->
+                                if (region.id == "neighbor_county") {
+                                    region.copy(accordRoute = null)
+                                } else {
+                                    region
+                                }
+                            }
+                    )
+                ).nextState.silver
+        )
+    }
+
+    @Test
+    fun adultHeirCanFoundBranchWithPersistentMonthlyBenefit() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val heir = V3Person(
+            id = 2,
+            name = "李承文",
+            age = 20,
+            branch = "主房",
+            identity = "长子",
+            trait = V3Trait.Studious,
+            study = 70,
+            martial = 20,
+            commerce = 25,
+            diplomacy = 45,
+            loyalty = 88,
+            generation = 2,
+            merit = 30,
+            ageMonths = 240,
+            surname = base.surname
+        )
+        val state = base.copy(
+            clanRank = 3,
+            year = 1608,
+            month = 5,
+            people = base.people + heir,
+            nextPersonId = 3,
+            seenChapterMilestones = listOf("rooting_covenant", "expansion_alliance")
+        )
+        val event = requireNotNull(V3EventEngine.generateEvent(state))
+        assertTrue(event.title.contains("请命立支"))
+        val choice = event.choices.first { it.label == "立书香房" }
+        val branched = V3EventEngine.choose(state.copy(activeEvent = event), choice)
+        assertTrue(branched.branches.any { it.name == "书香房" })
+        assertEquals("书香房", branched.people.first { it.id == heir.id }.branch)
+
+        val forecast = V3GameEngine.monthlyForecast(branched)
+        val withoutBranch = V3GameEngine.monthlyForecast(
+            branched.copy(branches = branched.branches.filterNot { it.name == "书香房" })
+        )
+        assertEquals(withoutBranch.influenceIncome + 1, forecast.influenceIncome)
+    }
+
+    @Test
+    fun failureEndingDoesNotRequireFinalDecision() {
+        val failed = V3Content.newGame(
+            "寒门佃户",
+            "中原灾地",
+            "明哲保身",
+            "饥荒将至"
+        ).copy(
+            year = 1643,
+            month = 8,
+            grain = -300,
+            seenChapterMilestones = listOf(
+                "rooting_covenant",
+                "expansion_alliance",
+                "county_rivalry",
+                "route_council"
+            )
+        )
+
+        assertTrue(V3GameEngine.isFailureEnding(failed))
+        assertTrue(V3GameEngine.isTimelineEnding(failed).not())
+        assertTrue(V3GameEngine.shouldAutoEnd(failed))
+        assertTrue(
+            V3GameEngine.finalizeEnding(failed).body.contains(
+                "粮仓长期亏空"
+            )
+        )
+    }
+
+    @Test
+    fun timelineEndingCreatesDirectFinalDecisionWithoutOlderMilestones() {
+        val timeline = V3Content.newGame(
+            "没落士族",
+            "江南水乡",
+            "耕读传家",
+            "官府催税"
+        ).copy(
+            year = 1644,
+            month = 5,
+            silver = 1_000,
+            grain = 1_000,
+            cohesion = 80
+        )
+
+        assertTrue(V3GameEngine.isTimelineEnding(timeline))
+        assertTrue(V3GameEngine.isFailureEnding(timeline).not())
+        val event = requireNotNull(
+            V3EventEngine.finalDecisionEvent(timeline)
+        )
+        assertEquals("甲申前夜", event.title)
+        val resolved = V3EventEngine.choose(
+            timeline.copy(activeEvent = event),
+            event.choices.first()
+        )
+        assertTrue("final_eve" in resolved.seenChapterMilestones)
+    }
+
+    @Test
+    fun branchBenefitUsesMainIdInsteadOfListPosition() {
+        val base = V3Content.newGame(
+            "江南商族",
+            "江南水乡",
+            "重商逐利",
+            "商路断绝"
+        )
+        val main = base.branches.first { it.id == "main" }
+        val merchantBranch = main.copy(
+            id = "merchant_2",
+            name = "商务房",
+            focus = V3Route.Merchant
+        )
+        val reordered = base.copy(
+            branches = listOf(merchantBranch, main)
+        )
+        val forecast = V3GameEngine.monthlyForecast(reordered)
+        val noSupportingBranch = V3GameEngine.monthlyForecast(
+            reordered.copy(branches = listOf(main))
+        )
+
+        assertEquals(
+            noSupportingBranch.silverIncome + 5,
+            forecast.silverIncome
+        )
+    }
+
+    @Test
+    fun finalDecisionIsRecordedInEndingChronicle() {
+        val base = V3Content.newGame("山中堡寨", "西北边堡", "明哲保身", "流寇逼近")
+            .copy(
+                clanRank = 5,
+                year = 1644,
+                month = 5,
+                routeScores = V3Content.initialRouteScores + (V3Route.Hermit to 90),
+                seenChapterMilestones = listOf("rooting_covenant", "expansion_alliance", "county_rivalry", "route_council")
+            )
+        val event = requireNotNull(V3EventEngine.generateEvent(base))
+        assertEquals("甲申前夜", event.title)
+        val resolved = V3EventEngine.choose(base.copy(activeEvent = event), event.choices.first())
+        val ending = V3GameEngine.finalizeEnding(resolved)
+        assertTrue(resolved.completedStoryFlags.any { it.startsWith("final_decision_") })
+        assertTrue(ending.body.contains("宗族最终选择"))
     }
 
     private fun assertStateInvariants(state: V3GameState) {

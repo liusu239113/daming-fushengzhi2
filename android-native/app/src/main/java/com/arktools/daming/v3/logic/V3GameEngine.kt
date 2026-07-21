@@ -240,6 +240,10 @@ object V3GameEngine {
 
     fun controlledRegionCount(state: V3GameState): Int = state.worldRegions.count { it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified }
 
+    fun externalControlledRegionCount(state: V3GameState): Int = state.worldRegions.count {
+        it.id != "home_county" && (it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified)
+    }
+
     fun estateYield(asset: V3EstateAsset): V3SiteYield = when (asset.type) {
         V3EstateType.TenantLand -> V3SiteYield(silver = 2 * asset.level, grain = 22 * asset.level, desc = "佃田租谷")
         V3EstateType.Shop -> V3SiteYield(silver = 18 * asset.level, desc = "铺面营收")
@@ -248,6 +252,67 @@ object V3GameEngine {
         V3EstateType.Caravan -> V3SiteYield(silver = 24 * asset.level, influence = asset.level, desc = "商队通路")
         V3EstateType.Barracks -> V3SiteYield(silver = -4 * asset.level, grain = -5 * asset.level, militia = 8 * asset.level, desc = "团练养勇")
     }
+
+    private data class RecurringBenefit(
+        val silver: Int = 0,
+        val grain: Int = 0,
+        val influence: Int = 0,
+        val cohesion: Int = 0,
+        val militia: Int = 0,
+        val yamen: Int = 0,
+        val gentry: Int = 0,
+        val villagers: Int = 0,
+        val merchants: Int = 0,
+        val garrison: Int = 0
+    )
+
+    private fun branchBenefit(route: V3Route): RecurringBenefit = when (route) {
+        V3Route.Scholar -> RecurringBenefit(influence = 1, gentry = 1)
+        V3Route.Merchant -> RecurringBenefit(silver = 5, merchants = 1)
+        V3Route.Fortress -> RecurringBenefit(cohesion = 1, militia = 2)
+        V3Route.Loyalist -> RecurringBenefit(influence = 1, yamen = 1, garrison = 1)
+        V3Route.Warlord -> RecurringBenefit(militia = 3)
+        V3Route.Overseas -> RecurringBenefit(silver = 6, merchants = 1)
+        V3Route.Hermit -> RecurringBenefit(grain = 5, cohesion = 1)
+    }
+
+    private fun accordBenefit(route: V3Route, tier: Int): RecurringBenefit = when (route) {
+        V3Route.Scholar -> RecurringBenefit(influence = 1 + tier / 2, gentry = 1)
+        V3Route.Merchant -> RecurringBenefit(silver = 4 + tier * 2, merchants = 1)
+        V3Route.Fortress -> RecurringBenefit(cohesion = 1, militia = 1 + tier, garrison = 1)
+        V3Route.Loyalist -> RecurringBenefit(influence = 1, yamen = 1, garrison = 1)
+        V3Route.Warlord -> RecurringBenefit(influence = 1, militia = 2 + tier)
+        V3Route.Overseas -> RecurringBenefit(silver = 5 + tier * 2, merchants = 1)
+        V3Route.Hermit -> RecurringBenefit(grain = 5 + tier * 2, cohesion = 1, villagers = 1)
+    }
+
+    fun accordBenefitText(route: V3Route, tier: Int): String {
+        val benefit = accordBenefit(route, tier)
+        val parts = buildList {
+            if (benefit.silver != 0) add("银+${benefit.silver}")
+            if (benefit.grain != 0) add("粮+${benefit.grain}")
+            if (benefit.influence != 0) add("族望+${benefit.influence}")
+            if (benefit.cohesion != 0) add("凝聚+${benefit.cohesion}")
+            if (benefit.militia != 0) add("乡勇+${benefit.militia}")
+            if (benefit.yamen != 0) add("官府+${benefit.yamen}")
+            if (benefit.gentry != 0) add("士绅+${benefit.gentry}")
+            if (benefit.villagers != 0) add("乡民+${benefit.villagers}")
+            if (benefit.merchants != 0) add("商帮+${benefit.merchants}")
+            if (benefit.garrison != 0) add("军镇+${benefit.garrison}")
+        }
+        return parts.joinToString(" · ")
+    }
+
+    private fun applyRelationsBenefit(
+        relations: V3Relations,
+        benefit: RecurringBenefit
+    ): V3Relations = relations.copy(
+        yamen = clamp(relations.yamen + benefit.yamen),
+        gentry = clamp(relations.gentry + benefit.gentry),
+        villagers = clamp(relations.villagers + benefit.villagers),
+        merchants = clamp(relations.merchants + benefit.merchants),
+        garrison = clamp(relations.garrison + benefit.garrison)
+    )
 
     fun estateUpgradeCost(state: V3GameState, type: V3EstateType): V3UpgradeCost {
         val current = state.estateAssets.firstOrNull { it.type == type }
@@ -377,7 +442,7 @@ object V3GameEngine {
 
     fun startConquest(state: V3GameState, regionId: String): V3GameState {
         if (state.conquestState != null) return state
-        if (!isUnlocked(state, "Conquest")) return state.copy(pendingReports = listOf("征伐尚未解锁：需要望族品第，并先控制至少一个地域。"))
+        if (!isUnlocked(state, "Conquest")) return state.copy(pendingReports = listOf("征伐尚未解锁：宗族升为望族后方可发动县外征伐。"))
         val region = state.worldRegions.firstOrNull { it.id == regionId } ?: return state
         if (region.status == V3RegionStatus.Pacified || region.status == V3RegionStatus.Controlled) return state.copy(pendingReports = listOf("${region.name}已在掌中，继续经营即可。"))
         val prerequisite = if (region.tier <= 2) 1 else region.tier
@@ -452,7 +517,7 @@ object V3GameEngine {
         val stageReady = when (state.clanRank) {
             1 -> elapsedMonths >= 8 && state.people.any { it.alive && it.generation >= 2 }
             2 -> elapsedMonths >= 42 && state.people.count { it.alive && it.generation >= 2 } >= 2
-            3 -> controlledRegionCount(state) >= 1
+            3 -> externalControlledRegionCount(state) >= 1
             4 -> controlledRegionCount(state) >= 4
             else -> true
         }
@@ -478,7 +543,7 @@ object V3GameEngine {
                 state.people.count { it.alive && it.generation >= 2 } < 2 -> "还需至少两名第二代子嗣延续家业"
                 else -> "代际经营条件已满足"
             }
-            3 -> if (controlledRegionCount(state) < 1) "还需控制至少一个县外地域" else "地域条件已满足"
+            3 -> if (externalControlledRegionCount(state) < 1) "还需控制至少一个县外地域" else "地域条件已满足"
             4 -> if (controlledRegionCount(state) < 4) "还需再控制${4 - controlledRegionCount(state)}个地域" else "天下经营条件已满足"
             else -> "阶段条件已满足"
         }
@@ -1103,7 +1168,7 @@ object V3GameEngine {
     fun isUnlocked(state: V3GameState, feature: String): Boolean = when (feature) {
         "Recruit" -> state.clanRank >= requiredRank(feature)
         "AdvancedTroops" -> state.clanRank >= requiredRank(feature) && state.estateAssets.any { it.type == V3EstateType.Barracks && it.level > 0 }
-        "Conquest" -> state.clanRank >= requiredRank(feature) && controlledRegionCount(state) >= 1
+        "Conquest" -> state.clanRank >= requiredRank(feature)
         "RaiseBanner" -> state.clanRank >= requiredRank(feature) && state.militia >= 80
         else -> state.clanRank >= requiredRank(feature)
     }
@@ -1487,6 +1552,14 @@ object V3GameEngine {
             silverIncome += region.wealth / 12
             grainIncome += region.wealth / 18
             influenceIncome += region.tier
+            region.accordRoute?.let { route ->
+                val benefit = accordBenefit(route, region.tier)
+                silverIncome += benefit.silver
+                grainIncome += benefit.grain
+                influenceIncome += benefit.influence
+                cohesionIncome += benefit.cohesion
+                militiaIncome += benefit.militia
+            }
         }
         state.sites.forEach { site ->
             val person = site.assignedPersonId?.let { id -> state.people.firstOrNull { it.id == id } } ?: return@forEach
@@ -1496,6 +1569,14 @@ object V3GameEngine {
             val grain = taskGrain(task, power)
             if (silver > 0) silverIncome += silver else taskSilverExpense += -silver
             if (grain > 0) grainIncome += grain else taskGrainExpense += -grain
+        }
+        state.branches.filter { it.id != "main" }.forEach { branch ->
+            val benefit = branchBenefit(branch.focus)
+            silverIncome += benefit.silver
+            grainIncome += benefit.grain
+            influenceIncome += benefit.influence
+            cohesionIncome += benefit.cohesion
+            militiaIncome += benefit.militia
         }
         val silverExpense = monthlySilverExpense(state) + taskSilverExpense
         val grainExpense = monthlyGrainExpense(state) + taskGrainExpense
@@ -1544,7 +1625,30 @@ object V3GameEngine {
             silverDelta += silver
             grainDelta += grain
             influenceDelta += region.tier
-            incomeParts += "${region.name}银+$silver/粮+$grain/望+${region.tier}"
+            val accordText = region.accordRoute?.let { route ->
+                val benefit = accordBenefit(route, region.tier)
+                silverDelta += benefit.silver
+                grainDelta += benefit.grain
+                influenceDelta += benefit.influence
+                cohesionDelta += benefit.cohesion
+                militiaDelta += benefit.militia
+                relations = applyRelationsBenefit(relations, benefit)
+                "/条约【${route.label}】${accordBenefitText(route, region.tier)}"
+            }.orEmpty()
+            incomeParts += "${region.name}银+$silver/粮+$grain/望+${region.tier}$accordText"
+        }
+        val supportingBranches = state.branches.filter { it.id != "main" }
+        supportingBranches.forEach { branch ->
+            val benefit = branchBenefit(branch.focus)
+            silverDelta += benefit.silver
+            grainDelta += benefit.grain
+            influenceDelta += benefit.influence
+            cohesionDelta += benefit.cohesion
+            militiaDelta += benefit.militia
+            relations = applyRelationsBenefit(relations, benefit)
+        }
+        if (supportingBranches.isNotEmpty()) {
+            detailLines += "房支协力：${supportingBranches.joinToString("、") { it.name }}按各自家业为本月提供持续助益。"
         }
 
         val sites = state.sites.map { site ->
@@ -1628,7 +1732,50 @@ object V3GameEngine {
             summary,
             state.month == 12
         )
-        return V3MonthlyReport("${state.year}年${state.month}月家业结算", summary, nextState)
+        val progression = V3ProgressionEngine.snapshot(nextState)
+        val primaryAction = progression.primaryAction
+        val resourceLines = listOf(
+            "银两 ${state.silver} → ${nextState.silver}（${signed(nextState.silver - state.silver)}）",
+            "粮食 ${state.grain} → ${nextState.grain}（${signed(nextState.grain - state.grain)}）",
+            "族望 ${state.influence} → ${nextState.influence} · 凝聚 ${state.cohesion} → ${nextState.cohesion} · 乡勇 ${state.militia} → ${nextState.militia}"
+        )
+        val assignmentLines = detailLines
+            .filter { it.contains("：控+") || it.contains("培养") || it.contains("成长") || it.contains("科举") }
+            .take(5)
+        val goalLines = buildList {
+            add("章节【${progression.chapter.title}】：${progression.mainQuest.completedCount}/${progression.mainQuest.totalCount}项条件达成")
+            progression.sideQuests.take(2).forEach { quest ->
+                add("年务【${quest.title}】：${quest.conditions.firstOrNull()?.progressText ?: "推进中"} · 奖励${quest.rewardText}")
+            }
+        }
+        val alertLines = buildList {
+            if (nextState.grain < 80) add("粮食低于80，添丁、募兵和连续月结存在断粮风险。")
+            if (nextState.silver < 45) add("银两低于45，婚配、营建与议事可能被阻断。")
+            nextState.sites.filter { it.risk >= 55 }.sortedByDescending { it.risk }.take(2).forEach { site ->
+                add("${site.name}风险${site.risk}，应优先派人治理或筑寨。")
+            }
+        }
+        val conclusion = when {
+            alertLines.isNotEmpty() -> "本月家业有进展，但${alertLines.first()}"
+            nextState.silver > state.silver && nextState.grain > state.grain -> "本月银粮双增，家业运转稳健，可继续推进章节主线。"
+            nextState.grain < state.grain -> "本月粮食净减，扩大家口或兵册前应先补粮。"
+            nextState.silver < state.silver -> "本月现银净减，下一月应优先安排商事或减少大额支出。"
+            else -> "本月收支基本平衡，下一步应集中推进章节主线。"
+        }
+        return V3MonthlyReport(
+            title = "${state.year}年${state.month}月家业结算",
+            lines = summary,
+            nextState = nextState,
+            conclusion = conclusion,
+            resourceLines = resourceLines,
+            assignmentLines = assignmentLines,
+            goalLines = goalLines,
+            alertLines = alertLines,
+            nextActionTitle = primaryAction.title,
+            nextActionReason = primaryAction.reason,
+            nextActionLabel = primaryAction.actionLabel,
+            nextActionDestination = primaryAction.destination
+        )
     }
 
     fun dominantRoute(state: V3GameState): V3Route = state.routeScores.maxByOrNull { it.value }?.key ?: V3Route.Hermit
@@ -1684,27 +1831,57 @@ object V3GameEngine {
 
     fun siteStatusFor(control: Int, risk: Int): V3SiteStatus = statusFor(control, risk)
 
-    fun shouldAutoEnd(state: V3GameState): Boolean = state.year > 1644 || (state.year == 1644 && state.month >= 5) || state.cohesion <= 0 || state.silver <= -300 || state.grain <= -300
+    fun isTimelineEnding(state: V3GameState): Boolean =
+        state.year > 1644 ||
+            (state.year == 1644 && state.month >= 5)
+
+    fun isFailureEnding(state: V3GameState): Boolean =
+        state.cohesion <= 0 ||
+            state.silver <= -300 ||
+            state.grain <= -300
+
+    fun shouldAutoEnd(state: V3GameState): Boolean =
+        isTimelineEnding(state) || isFailureEnding(state)
 
     fun finalizeEnding(state: V3GameState): V3FinalEnding {
         val preview = endingPreview(state)
         val bestPerson = alivePeople(state).maxByOrNull { it.merit }
         val stableSites = state.sites.count { it.risk < 35 && it.control >= 40 }
         val heirCount = alivePeople(state).count { it.generation >= 2 }
-        val body = when (preview.route) {
-            V3Route.Scholar -> "${state.clanName}由一户起家，终以书院、族学与士绅网络立身。子嗣中读书者渐多，家乘从草纸变成可传后世的谱牒。"
-            V3Route.Merchant -> "从一处田产、一间铺面开始，${state.clanName}把集市、码头与账房连成家业。乱世中不只求活，还求财源不断。"
-            V3Route.Fortress -> "${state.clanName}先成家，再置产，后筑寨募勇。香火与围墙一起长成，在兵荒马乱中守住一方烟火。"
-            V3Route.Loyalist -> "家业渐成后，${state.clanName}选择与县衙、士绅和军需绑定，以名义换庇护，也承受赋役之重。"
-            V3Route.Warlord -> "当法度崩坏，家族人口、产业与乡勇逐渐合成地方力量。${state.clanName}已不只是小户，而是县中不可忽视的大姓。"
-            V3Route.Overseas -> "从田庄到码头，${state.clanName}把一部分家业押向海路。即便王朝风雨飘摇，香火仍可在远方延续。"
-            V3Route.Hermit -> "不争一时显赫，只求成家、育子、置产、修祠。${state.clanName}在乱世缝隙里守住了大明浮生志最本质的一条路：活下去，传下去。"
+        val finalDecision = state.completedStoryFlags
+            .lastOrNull { it.startsWith("final_decision_") }
+            ?.removePrefix("final_decision_")
+        val decisionText = finalDecision?.let { "甲申前夜，宗族最终选择【$it】。" }.orEmpty()
+        val failureCause = when {
+            state.cohesion <= 0 -> "宗族凝聚归零，各房争产离散，主房再也无法维持共同家业。"
+            state.silver <= -300 -> "债务彻底压垮家计，田契、铺面与族产被迫抵押，宗族经营宣告失败。"
+            state.grain <= -300 -> "粮仓长期亏空，族人与佃户相继逃散，延续家业已无现实基础。"
+            else -> null
+        }
+        val routeBody = when (preview.route) {
+            V3Route.Scholar -> "${state.clanName}由一户起家，终以书院、族学与士绅网络立身。子嗣中读书者渐多，家乘从草纸变成可传后世的谱牒。$decisionText"
+            V3Route.Merchant -> "从一处田产、一间铺面开始，${state.clanName}把集市、码头与账房连成家业。乱世中不只求活，还求财源不断。$decisionText"
+            V3Route.Fortress -> "${state.clanName}先成家，再置产，后筑寨募勇。香火与围墙一起长成，在兵荒马乱中守住一方烟火。$decisionText"
+            V3Route.Loyalist -> "家业渐成后，${state.clanName}选择与县衙、士绅和军需绑定，以名义换庇护，也承受赋役之重。$decisionText"
+            V3Route.Warlord -> "当法度崩坏，家族人口、产业与乡勇逐渐合成地方力量。${state.clanName}已不只是小户，而是县中不可忽视的大姓。$decisionText"
+            V3Route.Overseas -> "从田庄到码头，${state.clanName}把一部分家业押向海路。即便王朝风雨飘摇，香火仍可在远方延续。$decisionText"
+            V3Route.Hermit -> "不争一时显赫，只求成家、育子、置产、修祠。${state.clanName}在乱世缝隙里守住了大明浮生志最本质的一条路：活下去，传下去。$decisionText"
+        }
+        val endingTitle = if (failureCause == null) {
+            preview.title
+        } else {
+            "${state.surname}氏家业中断"
+        }
+        val body = if (failureCause == null) {
+            routeBody
+        } else {
+            "$failureCause 回看此前道路，宗族虽曾偏向【${preview.route.label}】，却未能守住维系家业的底线。"
         }
         return V3FinalEnding(
             route = preview.route,
-            tier = preview.tier,
+            tier = if (failureCause == null) preview.tier else V3EndingTier.Fragile,
             score = preview.score,
-            title = preview.title,
+            title = endingTitle,
             body = body,
             stats = listOf(
                 "终局时间：${state.year}年${state.month}月",
@@ -1838,22 +2015,7 @@ object V3GameEngine {
             }
         }
 
-        val branchAdjusted = if (yearEnded) {
-            val heirs = healthProcessed.filter { it.alive && it.generation >= 2 && it.age >= 16 }
-            val existingBranches = state.branches.map { it.leaderName }.toSet()
-            val newBranchLeaders = heirs.filter { it.name !in existingBranches && it.branch == "主房" }.take(2)
-            healthProcessed.map { person ->
-                val leader = newBranchLeaders.firstOrNull { it.id == person.id }
-                if (leader != null) {
-                    lines += "${leader.name}成年立房，宗族从主房分出新支。"
-                    person.copy(branch = "${leader.name.takeLast(2)}房", identity = "分房支主")
-                } else {
-                    person
-                }
-            }
-        } else {
-            healthProcessed
-        }
+        val branchAdjusted = healthProcessed
 
         var livingCount = branchAdjusted.count { it.alive }
         val ageProcessed = if (yearEnded) {
@@ -2209,6 +2371,12 @@ object V3GameEngine {
             state.unificationProgress < 30 && controlledRegionCount(state) >= 2 -> pool.firstOrNull { it.id == "unify_30" }
             state.unificationProgress < 60 && controlledRegionCount(state) >= 4 -> pool.firstOrNull { it.id == "unify_60" }
             state.militia < 140 && controlledRegionCount(state) >= 2 -> pool.firstOrNull { it.id == "militia_140" }
+            alivePeople(state).size < 12 && state.clanRank >= 3 -> pool.firstOrNull { it.id == "population_12" }
+            estateLevelTotal(state) < 10 && state.clanRank >= 3 -> pool.firstOrNull { it.id == "estate_10" }
+            controlledRegionCount(state) < 6 && controlledRegionCount(state) >= 4 -> pool.firstOrNull { it.id == "region_6" }
+            state.unificationProgress < 85 && controlledRegionCount(state) >= 6 -> pool.firstOrNull { it.id == "unify_85" }
+            relationTotal(state.relations) < 260 && state.clanRank >= 3 -> pool.firstOrNull { it.id == "relations_260" }
+            state.sites.count { it.risk < 30 } < 6 && state.clanRank >= 3 -> pool.firstOrNull { it.id == "safe_6" }
             relationTotal(state.relations) < 180 -> pool.firstOrNull { it.id == "relations_180" }
             else -> pool.firstOrNull { it.route == route } ?: pool.firstOrNull()
         }
@@ -2337,6 +2505,10 @@ object V3GameEngine {
     private fun relationTotal(relations: V3Relations): Int {
         return relations.yamen + relations.gentry + relations.villagers + relations.merchants + relations.garrison - relations.bandits
     }
+
+    fun unificationFor(
+        regions: List<com.arktools.daming.v3.data.V3WorldRegion>
+    ): Int = calculateUnification(regions)
 
     private fun calculateUnification(regions: List<com.arktools.daming.v3.data.V3WorldRegion>): Int {
         val score = regions.sumOf { region ->
