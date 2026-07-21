@@ -392,19 +392,15 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     val tutorialStep = state.tutorialStep.coerceIn(0, elderGuideSteps(state).lastIndex)
     val tutorialFocus = elderGuideSteps(state)[tutorialStep].focus
     val tutorialTargetBounds = guideTargets[tutorialFocus]
-    var tutorialCardAtTop by remember(tutorialStep) { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(tutorialStep, controller.screen, tutorialTargetBounds) {
-        if (tutorialCardAtTop == null && tutorialTargetBounds != null) {
-            tutorialCardAtTop = tutorialTargetBounds.center.y > screenHeightPx * 0.55f
-        }
-    }
-    val cardAtTop = tutorialCardAtTop == true
+    var tutorialTargetReady by remember(tutorialStep) { mutableStateOf(false) }
+    var tutorialCardAtTop by remember(tutorialStep) { mutableStateOf(false) }
+    val cardAtTop = tutorialCardAtTop
     val onTutorialTargetClick: () -> Unit = {
         when (tutorialStep) {
             0 -> controller.observeTutorialLedger()
             1 -> controller.observeTutorialSite()
             2 -> controller.autoArrangeMonth()
-            3 -> controller.togglePause()
+            3 -> controller.advanceMonth()
             4 -> controller.observeTutorialMarriage()
             5 -> controller.observeTutorialClanPromotion()
             6 -> controller.observeTutorialGenealogy()
@@ -412,29 +408,51 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             8 -> controller.observeTutorialStrategyTabs()
         }
     }
-    LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, tutorialTargetBounds, cardAtTop, contentScroll.maxValue) {
+    LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, contentScroll.maxValue) {
+        tutorialTargetReady = false
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
         val step = elderGuideSteps(state)[tutorialStep]
         if (controller.screen != step.tab) {
             controller.switchScreen(step.tab)
             return@LaunchedEffect
         }
-        delay(180)
-        val bounds = tutorialTargetBounds ?: return@LaunchedEffect
-        val cardClearance = with(screenDensity) { 310.dp.toPx() }
-        val targetInLowerHalf = cardAtTop
-        val viewportTop = if (targetInLowerHalf) cardClearance else with(screenDensity) { 130.dp.toPx() }
-        val viewportBottom = if (targetInLowerHalf) {
-            screenHeightPx - with(screenDensity) { 72.dp.toPx() }
-        } else {
-            screenHeightPx - cardClearance
+        guideStrategyPage = step.strategyPage
+        val presetFraction = when (tutorialFocus) {
+            V3GuideFocus.MonthlyLedger, V3GuideFocus.TimeControls -> 0f
+            V3GuideFocus.AutoArrange -> 0.18f
+            V3GuideFocus.CountyMap -> 0.58f
+            V3GuideFocus.Marriage -> 0.22f
+            V3GuideFocus.ClanPromotion -> 0.72f
+            V3GuideFocus.Genealogy -> 0.25f
+            V3GuideFocus.StrategyContent, V3GuideFocus.StrategyTabs -> 0f
+            else -> 0f
         }
-        val targetScroll = when {
-            bounds.top < viewportTop -> contentScroll.value + bounds.top - viewportTop
-            bounds.bottom > viewportBottom -> contentScroll.value + bounds.bottom - viewportBottom
-            else -> contentScroll.value.toFloat()
-        }.toInt().coerceIn(0, contentScroll.maxValue)
-        if (targetScroll != contentScroll.value) contentScroll.scrollTo(targetScroll)
+        delay(100)
+        contentScroll.scrollTo((contentScroll.maxValue * presetFraction).toInt())
+        repeat(6) {
+            delay(100)
+            val bounds = guideTargets[tutorialFocus] ?: return@repeat
+            val shouldPlaceCardTop = bounds.center.y > screenHeightPx * 0.55f
+            val safeTop = if (shouldPlaceCardTop) with(screenDensity) { 300.dp.toPx() } else with(screenDensity) { 120.dp.toPx() }
+            val safeBottom = if (shouldPlaceCardTop) screenHeightPx - with(screenDensity) { 72.dp.toPx() } else screenHeightPx - with(screenDensity) { 300.dp.toPx() }
+            val adjustment = when {
+                bounds.top < safeTop -> bounds.top - safeTop
+                bounds.bottom > safeBottom -> bounds.bottom - safeBottom
+                else -> 0f
+            }.toInt()
+            if (adjustment != 0) {
+                contentScroll.scrollTo((contentScroll.value + adjustment).coerceIn(0, contentScroll.maxValue))
+            } else {
+                tutorialCardAtTop = shouldPlaceCardTop
+                tutorialTargetReady = true
+                return@LaunchedEffect
+            }
+        }
+        val finalBounds = guideTargets[tutorialFocus]
+        if (finalBounds != null && finalBounds.bottom > 0f && finalBounds.top < screenHeightPx) {
+            tutorialCardAtTop = finalBounds.center.y > screenHeightPx * 0.55f
+            tutorialTargetReady = true
+        }
     }
     V3Background(controller.screen.backgroundAsset()) {
         Box(Modifier.fillMaxSize()) {
@@ -471,6 +489,8 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             }
             if (
                 elderGuideVisible &&
+                    tutorialTargetReady &&
+                    tutorialTargetBounds != null &&
                     state.finalEnding == null &&
                     controller.latestReport == null &&
                     controller.message == null &&
@@ -588,7 +608,8 @@ private fun V3HomePage(
     }
     V3CountyMapView(
         state,
-        Modifier.guideTarget(V3GuideFocus.CountyMap, guideTargets)
+        guideModifier = Modifier.guideTarget(V3GuideFocus.CountyMap, guideTargets),
+        onGuideClick = controller::observeTutorialSite
     ) { siteId ->
         if (state.tutorialStep == 1 && !state.tutorialCompleted) {
             controller.observeTutorialSite()
@@ -772,7 +793,11 @@ private fun V3ElderGuideOverlay(
         Box(
             Modifier
                 .align(cardAlignment)
-                .padding(horizontal = 12.dp, vertical = 18.dp)
+                .padding(horizontal = 12.dp)
+                .padding(
+                    top = if (cardAtTop) 18.dp else 0.dp,
+                    bottom = if (cardAtTop) 0.dp else 82.dp
+                )
                 .fillMaxWidth()
                 .widthIn(max = 680.dp)
                 .background(V3Rice, V3PanelShape)
@@ -990,12 +1015,18 @@ private fun V3ClanPage(
     val eligible = V3GameEngine.marriageEligiblePeople(state)
     var selectedMarriagePersonId by remember { mutableStateOf<Int?>(null) }
     val target = eligible.firstOrNull { it.id == selectedMarriagePersonId } ?: eligible.firstOrNull()
-    V3Panel(
-        Modifier
-            .guideTarget(V3GuideFocus.Marriage, guideTargets)
-            .clickable { controller.observeTutorialMarriage() }
-    ) {
-        Text("婚配与提亲", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    V3Panel {
+        Text(
+            "婚配与提亲",
+            color = V3Red,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .fillMaxWidth()
+                .guideTarget(V3GuideFocus.Marriage, guideTargets)
+                .clickable { controller.observeTutorialMarriage() }
+                .padding(vertical = 6.dp)
+        )
         Text("先选择具体待婚族人，再查看媒人送来的对象。每桩婚事都绑定到所选族人，需支付对应银粮；男族人迎娶，女族人按招赘规则成家。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
         if (eligible.isEmpty()) {
             Text("当前没有18—55岁的适龄未婚族人。子女年满18岁后会自动进入待婚名单。", color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
@@ -1061,12 +1092,18 @@ private fun V3ClanPage(
             }
         }
     }
-    V3Panel(
-        Modifier
-            .guideTarget(V3GuideFocus.ClanPromotion, guideTargets)
-            .clickable { controller.observeTutorialClanPromotion() }
-    ) {
-        Text("宗族晋升", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    V3Panel {
+        Text(
+            "宗族晋升",
+            color = V3Red,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .fillMaxWidth()
+                .guideTarget(V3GuideFocus.ClanPromotion, guideTargets)
+                .clickable { controller.observeTutorialClanPromotion() }
+                .padding(vertical = 6.dp)
+        )
         val cost = V3GameEngine.nextRankCost(state)
         if (cost == null) {
             Text("已达最高品第。", color = V3Green, fontSize = 14.sp)
@@ -1650,6 +1687,8 @@ private fun worldMapPoint(regionId: String): Offset = when (regionId) {
 private fun V3CountyMapView(
     state: V3GameState,
     modifier: Modifier = Modifier,
+    guideModifier: Modifier = Modifier,
+    onGuideClick: () -> Unit = {},
     onSelectSite: (String) -> Unit
 ) {
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -1657,7 +1696,14 @@ private fun V3CountyMapView(
     val frameShape = V3SoftShape
     val density = LocalDensity.current
     V3Panel(modifier) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            guideModifier
+                .fillMaxWidth()
+                .clickable(onClick = onGuideClick)
+                .padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text("县域地图", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text("点建筑弹出管理", color = V3Muted, fontSize = 12.sp)
         }
