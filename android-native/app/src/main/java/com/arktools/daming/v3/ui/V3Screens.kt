@@ -386,10 +386,6 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     }
     var guideStrategyPage by remember { mutableStateOf<String?>(null) }
     val guideTargets = remember { mutableStateMapOf<V3GuideFocus, Rect>() }
-    LaunchedEffect(controller.screen) {
-        // 切换页签时清空旧页面的高亮坐标，避免跨页残留的 Rect 被错误地套用在新页面上
-        guideTargets.clear()
-    }
     val contentScroll = rememberScrollState()
     val screenDensity = LocalDensity.current
     val screenHeightPx = with(screenDensity) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
@@ -403,11 +399,23 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         }
     }
     val cardAtTop = tutorialCardAtTop == true
+    val onTutorialTargetClick: () -> Unit = {
+        when (tutorialStep) {
+            0 -> controller.observeTutorialLedger()
+            1 -> controller.observeTutorialSite()
+            2 -> controller.autoArrangeMonth()
+            3 -> controller.togglePause()
+            4 -> controller.observeTutorialMarriage()
+            5 -> controller.observeTutorialClanPromotion()
+            6 -> controller.observeTutorialGenealogy()
+            7 -> controller.observeTutorialStrategyContent()
+            8 -> controller.observeTutorialStrategyTabs()
+        }
+    }
     LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, tutorialTargetBounds, cardAtTop, contentScroll.maxValue) {
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
         val step = elderGuideSteps(state)[tutorialStep]
         if (controller.screen != step.tab) {
-            guideTargets.clear()
             controller.switchScreen(step.tab)
             return@LaunchedEffect
         }
@@ -477,6 +485,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                     controller = controller,
                     targetBounds = tutorialTargetBounds,
                     cardAtTop = cardAtTop,
+                    onTargetClick = onTutorialTargetClick,
                     onStrategyPageChange = { guideStrategyPage = it },
                     onDismiss = {
                         guideStrategyPage = null
@@ -745,6 +754,7 @@ private fun V3ElderGuideOverlay(
     controller: V3GameController,
     targetBounds: Rect?,
     cardAtTop: Boolean,
+    onTargetClick: () -> Unit,
     onStrategyPageChange: (String?) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -758,7 +768,7 @@ private fun V3ElderGuideOverlay(
     }
     val cardAlignment = if (cardAtTop) Alignment.TopCenter else Alignment.BottomCenter
     Box(Modifier.fillMaxSize()) {
-        V3GuideFocusFrame(targetBounds)
+        V3GuideFocusFrame(targetBounds, onTargetClick)
         Box(
             Modifier
                 .align(cardAlignment)
@@ -813,7 +823,7 @@ private fun V3ElderGuideOverlay(
 }
 
 @Composable
-private fun V3GuideFocusFrame(targetBounds: Rect?) {
+private fun V3GuideFocusFrame(targetBounds: Rect?, onTargetClick: () -> Unit) {
     val density = LocalDensity.current
     val paddingPx = with(density) { 8.dp.toPx() }
     val cornerPx = with(density) { 12.dp.toPx() }
@@ -869,6 +879,19 @@ private fun V3GuideFocusFrame(targetBounds: Rect?) {
             }
         }
         V3GuideInputBlockers(targetBounds)
+        targetBounds?.let { bounds ->
+            val left = with(density) { (bounds.left - paddingPx).coerceAtLeast(0f).toDp() }
+            val top = with(density) { (bounds.top - paddingPx).coerceAtLeast(0f).toDp() }
+            val width = with(density) { (bounds.width + paddingPx * 2f).toDp() }
+            val height = with(density) { (bounds.height + paddingPx * 2f).toDp() }
+            Box(
+                Modifier
+                    .offset(x = left, y = top)
+                    .width(width)
+                    .height(height)
+                    .clickable(onClick = onTargetClick)
+            )
+        }
     }
 }
 
