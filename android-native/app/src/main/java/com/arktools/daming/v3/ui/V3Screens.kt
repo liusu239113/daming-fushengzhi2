@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,6 +67,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
@@ -225,14 +227,26 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
                         fontSize = 11.sp,
                         lineHeight = 17.sp
                     )
-                    V3CompactSelector("出身", V3Content.roots, root, ::createRootEffect) { root = it }
+                    V3CompactSelector("出身", V3Content.roots, root, ::createRootEffect) {
+                        controller.playUiSelect()
+                        root = it
+                    }
                     V3CompactSelector("县域", V3Content.counties, county, {
                         V3Content.startProfile(root, it, creed, crisis).countyEffect
-                    }) { county = it }
-                    V3CompactSelector("家训", V3Content.creeds, creed, ::createCreedEffect) { creed = it }
+                    }) {
+                        controller.playUiSelect()
+                        county = it
+                    }
+                    V3CompactSelector("家训", V3Content.creeds, creed, ::createCreedEffect) {
+                        controller.playUiSelect()
+                        creed = it
+                    }
                     V3CompactSelector("危机", V3Content.crises, crisis, {
                         V3Content.startProfile(root, county, creed, it).crisisEffect
-                    }) { crisis = it }
+                    }) {
+                        controller.playUiSelect()
+                        crisis = it
+                    }
                 }
                 V3Panel {
                     Text("开局实得", color = V3Red, fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -285,7 +299,10 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
                     .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                V3Button("返回", Modifier.weight(1f), onClick = onBack)
+                V3Button("返回", Modifier.weight(1f)) {
+                    controller.playUiClick()
+                    onBack()
+                }
                 V3Button("开宗立户", Modifier.weight(1f), enabled = nameError == null) {
                     controller.newGame(root, county, creed, crisis, surname, givenName)
                     onStart()
@@ -374,16 +391,42 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         guideTargets.clear()
     }
     val contentScroll = rememberScrollState()
+    val screenDensity = LocalDensity.current
+    val screenHeightPx = with(screenDensity) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val tutorialStep = state.tutorialStep.coerceIn(0, elderGuideSteps(state).lastIndex)
     val tutorialFocus = elderGuideSteps(state)[tutorialStep].focus
-    LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, contentScroll.maxValue) {
+    val tutorialTargetBounds = guideTargets[tutorialFocus]
+    var tutorialCardAtTop by remember(tutorialStep) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(tutorialStep, controller.screen, tutorialTargetBounds) {
+        if (tutorialCardAtTop == null && tutorialTargetBounds != null) {
+            tutorialCardAtTop = tutorialTargetBounds.center.y > screenHeightPx * 0.55f
+        }
+    }
+    val cardAtTop = tutorialCardAtTop == true
+    LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, tutorialTargetBounds, cardAtTop, contentScroll.maxValue) {
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
-        delay(120)
-        val bounds = guideTargets[tutorialFocus] ?: return@LaunchedEffect
-        val targetScroll = (contentScroll.value + bounds.top - 190f)
-            .toInt()
-            .coerceIn(0, contentScroll.maxValue)
-        contentScroll.scrollTo(targetScroll)
+        val step = elderGuideSteps(state)[tutorialStep]
+        if (controller.screen != step.tab) {
+            guideTargets.clear()
+            controller.switchScreen(step.tab)
+            return@LaunchedEffect
+        }
+        delay(180)
+        val bounds = tutorialTargetBounds ?: return@LaunchedEffect
+        val cardClearance = with(screenDensity) { 310.dp.toPx() }
+        val targetInLowerHalf = cardAtTop
+        val viewportTop = if (targetInLowerHalf) cardClearance else with(screenDensity) { 130.dp.toPx() }
+        val viewportBottom = if (targetInLowerHalf) {
+            screenHeightPx - with(screenDensity) { 72.dp.toPx() }
+        } else {
+            screenHeightPx - cardClearance
+        }
+        val targetScroll = when {
+            bounds.top < viewportTop -> contentScroll.value + bounds.top - viewportTop
+            bounds.bottom > viewportBottom -> contentScroll.value + bounds.bottom - viewportBottom
+            else -> contentScroll.value.toFloat()
+        }.toInt().coerceIn(0, contentScroll.maxValue)
+        if (targetScroll != contentScroll.value) contentScroll.scrollTo(targetScroll)
     }
     V3Background(controller.screen.backgroundAsset()) {
         Box(Modifier.fillMaxSize()) {
@@ -432,7 +475,8 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                 V3ElderGuideOverlay(
                     state = state,
                     controller = controller,
-                    targetBounds = guideTargets[tutorialFocus],
+                    targetBounds = tutorialTargetBounds,
+                    cardAtTop = cardAtTop,
                     onStrategyPageChange = { guideStrategyPage = it },
                     onDismiss = {
                         guideStrategyPage = null
@@ -536,9 +580,12 @@ private fun V3HomePage(
     V3CountyMapView(
         state,
         Modifier.guideTarget(V3GuideFocus.CountyMap, guideTargets)
-    ) {
-        selectedSiteId = it
-        controller.observeTutorialSite()
+    ) { siteId ->
+        if (state.tutorialStep == 1 && !state.tutorialCompleted) {
+            controller.observeTutorialSite()
+        } else {
+            selectedSiteId = siteId
+        }
     }
     V3EstatePanel(state, controller)
     selectedSite?.let { site ->
@@ -612,8 +659,8 @@ private fun elderGuideSteps(state: V3GameState): List<V3ElderGuideStep> = listOf
         "周管事",
         "male_middle",
         "第二课 · 打开田庄",
-        "账看明白了，还要认得产业。请向下查看县域地图，亲手点开田庄或任意地点，再关闭管理窗口。地图会自动滚到眼前，不必盲找。",
-        "请点击高亮的县域地图地点",
+        "账看明白了，还要认得产业。请点高亮的县域地图，确认田庄、集市和县衙的位置；系统会自动滚到地图，不必盲找。",
+        "请点击高亮的县域地图",
         V3GuideFocus.CountyMap
     ),
     V3ElderGuideStep(
@@ -697,6 +744,7 @@ private fun V3ElderGuideOverlay(
     state: V3GameState,
     controller: V3GameController,
     targetBounds: Rect?,
+    cardAtTop: Boolean,
     onStrategyPageChange: (String?) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -708,13 +756,15 @@ private fun V3ElderGuideOverlay(
         controller.switchScreen(step.tab)
         controller.playGuideTick()
     }
+    val cardAlignment = if (cardAtTop) Alignment.TopCenter else Alignment.BottomCenter
     Box(Modifier.fillMaxSize()) {
         V3GuideFocusFrame(targetBounds)
         Box(
             Modifier
-                .align(Alignment.BottomCenter)
-                .padding(12.dp)
+                .align(cardAlignment)
+                .padding(horizontal = 12.dp, vertical = 18.dp)
                 .fillMaxWidth()
+                .widthIn(max = 680.dp)
                 .background(V3Rice, V3PanelShape)
                 .border(2.dp, V3Gold, V3PanelShape)
                 .padding(12.dp)
@@ -735,9 +785,9 @@ private fun V3ElderGuideOverlay(
                     }
                     Text("任务 ${safeIndex + 1}/${steps.size}", color = V3Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
-                Text(step.words, color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
+                Text(step.words, color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
                 Text(
-                    if (safeIndex == steps.lastIndex) "前四项操作已完成，可收下族老札记。" else step.action,
+                    if (safeIndex == steps.lastIndex) "全部操作已完成，可收下族老札记。" else step.action,
                     color = V3Gold,
                     fontSize = 12.sp,
                     lineHeight = 18.sp,
@@ -768,32 +818,8 @@ private fun V3GuideFocusFrame(targetBounds: Rect?) {
     val paddingPx = with(density) { 8.dp.toPx() }
     val cornerPx = with(density) { 12.dp.toPx() }
     val borderPx = with(density) { 3.dp.toPx() }
-    // 全屏半透明黑色遮罩 + 圆角挖洞，洞外拦截点击，洞内点击穿透给底层控件
-    Box(
-        Modifier
-            .fillMaxSize()
-            .pointerInput(targetBounds) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val pos = event.changes.firstOrNull()?.position
-                        if (targetBounds != null && pos != null) {
-                            val holeLeft = (targetBounds.left - paddingPx).coerceAtLeast(0f)
-                            val holeTop = (targetBounds.top - paddingPx).coerceAtLeast(0f)
-                            val holeRight = (targetBounds.right + paddingPx)
-                            val holeBottom = (targetBounds.bottom + paddingPx)
-                            val inside = pos.x in holeLeft..holeRight && pos.y in holeTop..holeBottom
-                            if (!inside) {
-                                // 吞掉洞外点击，避免误触其它按钮
-                                event.changes.forEach { it.consume() }
-                            }
-                        } else {
-                            event.changes.forEach { it.consume() }
-                        }
-                    }
-                }
-            }
-    ) {
+    // 遮罩仅负责视觉高亮，不接管指针事件；目标控件保持真实可点击。
+    Box(Modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val hole = if (targetBounds != null) {
                 val left = (targetBounds.left - paddingPx).coerceAtLeast(0f)
@@ -842,7 +868,46 @@ private fun V3GuideFocusFrame(targetBounds: Rect?) {
                 )
             }
         }
+        V3GuideInputBlockers(targetBounds)
     }
+}
+
+@Composable
+private fun V3GuideInputBlockers(targetBounds: Rect?) {
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val screenHeight = configuration.screenHeightDp.dp
+    val padding = 8.dp
+    fun Modifier.blockGuideInput(): Modifier = pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent().changes.forEach { it.consume() }
+            }
+        }
+    }
+    if (targetBounds == null) {
+        Box(Modifier.fillMaxSize().blockGuideInput())
+        return
+    }
+    val left = with(density) { targetBounds.left.toDp() } - padding
+    val top = with(density) { targetBounds.top.toDp() } - padding
+    val right = with(density) { targetBounds.right.toDp() } + padding
+    val bottom = with(density) { targetBounds.bottom.toDp() } + padding
+    val safeLeft = left.coerceIn(0.dp, screenWidth)
+    val safeTop = top.coerceIn(0.dp, screenHeight)
+    val safeRight = right.coerceIn(0.dp, screenWidth)
+    val safeBottom = bottom.coerceIn(0.dp, screenHeight)
+    Box(Modifier.fillMaxWidth().height(safeTop).blockGuideInput())
+    Box(Modifier.offset(y = safeBottom).fillMaxWidth().height((screenHeight - safeBottom).coerceAtLeast(0.dp)).blockGuideInput())
+    Box(Modifier.offset(y = safeTop).width(safeLeft).height((safeBottom - safeTop).coerceAtLeast(0.dp)).blockGuideInput())
+    Box(
+        Modifier
+            .offset(x = safeRight, y = safeTop)
+            .width((screenWidth - safeRight).coerceAtLeast(0.dp))
+            .height((safeBottom - safeTop).coerceAtLeast(0.dp))
+            .blockGuideInput()
+    )
 }
 
 @Composable
@@ -887,20 +952,7 @@ private fun V3ClanPage(
     controller: V3GameController,
     guideTargets: MutableMap<V3GuideFocus, Rect>
 ) {
-    // 教程：第4课（婚配与提亲）/第5课（宗族晋升）属于"浏览高亮面板"型步骤，
-    // 面板已出现在视野内并被 Canvas 挖洞高亮后，稍作停留即自动推进，避免卡住玩家。
-    LaunchedEffect(state.tutorialStep) {
-        when (state.tutorialStep) {
-            4 -> {
-                delay(1800)
-                controller.observeTutorialMarriage()
-            }
-            5 -> {
-                delay(1800)
-                controller.observeTutorialClanPromotion()
-            }
-        }
-    }
+    // 教程步骤必须由玩家点击当前高亮目标完成，不再用定时器自动跳课。
     V3Section("宗族", "${V3GameEngine.clanRankName(state)} · 人口 ${V3GameEngine.alivePeople(state).size} · 产业 ${V3GameEngine.builtSiteCount(state)}")
     V3Panel {
         Text(state.clanName, color = V3Red, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -915,7 +967,11 @@ private fun V3ClanPage(
     val eligible = V3GameEngine.marriageEligiblePeople(state)
     var selectedMarriagePersonId by remember { mutableStateOf<Int?>(null) }
     val target = eligible.firstOrNull { it.id == selectedMarriagePersonId } ?: eligible.firstOrNull()
-    V3Panel(Modifier.guideTarget(V3GuideFocus.Marriage, guideTargets)) {
+    V3Panel(
+        Modifier
+            .guideTarget(V3GuideFocus.Marriage, guideTargets)
+            .clickable { controller.observeTutorialMarriage() }
+    ) {
         Text("婚配与提亲", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text("先选择具体待婚族人，再查看媒人送来的对象。每桩婚事都绑定到所选族人，需支付对应银粮；男族人迎娶，女族人按招赘规则成家。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
         if (eligible.isEmpty()) {
@@ -982,7 +1038,11 @@ private fun V3ClanPage(
             }
         }
     }
-    V3Panel(Modifier.guideTarget(V3GuideFocus.ClanPromotion, guideTargets)) {
+    V3Panel(
+        Modifier
+            .guideTarget(V3GuideFocus.ClanPromotion, guideTargets)
+            .clickable { controller.observeTutorialClanPromotion() }
+    ) {
         Text("宗族晋升", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         val cost = V3GameEngine.nextRankCost(state)
         if (cost == null) {
@@ -1025,7 +1085,7 @@ private fun V3PeoplePage(
     V3GenealogyTree(
         state.clanName,
         people,
-        Modifier.guideTarget(V3GuideFocus.Genealogy, guideTargets),
+        guideTargets = guideTargets,
         onSelect = {
             selectedPersonId = it
             controller.observeTutorialGenealogy()
@@ -1074,6 +1134,7 @@ private fun V3GenealogyTree(
     clanName: String,
     people: List<V3Person>,
     modifier: Modifier = Modifier,
+    guideTargets: MutableMap<V3GuideFocus, Rect>,
     onSelect: (Int) -> Unit
 ) {
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -1137,7 +1198,15 @@ private fun V3GenealogyTree(
                 }
                 people.sortedWith(compareBy<V3Person> { positions[it.id]?.y ?: 0 }.thenBy { positions[it.id]?.x ?: 0 }).forEach { person ->
                     val position = positions[person.id] ?: GenealogyNodePosition(0, 0)
-                    V3FamilyMiniNode(person, x = position.x, y = position.y, onSelect = onSelect)
+                    V3FamilyMiniNode(
+                        person,
+                        x = position.x,
+                        y = position.y,
+                        modifier = if (person.id == people.firstOrNull()?.id) {
+                            Modifier.guideTarget(V3GuideFocus.Genealogy, guideTargets)
+                        } else Modifier,
+                        onSelect = onSelect
+                    )
                 }
             }
         }
@@ -1145,7 +1214,13 @@ private fun V3GenealogyTree(
 }
 
 @Composable
-private fun V3FamilyMiniNode(person: V3Person, x: Int, y: Int, onSelect: (Int) -> Unit) {
+private fun V3FamilyMiniNode(
+    person: V3Person,
+    x: Int,
+    y: Int,
+    modifier: Modifier = Modifier,
+    onSelect: (Int) -> Unit
+) {
     val nodeHeight = 150
     val statusColor = when {
         person.currentTask != null -> V3Green
@@ -1162,7 +1237,7 @@ private fun V3FamilyMiniNode(person: V3Person, x: Int, y: Int, onSelect: (Int) -
         else -> "待命"
     }
     Box(
-        Modifier
+        modifier
             .offset(x = x.dp, y = y.dp)
             .width(112.dp)
             .height(nodeHeight.dp)
@@ -1236,15 +1311,13 @@ private fun V3StrategyPage(
     LaunchedEffect(forcedPage) {
         if (forcedPage != null) page = forcedPage
     }
-    // 教程：第7课（浏览声势路线内容）自动推进；第8课（点击声势页签）由按钮点击触发
-    LaunchedEffect(state.tutorialStep, page) {
-        if (state.tutorialStep == 7 && page == "声势") {
-            delay(1800)
-            controller.observeTutorialStrategyContent()
-        }
-    }
+    // 大势教程也必须由玩家点击高亮内容或页签完成。
     V3Section("大势", "当前路线：${V3GameEngine.dominantRoute(state).label}")
-    V3Panel {
+    V3Panel(
+        Modifier
+            .guideTarget(V3GuideFocus.StrategyContent, guideTargets)
+            .clickable { controller.observeTutorialStrategyContent() }
+    ) {
         Text("路线评估：${ending.title}", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text("${ending.route.label} · ${ending.tier.label} · 评估 ${ending.score}", color = V3Ink, fontSize = 14.sp)
         Text(ending.desc, color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
@@ -1265,7 +1338,7 @@ private fun V3StrategyPage(
     }
     when (page) {
         "声势" -> {
-            Column(Modifier.guideTarget(V3GuideFocus.StrategyContent, guideTargets)) {
+            Column {
             V3Panel {
                 Text("地方关系", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 V3RelationRow("官府", state.relations.yamen)
@@ -1954,8 +2027,7 @@ private fun V3TimeControls(
         Dialog(onDismissRequest = { confirmSpeed = null }) {
             V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
                 Text("观看广告解锁倍速", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Text("是否观看一段激励视频？完整观看并通过奖励校验后，2–5 倍速度全部解锁 20 分钟，期间可随时切换倍率。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
-                Text("不观看也可继续以 1 倍速游玩，1 倍永久免费。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                Text("观看后，2–5 倍时序全部解锁 20 分钟。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     V3SmallButton("关闭", Modifier.weight(1f)) { confirmSpeed = null }
                     V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
@@ -2016,25 +2088,17 @@ private fun V3TimeControls(
                 modifier = Modifier.weight(1.4f)
             )
         }
-        Text(
-            if (remainingPassMillis > 0L) {
-                val totalSeconds = (remainingPassMillis / 1000L).coerceAtLeast(0L)
-                val minutes = totalSeconds / 60L
-                val seconds = totalSeconds % 60L
-                "广告倍速已解锁，剩余 ${minutes}分${seconds.toString().padStart(2, '0')}秒。1倍永久免费；权益到期自动恢复1倍。"
-            } else {
-                "1倍永久免费；点击2–5倍可观看一次激励广告，完整观看并通过奖励校验后全部解锁20分钟。"
-            },
-            color = if (remainingPassMillis > 0L) V3Green else V3Gold,
-            fontSize = 10.sp,
-            lineHeight = 15.sp
-        )
-        Text(
-            "现实耗时：1倍22秒/月（4分24秒/年）· 2倍11秒/月 · 3倍约7秒/月 · 4倍约5秒/月 · 5倍约4秒/月；人物每月增长1个月。",
-            color = V3Muted,
-            fontSize = 10.sp,
-            lineHeight = 15.sp
-        )
+        if (remainingPassMillis > 0L) {
+            val totalSeconds = (remainingPassMillis / 1000L).coerceAtLeast(0L)
+            val minutes = totalSeconds / 60L
+            val seconds = totalSeconds % 60L
+            Text(
+                "倍速剩余 ${minutes}:${seconds.toString().padStart(2, '0')}",
+                color = V3Green,
+                fontSize = 10.sp,
+                lineHeight = 15.sp
+            )
+        }
     }
 }
 
@@ -2324,35 +2388,17 @@ private fun V3SpeedButton(
             Box(
                 Modifier
                     .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.58f), V3ButtonShape),
+                    .background(Color(0x552B2925), V3ButtonShape),
                 contentAlignment = Alignment.Center
             ) {
-                V3LockIcon(color = V3Gold)
+                AssetImage(
+                    GameImages.V3IconSpeedLock,
+                    "未解锁",
+                    Modifier.size(25.dp),
+                    ContentScale.Fit
+                )
             }
         }
-    }
-}
-
-@Composable
-private fun V3LockIcon(color: Color) {
-    Canvas(Modifier.size(20.dp)) {
-        val stroke = size.minDimension * 0.11f
-        drawArc(
-            color = color,
-            startAngle = 180f,
-            sweepAngle = 180f,
-            useCenter = false,
-            topLeft = Offset(size.width * 0.23f, size.height * 0.06f),
-            size = Size(size.width * 0.54f, size.height * 0.58f),
-            style = Stroke(width = stroke, cap = StrokeCap.Round)
-        )
-        drawRoundRect(
-            color = color,
-            topLeft = Offset(size.width * 0.14f, size.height * 0.43f),
-            size = Size(size.width * 0.72f, size.height * 0.48f),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.09f)
-        )
-        drawCircle(Color.Black.copy(alpha = 0.62f), radius = size.width * 0.055f, center = Offset(size.width * 0.5f, size.height * 0.66f))
     }
 }
 

@@ -560,4 +560,12 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun playGuideTick() {
         audio.playSfx(SfxKey.UiSelect)
     }
+
+    fun playUiClick() {
+        audio.click()
+    }
+
+    fun playUiSelect() {
+        audio.select()
+    }
 }

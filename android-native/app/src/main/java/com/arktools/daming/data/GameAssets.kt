@@ -13,6 +13,7 @@ object GameImages {
     const val V3IconGrain = "image/v3_icon_grain.png"
     const val V3IconPopulation = "image/v3_icon_population.png"
     const val V3IconIndustry = "image/v3_icon_industry.png"
+    const val V3IconSpeedLock = "image/v3_icon_speed_lock.png"
     const val V3UiGenealogyBook = "image/v3_ui_genealogy_book.png"
     const val V3UiPageLeft = "image/v3_ui_page_left.png"
     const val V3UiPageRight = "image/v3_ui_page_right.png"
