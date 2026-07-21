@@ -555,6 +555,9 @@ object V3Content {
             sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${surname}氏宗祠") else it },
             annualGoals = profile.annualGoals,
             routeScores = profile.routeScores,
+            tutorialVersion = V3_TUTORIAL_VERSION,
+            tutorialStep = 0,
+            tutorialCompleted = false,
             pendingReports = listOf("${county}局势未稳，${crisis}已成眼前第一患。"),
             eventLog = listOf("${root}立于${county}，奉行【${creed}】，却遭【${crisis}】。")
         )

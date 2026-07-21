@@ -80,8 +80,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     companion object {
-        // 新手引导总步骤数：必须与 V3Screens.elderGuideSteps() 的 size 保持一致
-        const val TUTORIAL_STEP_COUNT = 10
+        // 完整教程包含界面导览、地点/族人弹窗教学和首月经营闭环。
+        const val TUTORIAL_STEP_COUNT = 32
     }
 
     fun switchScreen(next: V3Screen) {
@@ -170,7 +170,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun autoArrangeMonth() {
         audio.playSfx(SfxKey.V3Edict)
         state = V3GameEngine.autoArrangeMonth(state)
-        if (state.people.any { it.alive && (it.currentTask != null || it.trainingFocus != null) }) completeTutorialAction(2)
+        if (state.people.any { it.alive && (it.currentTask != null || it.trainingFocus != null) }) {
+            completeTutorialAction(15)
+        }
         message = if (state.tutorialCompleted) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
     }
@@ -179,8 +181,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.select()
         state = V3GameEngine.assignTask(state, personId, siteId, task)
         val assigned = state.people.firstOrNull { it.id == personId }
-        if (assigned?.assignedSiteId == siteId && assigned.currentTask == task) completeTutorialAction(2)
-        message = state.pendingReports.firstOrNull()
+        if (assigned?.assignedSiteId == siteId && assigned.currentTask == task) {
+            completeTutorialAction(14)
+        }
+        message = if (state.tutorialCompleted) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
     }
 
@@ -387,7 +391,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
         val shouldShowReport = showReport || report.nextState.month == 1 || report.lines.any { it.contains("目标达成") || it.contains("添丁") || it.contains("终局") || it.contains("岁末") }
         latestReport = if (shouldShowReport) report.copy(nextState = withEnding) else null
-        completeTutorialAction(3)
+        completeTutorialAction(16)
         if (withEnding.activeEvent != null || latestReport != null) pauseForModal()
     }
 
@@ -395,7 +399,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(SfxKey.V3Edict)
         pauseForModal()
         state = V3EventEngine.choose(state, choice)
-        message = state.pendingReports.firstOrNull()
+        completeTutorialAction(18)
+        message = if (state.tutorialCompleted) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
     }
 
@@ -423,6 +428,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun clearReport() {
         audio.click()
         latestReport = null
+        completeTutorialAction(17)
+        if (state.tutorialStep == 18 && state.activeEvent == null) {
+            completeTutorialAction(18)
+        }
         resumeAfterModalIfClear()
     }
 
@@ -486,37 +495,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         return true
     }
 
-    fun observeTutorialLedger() {
-        completeTutorialAction(0)
-    }
-
-    fun observeTutorialSite() {
-        completeTutorialAction(1)
-    }
-
-    /** 宗族页：婚配与提亲面板已被高亮/浏览 */
-    fun observeTutorialMarriage() {
-        completeTutorialAction(4)
-    }
-
-    /** 宗族页：宗族晋升面板已被高亮/浏览 */
-    fun observeTutorialClanPromotion() {
-        completeTutorialAction(5)
-    }
-
-    /** 族谱页：点击任意族人卡片 */
-    fun observeTutorialGenealogy() {
-        completeTutorialAction(6)
-    }
-
-    /** 大势页：声势路线内容已被高亮/浏览 */
-    fun observeTutorialStrategyContent() {
-        completeTutorialAction(7)
-    }
-
-    /** 大势页：点击"声势"页签 */
-    fun observeTutorialStrategyTabs() {
-        completeTutorialAction(8)
+    fun advanceTutorial(requiredStep: Int) {
+        completeTutorialAction(requiredStep)
     }
 
     fun finishTutorial() {
@@ -531,7 +511,11 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     fun reopenTutorial() {
-        state = state.copy(tutorialStep = 0, tutorialCompleted = false)
+        state = state.copy(
+            tutorialVersion = com.arktools.daming.v3.data.V3_TUTORIAL_VERSION,
+            tutorialStep = 0,
+            tutorialCompleted = false
+        )
         screen = V3Screen.County
         saveStore.save(state)
     }

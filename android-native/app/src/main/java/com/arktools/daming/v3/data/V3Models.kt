@@ -3,6 +3,7 @@ package com.arktools.daming.v3.data
 import kotlinx.serialization.Serializable
 
 const val V3_SAVE_VERSION = 2
+const val V3_TUTORIAL_VERSION = 2
 
 @Serializable
 enum class V3Screen { County, Clan, People, Strategy }
@@ -405,6 +406,7 @@ data class V3GameState(
     val rebelHeat: Int = 0,
     val finalEnding: V3FinalEnding? = null,
     val activeEvent: V3ActiveEvent? = null,
+    val tutorialVersion: Int = 1,
     val tutorialStep: Int = 0,
     val tutorialCompleted: Boolean = false,
     val pendingReports: List<String> = listOf("县域初定，族老请你先审视祠堂、田庄、集市与县衙。"),

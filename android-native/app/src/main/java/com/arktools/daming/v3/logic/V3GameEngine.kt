@@ -26,6 +26,7 @@ import com.arktools.daming.v3.data.V3SiteYield
 import com.arktools.daming.v3.data.V3SpouseCandidate
 import com.arktools.daming.v3.data.V3TaskType
 import com.arktools.daming.v3.data.V3TrainingType
+import com.arktools.daming.v3.data.V3_TUTORIAL_VERSION
 import com.arktools.daming.v3.data.V3Trait
 import com.arktools.daming.v3.data.V3UpgradeCost
 import com.arktools.daming.v3.data.V3BattleState
@@ -184,12 +185,21 @@ object V3GameEngine {
         }
         val existingRegionIds = state.worldRegions.map { it.id }.toSet()
         val mergedRegions = state.worldRegions + V3Content.initialWorldRegions.filter { it.id !in existingRegionIds }
+        val migratedTutorialStep = if (
+            state.tutorialVersion < V3_TUTORIAL_VERSION
+        ) 0 else state.tutorialStep
+        val migratedTutorialCompleted = if (
+            state.tutorialVersion < V3_TUTORIAL_VERSION
+        ) false else state.tutorialCompleted
         if (
             migratedArmy.total() == state.militia &&
             mergedRegions.size == state.worldRegions.size &&
             migratedPeople == state.people &&
             migratedStateSurname == state.surname &&
-            migratedFounderName == state.founderName
+            migratedFounderName == state.founderName &&
+            state.tutorialVersion == V3_TUTORIAL_VERSION &&
+            migratedTutorialStep == state.tutorialStep &&
+            migratedTutorialCompleted == state.tutorialCompleted
         ) return state
         return state.copy(
             surname = migratedStateSurname,
@@ -197,7 +207,10 @@ object V3GameEngine {
             militia = migratedArmy.total(),
             army = migratedArmy,
             people = migratedPeople,
-            worldRegions = mergedRegions
+            worldRegions = mergedRegions,
+            tutorialVersion = V3_TUTORIAL_VERSION,
+            tutorialStep = migratedTutorialStep,
+            tutorialCompleted = migratedTutorialCompleted
         )
     }
 
