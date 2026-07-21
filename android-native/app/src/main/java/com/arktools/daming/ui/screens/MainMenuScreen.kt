@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.arktools.daming.ads.RewardedSilverButton
 import com.arktools.daming.data.GameImages
 import com.arktools.daming.ui.components.AssetImage
 import com.arktools.daming.ui.theme.FontPreference
@@ -93,7 +92,6 @@ fun MainMenuScreen(
                 onContinue()
             }
             MenuButton("设置", "字体、音乐和音效", onClick = v3Controller::openSettings)
-            RewardedSilverButton(onReward = v3Controller::grantRewardedAdSilver)
         }
         Text("v1.0.0", Modifier.align(Alignment.BottomStart).padding(12.dp), color = MenuMuted, fontSize = 12.sp)
     }

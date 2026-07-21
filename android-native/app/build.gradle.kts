@@ -89,7 +89,7 @@ dependencies {
     implementation("com.squareup.retrofit2:adapter-rxjava2:2.2.0")
     implementation("io.reactivex.rxjava2:rxjava:2.2.21")
 
-    implementation(fileTree(mapOf("dir" to "libs-minimal", "include" to listOf("**/*.aar"))))
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("**/*.aar"))))
 
     implementation("com.taptap.sdk:tap-core:4.10.3")
     implementation("com.taptap.sdk:tap-login:4.10.3")

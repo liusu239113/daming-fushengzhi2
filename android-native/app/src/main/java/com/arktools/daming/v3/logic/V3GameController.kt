@@ -426,11 +426,29 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         message = text
     }
 
-    fun grantRewardedAdSilver(amount: Int = 50) {
-        val reward = amount.coerceAtLeast(0)
-        state = state.copy(silver = (state.silver + reward).coerceAtMost(999_999))
+    fun grantMonthlyReward(
+        description: String,
+        silver: Int = 0,
+        grain: Int = 0,
+        cohesion: Int = 0,
+        repairDurability: Int = 0
+    ) {
+        val repairedEquipment = if (repairDurability > 0) {
+            state.equipment.map { item ->
+                item.copy(durability = (item.durability + repairDurability).coerceAtMost(item.maxDurability))
+            }
+        } else {
+            state.equipment
+        }
+        state = state.copy(
+            silver = (state.silver + silver).coerceIn(-999, 999_999),
+            grain = (state.grain + grain).coerceIn(-999, 999_999),
+            cohesion = (state.cohesion + cohesion).coerceIn(0, 100),
+            equipment = repairedEquipment
+        )
         saveStore.save(state)
-        showInfo("激励广告奖励已到账：银两 +$reward。")
+        latestReport = null
+        showInfo(description)
     }
 
     private fun pauseForModal() {

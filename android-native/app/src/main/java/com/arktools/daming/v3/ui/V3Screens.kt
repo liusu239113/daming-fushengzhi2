@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.arktools.daming.ads.RewardClaimStore
 import com.arktools.daming.ads.RewardedAdController
 import com.arktools.daming.ads.SpeedPassStore
 import com.arktools.daming.data.GameImages
@@ -89,6 +90,7 @@ import com.arktools.daming.v3.data.V3EstateType
 import com.arktools.daming.v3.data.V3FinalEnding
 import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3Gender
+import com.arktools.daming.v3.data.V3MonthlyReport
 import com.arktools.daming.v3.data.V3Person
 import com.arktools.daming.v3.data.V3Route
 import com.arktools.daming.v3.data.V3RegionStatus
@@ -440,9 +442,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     val activeEvent = controller.state.activeEvent
     if (controller.state.finalEnding == null) {
         controller.latestReport?.let { report ->
-            V3Dialog(title = monthlyReportTitle(report.title, report.lines), onDismiss = controller::clearReport) {
-                report.lines.forEach { Text("· $it", color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp) }
-            }
+            V3MonthlyReportDialog(report = report, controller = controller)
         } ?: activeEvent?.let { event ->
             V3EventDialog(event = event, controller = controller)
         }
@@ -2284,8 +2284,111 @@ private fun V3ExamDialog(session: com.arktools.daming.v3.data.V3ExamSession, con
     }
 }
 
+private data class V3AdRewardOffer(
+    val key: String,
+    val title: String,
+    val subtitle: String,
+    val grantedMessage: String,
+    val silver: Int = 0,
+    val grain: Int = 0,
+    val cohesion: Int = 0,
+    val repairDurability: Int = 0
+)
+
+private fun monthlyAdOffer(state: V3GameState): V3AdRewardOffer {
+    val keyPrefix = "month-${state.year}-${state.month}"
+    return when {
+        state.silver < 80 -> V3AdRewardOffer(
+            key = "$keyPrefix-silver",
+            title = "接受行商周转",
+            subtitle = "可选观看一段激励视频，商队送来 70 两应急银",
+            grantedMessage = "行商周转已到账：银两 +70。",
+            silver = 70
+        )
+        state.grain < 120 -> V3AdRewardOffer(
+            key = "$keyPrefix-grain",
+            title = "开仓筹措赈粮",
+            subtitle = "可选观看一段激励视频，乡绅协助筹得 100 石粮",
+            grantedMessage = "赈粮已入仓：粮食 +100。",
+            grain = 100
+        )
+        state.equipment.any { it.durability < it.maxDurability } -> V3AdRewardOffer(
+            key = "$keyPrefix-repair",
+            title = "请军匠维护军械",
+            subtitle = "可选观看一段激励视频，全部军械恢复 12 点耐久",
+            grantedMessage = "军匠维护完成：全部军械耐久 +12。",
+            repairDurability = 12
+        )
+        state.cohesion < 55 -> V3AdRewardOffer(
+            key = "$keyPrefix-cohesion",
+            title = "设宴安抚族人",
+            subtitle = "可选观看一段激励视频，宗族凝聚 +6",
+            grantedMessage = "族宴结束：宗族凝聚 +6。",
+            cohesion = 6
+        )
+        else -> V3AdRewardOffer(
+            key = "$keyPrefix-trade",
+            title = "追加本月商路分红",
+            subtitle = "可选观看一段激励视频，获得 45 两商路分红",
+            grantedMessage = "商路分红已到账：银两 +45。",
+            silver = 45
+        )
+    }
+}
+
+@Composable
+private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameController) {
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    val claimStore = remember { RewardClaimStore(context) }
+    val offer = monthlyAdOffer(controller.state)
+    var loading by remember { mutableStateOf(false) }
+    var claimed by remember(offer.key) { mutableStateOf(claimStore.hasClaimed(offer.key)) }
+
+    V3Dialog(title = monthlyReportTitle(report.title, report.lines), onDismiss = controller::clearReport) {
+        report.lines.forEach { Text("· $it", color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp) }
+        if (!claimed) {
+            Text("本月可选机缘", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(offer.subtitle, color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            V3SmallButton(if (loading) "机缘加载中…" else offer.title, Modifier.fillMaxWidth(), enabled = !loading) {
+                when {
+                    activity == null -> controller.showInfo("当前页面无法打开激励视频。")
+                    loading -> Unit
+                    else -> RewardedAdController.show(
+                        activity = activity,
+                        onLoadingChanged = { loading = it },
+                        onRewarded = {
+                            if (!claimStore.hasClaimed(offer.key)) {
+                                claimStore.markClaimed(offer.key)
+                                claimed = true
+                                controller.grantMonthlyReward(
+                                    description = offer.grantedMessage,
+                                    silver = offer.silver,
+                                    grain = offer.grain,
+                                    cohesion = offer.cohesion,
+                                    repairDurability = offer.repairDurability
+                                )
+                            }
+                        },
+                        onError = controller::showInfo,
+                        onClosed = {}
+                    )
+                }
+            }
+            Text("这是额外奖励，不观看也可直接关闭月报继续游戏。", color = V3Muted, fontSize = 10.sp)
+        }
+    }
+}
+
 @Composable
 private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller: V3GameController) {
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    val claimStore = remember { RewardClaimStore(context) }
+    val battleRewardKey = "battle-${state.year}-${state.month}-${battle.target}-${battle.enemyPower}-${battle.turn}"
+    var adLoading by remember { mutableStateOf(false) }
+    var battleRewardClaimed by remember(battleRewardKey) { mutableStateOf(claimStore.hasClaimed(battleRewardKey)) }
+
     Dialog(onDismissRequest = {}) {
         V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 540.dp)) {
             Text("军务出征 · ${battle.target}", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -2332,6 +2435,31 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                 if (battle.roundLog.isNotEmpty()) {
                     Text("战报", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     battle.roundLog.take(5).forEach { round -> Text("· ${round.text}", color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp) }
+                }
+                if (battle.finished && !battleRewardClaimed) {
+                    Text("战后可选军匠援助：观看一段激励视频，全部军械恢复 18 点耐久。不观看也可直接收兵。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                    V3SmallButton(if (adLoading) "军匠联络中…" else "请军匠战地维护", Modifier.fillMaxWidth(), enabled = !adLoading) {
+                        when {
+                            activity == null -> controller.showInfo("当前页面无法打开激励视频。")
+                            adLoading -> Unit
+                            else -> RewardedAdController.show(
+                                activity = activity,
+                                onLoadingChanged = { adLoading = it },
+                                onRewarded = {
+                                    if (!claimStore.hasClaimed(battleRewardKey)) {
+                                        claimStore.markClaimed(battleRewardKey)
+                                        battleRewardClaimed = true
+                                        controller.grantMonthlyReward(
+                                            description = "战地军械维护完成：全部军械耐久 +18。",
+                                            repairDurability = 18
+                                        )
+                                    }
+                                },
+                                onError = controller::showInfo,
+                                onClosed = {}
+                            )
+                        }
+                    }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     V3SmallButton(if (battle.finished) "收兵结算" else if (battle.turn % 2 == 0) "我方先手" else "敌方先手", Modifier.weight(1f), selected = true) {
