@@ -64,7 +64,51 @@ jobs:
           EOF
 
       - name: Test and build signed release APK
-        run: gradle :app:testDebugUnitTest :app:assembleRelease --no-daemon --stacktrace -Dfile.encoding=UTF-8
+        env:
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
+        run: gradle :app:testDebugUnitTest :app:assembleRelease --no-daemon --stacktrace -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8
+
+      - name: Verify runtime provider classes
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          unzip -q "$apk" 'classes*.dex' -d "$tmp_dir"
+          build_tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$build_tools/dexdump" -f "$tmp_dir"/classes*.dex > "$tmp_dir/dexdump.txt"
+          python3 - "$tmp_dir/dexdump.txt" <<'PY'
+          import re
+          import sys
+
+          expected = {
+              "Lcom/bytedance/sdk/openadsdk/TTFileProvider;": "Landroidx/core/content/FileProvider;",
+              "Lcom/qq/e/comm/GDTFileProvider;": "Landroid/content/ContentProvider;",
+              "Lcom/sigmob/sdk/SigmobFileV4Provider;": "Landroidx/core/content/FileProvider;",
+          }
+          dump = open(sys.argv[1], encoding="utf-8").read()
+          definitions = dict(re.findall(
+              r"Class descriptor\s+: '([^']+)'\n"
+              r"\s+Access flags\s+:.*?\n"
+              r"\s+Superclass\s+: '([^']+)'",
+              dump,
+          ))
+          errors = []
+          for provider, expected_superclass in expected.items():
+              actual_superclass = definitions.get(provider)
+              if actual_superclass is None:
+                  errors.append(f"Missing runtime provider class definition: {provider}")
+              elif actual_superclass != expected_superclass:
+                  errors.append(
+                      f"Invalid superclass for {provider}: "
+                      f"expected {expected_superclass}, got {actual_superclass}"
+                  )
+          if errors:
+              raise SystemExit("\n".join(errors))
+          for provider in expected:
+              print(f"Verified loadable provider: {provider}")
+          PY
 
       - name: Verify release signature
         run: |
