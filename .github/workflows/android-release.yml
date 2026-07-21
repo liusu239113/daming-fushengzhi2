@@ -87,7 +87,7 @@ jobs:
               "Lcom/qq/e/comm/GDTFileProvider;": "Landroid/content/ContentProvider;",
               "Lcom/sigmob/sdk/SigmobFileV4Provider;": "Landroidx/core/content/FileProvider;",
           }
-          dump = open(sys.argv[1], encoding="utf-8").read()
+          dump = open(sys.argv[1], encoding="utf-8", errors="replace").read()
           definitions = dict(re.findall(
               r"Class descriptor\s+: '([^']+)'\n"
               r"\s+Access flags\s+:.*?\n"
