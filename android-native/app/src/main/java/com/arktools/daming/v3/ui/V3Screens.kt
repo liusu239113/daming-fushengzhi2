@@ -355,28 +355,18 @@ private fun Modifier.guideTarget(
 @Composable
 fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, onBackToMenu: () -> Unit) {
     LaunchedEffect(Unit) { controller.ensureV3Bgm() }
-    var secondsToNextMonth by remember { mutableStateOf(0) }
     LaunchedEffect(controller.timeSpeed) {
-        while (true) {
-            if (controller.shouldAutoTick()) {
-                var remainingMillis = monthIntervalMillis(controller.timeSpeed)
-                secondsToNextMonth = ((remainingMillis + 999L) / 1000L).toInt()
-                while (remainingMillis > 0L && controller.shouldAutoTick() && controller.timeSpeed > 0) {
-                    val step = minOf(250L, remainingMillis)
-                    delay(step)
-                    remainingMillis -= step
-                    secondsToNextMonth = ((remainingMillis + 999L) / 1000L).toInt()
-                }
-                if (controller.shouldAutoTick() && controller.timeSpeed > 0) controller.autoAdvanceTime()
-            } else {
-                secondsToNextMonth = 0
-                delay(500L)
-            }
+        while (controller.timeSpeed > 0) {
+            delay(monthIntervalMillis(controller.timeSpeed))
+            if (controller.shouldAutoTick()) controller.autoAdvanceTime()
         }
     }
     val state = controller.state
     var confirmBackToMenu by remember { mutableStateOf(false) }
-    var elderGuideVisible by remember { mutableStateOf(!state.tutorialCompleted) }
+    var elderGuideVisible by remember(state.clanName, state.founderName) { mutableStateOf(!state.tutorialCompleted) }
+    LaunchedEffect(state.tutorialCompleted) {
+        if (!state.tutorialCompleted) elderGuideVisible = true
+    }
     var guideStrategyPage by remember { mutableStateOf<String?>(null) }
     val guideTargets = remember { mutableStateMapOf<V3GuideFocus, Rect>() }
     LaunchedEffect(controller.screen) {
@@ -386,13 +376,14 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     val contentScroll = rememberScrollState()
     val tutorialStep = state.tutorialStep.coerceIn(0, elderGuideSteps(state).lastIndex)
     val tutorialFocus = elderGuideSteps(state)[tutorialStep].focus
-    LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, guideTargets[tutorialFocus], contentScroll.maxValue) {
+    LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, contentScroll.maxValue) {
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
+        delay(120)
         val bounds = guideTargets[tutorialFocus] ?: return@LaunchedEffect
         val targetScroll = (contentScroll.value + bounds.top - 190f)
             .toInt()
             .coerceIn(0, contentScroll.maxValue)
-        contentScroll.animateScrollTo(targetScroll)
+        contentScroll.scrollTo(targetScroll)
     }
     V3Background(controller.screen.backgroundAsset()) {
         Box(Modifier.fillMaxSize()) {
@@ -401,8 +392,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                     state,
                     controller,
                     onRequestBackToMenu = { confirmBackToMenu = true },
-                    guideTargets = guideTargets,
-                    secondsToNextMonth = secondsToNextMonth
+                    guideTargets = guideTargets
                 )
                 Column(
                     Modifier.weight(1f).verticalScroll(contentScroll).padding(10.dp).widthIn(max = 760.dp).align(Alignment.CenterHorizontally),
@@ -421,7 +411,6 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                                 controller.reopenTutorial()
                                 elderGuideVisible = true
                             })
-                            V3Screen.Military -> V3MilitaryPage(state, controller)
                         }
                     }
                 }
@@ -1026,6 +1015,13 @@ private fun V3PeoplePage(
     var selectedPersonId by remember { mutableStateOf<Int?>(null) }
     val person = selectedPersonId?.let { id -> people.firstOrNull { it.id == id } }
     V3Section("族谱", "可拖动查看大族树状图；点小卡片弹出族人详情与培养安排。")
+    V3Panel {
+        Text("族人总管", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("待命族人较多时，无需逐个点开安排。系统会优先处理险地与收支缺口，再按族人所长培养其余人。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+        V3SmallButton("一键安排全部待命族人", Modifier.fillMaxWidth(), selected = true) {
+            controller.autoArrangeMonth()
+        }
+    }
     V3GenealogyTree(
         state.clanName,
         people,
@@ -1341,85 +1337,6 @@ private fun V3StrategyPage(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         V3SmallButton("设置", Modifier.weight(1f), onClick = controller::openSettings)
         V3SmallButton("族老札记", Modifier.weight(1f), onClick = openGuide)
-    }
-}
-
-@Composable
-private fun V3MilitaryPage(state: V3GameState, controller: V3GameController) {
-    val recruitUnlocked = V3GameEngine.isUnlocked(state, "Recruit")
-    val advancedUnlocked = V3GameEngine.isUnlocked(state, "AdvancedTroops")
-    val conquestUnlocked = V3GameEngine.isUnlocked(state, "Conquest")
-    val bannerUnlocked = V3GameEngine.isUnlocked(state, "RaiseBanner")
-    V3Section("军务", "独立管理兵册、军械与出征，不再把长列表塞进大势页面。")
-    V3Panel {
-        Text("军务总览", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("兵册 ${state.army.total()} · 乡勇 ${state.army.militia} · 枪兵 ${state.army.spear} · 弓手 ${state.army.archer} · 盾手 ${state.army.shield} · 骑兵 ${state.army.cavalry}", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
-        Text("募兵消耗银两与粮食；兵种会影响出征攻击、防守和损耗。按钮不可用时也会在点击后说明缺口。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        Text("解锁状态：基础募兵 ${if (recruitUnlocked) "已开" else "需小族或寨堡"} · 精兵 ${if (advancedUnlocked) "已开" else "需望族与团练营"} · 征伐 ${if (conquestUnlocked) "已开" else "需望族并控制地域"} · 举旗 ${if (bannerUnlocked) "已开" else "需县中大姓与80兵"}", color = V3Gold, fontSize = 12.sp, lineHeight = 18.sp)
-    }
-    V3Panel {
-        Text("募兵", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("点击一次募5名。若品第、团练营、价格或粮银不满足，会弹出明确原因。", color = V3Muted, fontSize = 12.sp)
-        V3TroopType.entries.chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { type ->
-                    val enabledByRank = type == V3TroopType.Militia || advancedUnlocked || (type == V3TroopType.Cavalry && state.clanRank >= 4)
-                    V3SmallButton("募${type.label}×5\n银${type.silverCost * 5} / 粮${type.grainCost * 5}", Modifier.weight(1f), enabled = recruitUnlocked && enabledByRank) {
-                        controller.recruitTroops(type, 5)
-                    }
-                }
-                repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-    }
-    V3Panel {
-        Text("军械库", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("武器提高攻击，甲胄与盾牌提高防御，坐骑提高机动攻击。品质越高，基础属性越高，价格也越高。装备后会显示在对应族人详情。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        V3EquipmentSlot.entries.forEach { slot ->
-            val basePrice = when (slot) {
-                V3EquipmentSlot.Weapon -> 32
-                V3EquipmentSlot.Armor -> 32
-                V3EquipmentSlot.Mount -> 28
-                V3EquipmentSlot.Shield -> 24
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(slot.label, color = V3Ink, fontSize = 14.sp, modifier = Modifier.weight(0.8f))
-                V3EquipmentQuality.entries.forEach { quality ->
-                    val price = basePrice * quality.multiplier
-                    V3SmallButton("${quality.label}\n银$price", Modifier.weight(1f)) {
-                        controller.buyEquipment(slot, quality)
-                    }
-                }
-            }
-        }
-        Text("库存与穿戴", color = V3Gold, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        Text("库存 ${state.equipment.count { it.ownerId == null }} 件 · 已装备 ${state.equipment.count { it.ownerId != null }} 件。点击‘装备’后，装备会进入族人详情的装备栏，并计入出战属性。", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
-        if (state.equipment.isEmpty()) {
-            Text("军械库还是空的。先购买一件军械，再给成年族人装备。", color = V3Muted, fontSize = 12.sp)
-        } else {
-            state.equipment.forEach { item ->
-                val owner = item.ownerId?.let { id -> state.people.firstOrNull { it.id == id } }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${item.name} · ${item.quality.label} · 攻${item.attack}/防${item.defense} · 银${item.price} · 耐久${item.durability}%${owner?.let { " · ${it.name}" } ?: " · 库存"}", color = V3Ink, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    if (owner == null) {
-                        val target = V3GameEngine.adultPeople(state).firstOrNull()
-                        V3SmallButton("装备", Modifier.width(58.dp), enabled = target != null) {
-                            if (target != null) controller.equipEquipment(item.id, target.id) else controller.showInfo("当前没有16岁以上的成年族人，装备暂时没有可用的穿戴者。")
-                        }
-                    } else {
-                        V3SmallButton("已装备", Modifier.width(64.dp), enabled = false, onClick = {})
-                    }
-                }
-            }
-        }
-    }
-    V3Panel {
-        Text("出征与军令", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-        Text("出征会打开独立战斗面板：选择成年族人、分配兵种、逐回合推进。兵器与甲胄会直接计入族人的战斗属性。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            V3SmallButton("讨伐高风险地点", Modifier.weight(1f), enabled = recruitUnlocked) { controller.startBattle() }
-            V3SmallButton("举旗", Modifier.weight(1f), enabled = bannerUnlocked) { controller.raiseBanner() }
-        }
     }
 }
 
@@ -1814,6 +1731,7 @@ private fun V3EstatePanel(state: V3GameState, controller: V3GameController) {
             V3SmallButton("控制地域", Modifier.weight(1f)) { controller.showInfo("控制地域：当前已控制的县外区域数量。控制地域会带来额外银粮，也会提高统一进度。当前 ${V3GameEngine.controlledRegionCount(state)}。") }
             V3SmallButton("统一进度", Modifier.weight(1f)) { controller.showInfo("统一进度：跨县经营和征伐的长期进度，不等于家产等级。需要逐步控制战略地域，满足条件后才能宣告统一。当前 ${state.unificationProgress}/100。") }
         }
+        V3SmallButton("一键营建可负担家产", Modifier.fillMaxWidth(), selected = true, onClick = controller::autoManageEstates)
         V3EstateType.entries.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 row.forEach { type ->
@@ -1961,8 +1879,7 @@ private fun V3TopBar(
     state: V3GameState,
     controller: V3GameController,
     onRequestBackToMenu: () -> Unit,
-    guideTargets: MutableMap<V3GuideFocus, Rect>,
-    secondsToNextMonth: Int
+    guideTargets: MutableMap<V3GuideFocus, Rect>
 ) {
     Box(Modifier.fillMaxWidth().guideTarget(V3GuideFocus.TopBar, guideTargets)) {
         AssetImage(GameImages.MingyunPanel, null, Modifier.matchParentSize(), ContentScale.FillBounds)
@@ -1982,7 +1899,7 @@ private fun V3TopBar(
                     V3SmallButton("菜单", Modifier.width(66.dp)) { onRequestBackToMenu() }
                 }
             }
-            V3TimeControls(controller, guideTargets, secondsToNextMonth)
+            V3TimeControls(controller, guideTargets)
             Text(
                 "当前目标：${nextAdvice(state)}",
                 color = V3Red,
@@ -2008,15 +1925,14 @@ private fun V3TopBar(
 @Composable
 private fun V3TimeControls(
     controller: V3GameController,
-    guideTargets: MutableMap<V3GuideFocus, Rect>,
-    secondsToNextMonth: Int
+    guideTargets: MutableMap<V3GuideFocus, Rect>
 ) {
     val context = LocalContext.current
     val activity = context as? android.app.Activity
     val speedPassStore = remember { SpeedPassStore(context) }
     var remainingPassMillis by remember { mutableStateOf(speedPassStore.remainingMillis()) }
     var adLoading by remember { mutableStateOf(false) }
-    // 点击 2–5 倍锁定按钮时先弹确认窗，确认后再拉广告
+    // 点击带锁遮罩的 2–5 倍按钮时先弹确认窗，确认后再拉广告
     var confirmSpeed by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(remainingPassMillis > 0L) {
@@ -2077,17 +1993,22 @@ private fun V3TimeControls(
             V3SmallButton(if (controller.timeSpeed == 0) "继续" else "暂停", Modifier.weight(1f), selected = controller.timeSpeed == 0) { controller.togglePause() }
             listOf(1, 2, 3, 4, 5).forEach { speed ->
                 val unlocked = speed == 1 || remainingPassMillis > 0L
-                val label = if (unlocked) "${speed}倍" else "${speed}倍锁定"
-                V3SmallButton(label, Modifier.weight(1f), selected = controller.timeSpeed == speed, enabled = !adLoading) {
+                V3SpeedButton(
+                    speed = speed,
+                    unlocked = unlocked,
+                    selected = controller.timeSpeed == speed,
+                    modifier = Modifier.weight(1f),
+                    enabled = !adLoading
+                ) {
                     when {
-                        speed == 1 || remainingPassMillis > 0L -> controller.updateTimeSpeed(speed)
-                        adLoading -> Unit // 遮罩已经在显示，不重复弹提示
+                        unlocked -> controller.updateTimeSpeed(speed)
+                        adLoading -> Unit
                         else -> confirmSpeed = speed
                     }
                 }
             }
             Text(
-                if (controller.shouldAutoTick()) "下月 ${secondsToNextMonth}秒" else "时序暂停",
+                if (controller.shouldAutoTick()) "时序推进中" else "时序暂停",
                 color = if (controller.shouldAutoTick()) V3Green else V3Muted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -2166,7 +2087,6 @@ private fun V3Screen.backgroundAsset(): String = when (this) {
     V3Screen.Clan -> GameImages.MingyunClanBg
     V3Screen.People -> GameImages.MingyunPeopleBg
     V3Screen.Strategy -> GameImages.MingyunStrategyBg
-    V3Screen.Military -> GameImages.MingyunStrategyBg
 }
 
 @Composable
@@ -2295,7 +2215,13 @@ private fun V3SelectorChips(title: String, values: List<Pair<String, String>>, s
 
 @Composable
 private fun V3Metric(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier.background(V3PaperDeep, V3SoftShape).padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier
+            .background(V3PaperDeep, V3SoftShape)
+            .border(1.dp, V3Border.copy(alpha = 0.82f), V3SoftShape)
+            .padding(vertical = 7.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(label, color = V3Muted, fontSize = 11.sp)
         Text(value.toString(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
@@ -2366,6 +2292,67 @@ private fun V3Button(text: String, modifier: Modifier = Modifier, enabled: Boole
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp)
         )
+    }
+}
+
+@Composable
+private fun V3SpeedButton(
+    speed: Int,
+    unlocked: Boolean,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 40.dp)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        AssetImage(
+            when {
+                selected -> GameImages.MingyunSmallButtonSelected
+                else -> GameImages.MingyunSmallButton
+            },
+            null,
+            Modifier.matchParentSize(),
+            ContentScale.FillBounds
+        )
+        Text("${speed}倍", color = V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        if (!unlocked) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.58f), V3ButtonShape),
+                contentAlignment = Alignment.Center
+            ) {
+                V3LockIcon(color = V3Gold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun V3LockIcon(color: Color) {
+    Canvas(Modifier.size(20.dp)) {
+        val stroke = size.minDimension * 0.11f
+        drawArc(
+            color = color,
+            startAngle = 180f,
+            sweepAngle = 180f,
+            useCenter = false,
+            topLeft = Offset(size.width * 0.23f, size.height * 0.06f),
+            size = Size(size.width * 0.54f, size.height * 0.58f),
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(size.width * 0.14f, size.height * 0.43f),
+            size = Size(size.width * 0.72f, size.height * 0.48f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.width * 0.09f)
+        )
+        drawCircle(Color.Black.copy(alpha = 0.62f), radius = size.width * 0.055f, center = Offset(size.width * 0.5f, size.height * 0.66f))
     }
 }
 

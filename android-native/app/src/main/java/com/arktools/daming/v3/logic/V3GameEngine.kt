@@ -258,6 +258,27 @@ object V3GameEngine {
         return V3UpgradeCost(baseSilver * nextLevel, baseGrain * nextLevel, type.desc)
     }
 
+    fun autoManageEstates(state: V3GameState): V3GameState {
+        var next = state
+        val developed = mutableListOf<String>()
+        V3EstateType.entries.forEach { type ->
+            if (!isEstateUnlocked(next, type)) return@forEach
+            val beforeLevel = next.estateAssets.firstOrNull { it.type == type }?.level ?: 0
+            val candidate = upgradeEstate(next, type)
+            val afterLevel = candidate.estateAssets.firstOrNull { it.type == type }?.level ?: 0
+            if (afterLevel > beforeLevel) {
+                next = candidate
+                developed += "${type.label}Lv.$afterLevel"
+            }
+        }
+        val summary = if (developed.isEmpty()) {
+            "一键营建未执行：当前没有可负担的家产升级，请先积累银粮、人口或提升宗族品第。"
+        } else {
+            "一键营建完成：${developed.joinToString("、")}。已按当前银粮、人口和解锁条件自动处理。"
+        }
+        return next.copy(pendingReports = listOf(summary))
+    }
+
     fun upgradeEstate(state: V3GameState, type: V3EstateType): V3GameState {
         if (!isEstateUnlocked(state, type)) {
             return state.copy(pendingReports = listOf("${type.label}尚未开放：宗族达到${estateRequiredRank(type)}级后解锁。"))
@@ -1604,7 +1625,6 @@ object V3GameEngine {
         V3Screen.Clan -> "宗族"
         V3Screen.People -> "族人"
         V3Screen.Strategy -> "大势"
-        V3Screen.Military -> "军务"
     }
 
     fun goalProgress(state: V3GameState, goal: V3AnnualGoal): Int = when (goal.metric) {

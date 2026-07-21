@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 const val V3_SAVE_VERSION = 2
 
 @Serializable
-enum class V3Screen { County, Clan, People, Strategy, Military }
+enum class V3Screen { County, Clan, People, Strategy }
 
 @Serializable
 enum class V3Gender(val label: String) { Male("男"), Female("女") }

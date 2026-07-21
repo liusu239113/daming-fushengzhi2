@@ -18,6 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import com.arktools.daming.data.GameImages
+import com.arktools.daming.ui.components.AssetImage
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -134,10 +137,12 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun GateMessage(message: String) {
         Box(
-            modifier = Modifier.fillMaxSize().background(Color(0xFFB98E59)),
+            modifier = Modifier.fillMaxSize().background(Color(0xFF0E0D0B)),
             contentAlignment = Alignment.Center
         ) {
-            Text(message, color = Color(0xFF2B2016))
+            AssetImage(GameImages.V3MainMenuBg, null, Modifier.fillMaxSize(), ContentScale.Crop)
+            Box(Modifier.fillMaxSize().background(Color(0x66100E0B)))
+            Text(message, color = Color(0xFFFFF1D2))
         }
     }
 

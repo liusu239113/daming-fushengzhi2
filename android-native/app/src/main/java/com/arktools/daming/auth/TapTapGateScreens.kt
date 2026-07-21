@@ -2,6 +2,7 @@ package com.arktools.daming.auth
 
 import android.app.Activity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arktools.daming.data.GameImages
+import com.arktools.daming.ui.components.AssetImage
+import androidx.compose.ui.layout.ContentScale
 import com.taptap.sdk.kit.internal.callback.TapTapCallback
 import com.taptap.sdk.kit.internal.exception.TapTapException
 import com.taptap.sdk.login.Scopes
@@ -46,14 +50,19 @@ fun TapTapLoginGate(onLoggedIn: (TapTapAccount) -> Unit) {
         TapTapLogin.getCurrentTapAccount()?.let(onLoggedIn)
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFFB98E59)), contentAlignment = Alignment.Center) {
+    MingGateBackground {
         Column(
-            modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 520.dp).background(Color(0xFFF4E7C7), RoundedCornerShape(18.dp)).padding(24.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .widthIn(max = 520.dp)
+                .background(Color(0xF2181511), RoundedCornerShape(18.dp))
+                .border(1.dp, Color(0xFFB89A62), RoundedCornerShape(18.dp))
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Text("大明浮生志3", color = Color(0xFFA83224), fontSize = 30.sp, fontWeight = FontWeight.Bold)
-            Text("登录 TapTap 账号后进入宗族沙盘", color = Color(0xFF2B2016), fontSize = 15.sp, textAlign = TextAlign.Center)
+            Text("大明浮生志3", color = Color(0xFFE2C17E), fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text("登录 TapTap 账号后进入宗族沙盘", color = Color(0xFFFFF1D2), fontSize = 15.sp, textAlign = TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
@@ -135,14 +144,32 @@ fun ComplianceGate(
         if (allowed) onAllowed()
     }
 
-    Box(Modifier.fillMaxSize().background(Color(0xFFB98E59)), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(message, color = Color(0xFF2B2016), fontSize = 16.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(24.dp))
+    MingGateBackground {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .widthIn(max = 520.dp)
+                .background(Color(0xF2181511), RoundedCornerShape(18.dp))
+                .border(1.dp, Color(0xFFB89A62), RoundedCornerShape(18.dp))
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(message, color = Color(0xFFFFF1D2), fontSize = 16.sp, textAlign = TextAlign.Center)
             if (canRetry) {
                 Button(onClick = onReturnToLogin, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFA83224))) {
                     Text("返回登录")
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MingGateBackground(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color(0xFF0E0D0B)), contentAlignment = Alignment.Center) {
+        AssetImage(GameImages.V3MainMenuBg, null, Modifier.fillMaxSize(), ContentScale.Crop)
+        Box(Modifier.fillMaxSize().background(Color(0x66100E0B)))
+        content()
     }
 }

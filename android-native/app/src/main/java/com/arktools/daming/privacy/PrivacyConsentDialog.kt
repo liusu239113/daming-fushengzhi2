@@ -5,9 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,15 +27,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.arktools.daming.ads.AdConfig
+import com.arktools.daming.data.GameImages
+import com.arktools.daming.ui.components.AssetImage
 import kotlinx.coroutines.launch
 
 @Composable
@@ -43,20 +48,20 @@ fun PrivacyConsentDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preferences = PrivacyPreferences(context)
-    val paper = Color(0xFFF4E7C7)
-    val ink = Color(0xFF2B2016)
-    val muted = Color(0xFF6E5D46)
-    val red = Color(0xFFA83224)
-    val blue = Color(0xFF1565C0)
+    val paper = Color(0xF2181511)
+    val ink = Color(0xFFFFF1D2)
+    val muted = Color(0xFFD1C4AD)
+    val red = Color(0xFFE06B55)
+    val blue = Color(0xFFA5C9CA)
 
-    Dialog(
-        onDismissRequest = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
-    ) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        AssetImage(GameImages.V3MainMenuBg, null, Modifier.fillMaxSize(), ContentScale.Crop)
+        Box(Modifier.fillMaxSize().background(Color(0x66100E0B)))
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.9f)
                 .background(paper, RoundedCornerShape(18.dp))
+                .border(1.dp, Color(0xFFB89A62), RoundedCornerShape(18.dp))
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

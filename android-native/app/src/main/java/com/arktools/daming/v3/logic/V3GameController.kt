@@ -61,7 +61,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         resumeSpeedAfterModal = null
         latestReport = null
         settingsVisible = false
-        message = "你从一户起家。先娶妻成家，再置产业、养子嗣、派族人经营。时间默认暂停，处理完家业后再点继续。"
+        message = null
     }
 
     fun hasSave(): Boolean = saveStore.hasSave()
@@ -171,7 +171,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(SfxKey.V3Edict)
         state = V3GameEngine.autoArrangeMonth(state)
         if (state.people.any { it.alive && (it.currentTask != null || it.trainingFocus != null) }) completeTutorialAction(2)
-        message = state.pendingReports.firstOrNull()
+        message = if (state.tutorialCompleted) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
     }
 
@@ -187,6 +187,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun upgradeSite(siteId: String) {
         audio.playSfx(SfxKey.V3Build)
         state = V3GameEngine.upgradeSite(state, siteId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun autoManageEstates() {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.autoManageEstates(state)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
@@ -405,7 +412,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         state = V3Content.newGame(state.root, state.county, state.creed, state.crisis, state.surname, givenName)
         saveStore.save(state)
         latestReport = null
-        message = "新一轮县域宗族沙盘已重开。"
+        message = null
         timeSpeed = 0
         lastActiveSpeed = 1
         resumeSpeedAfterModal = null
@@ -427,6 +434,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun showInfo(text: String) {
         audio.click()
+        if (!state.tutorialCompleted) return
         pauseForModal()
         message = text
     }
