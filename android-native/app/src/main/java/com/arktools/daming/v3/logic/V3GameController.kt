@@ -79,6 +79,11 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         message = "案卷已启封，旧日县域局势重归案前。"
     }
 
+    companion object {
+        // 新手引导总步骤数：必须与 V3Screens.elderGuideSteps() 的 size 保持一致
+        const val TUTORIAL_STEP_COUNT = 10
+    }
+
     fun switchScreen(next: V3Screen) {
         if (screen != next) audio.tabSwitch()
         screen = next
@@ -481,14 +486,39 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         completeTutorialAction(1)
     }
 
+    /** 宗族页：婚配与提亲面板已被高亮/浏览 */
+    fun observeTutorialMarriage() {
+        completeTutorialAction(4)
+    }
+
+    /** 宗族页：宗族晋升面板已被高亮/浏览 */
+    fun observeTutorialClanPromotion() {
+        completeTutorialAction(5)
+    }
+
+    /** 族谱页：点击任意族人卡片 */
+    fun observeTutorialGenealogy() {
+        completeTutorialAction(6)
+    }
+
+    /** 大势页：声势路线内容已被高亮/浏览 */
+    fun observeTutorialStrategyContent() {
+        completeTutorialAction(7)
+    }
+
+    /** 大势页：点击"声势"页签 */
+    fun observeTutorialStrategyTabs() {
+        completeTutorialAction(8)
+    }
+
     fun finishTutorial() {
-        if (state.tutorialStep < 4) return
-        state = state.copy(tutorialStep = 5, tutorialCompleted = true)
+        if (state.tutorialStep < TUTORIAL_STEP_COUNT - 1) return
+        state = state.copy(tutorialStep = TUTORIAL_STEP_COUNT, tutorialCompleted = true)
         saveStore.save(state)
     }
 
     fun skipTutorial() {
-        state = state.copy(tutorialStep = 5, tutorialCompleted = true)
+        state = state.copy(tutorialStep = TUTORIAL_STEP_COUNT, tutorialCompleted = true)
         saveStore.save(state)
     }
 
@@ -500,10 +530,11 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     private fun completeTutorialAction(requiredStep: Int) {
         if (state.tutorialCompleted || state.tutorialStep != requiredStep) return
+        if (requiredStep >= TUTORIAL_STEP_COUNT) return
         val nextStep = requiredStep + 1
         state = state.copy(
             tutorialStep = nextStep,
-            tutorialCompleted = nextStep >= 5
+            tutorialCompleted = nextStep >= TUTORIAL_STEP_COUNT
         )
         saveStore.save(state)
     }

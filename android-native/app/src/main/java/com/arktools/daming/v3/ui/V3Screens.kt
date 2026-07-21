@@ -51,16 +51,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.awaitPointerEvent
+import androidx.compose.ui.input.pointer.awaitPointerEventScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,6 +80,7 @@ import androidx.compose.ui.window.Dialog
 import com.arktools.daming.ads.RewardClaimStore
 import com.arktools.daming.ads.RewardedAdController
 import com.arktools.daming.ads.SpeedPassStore
+import com.arktools.daming.ads.ui.AdLoadingOverlay
 import com.arktools.daming.data.GameImages
 import com.arktools.daming.ui.components.AssetImage
 import com.arktools.daming.ui.theme.FontPreference
@@ -348,19 +358,22 @@ private fun Modifier.guideTarget(
 fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, onBackToMenu: () -> Unit) {
     LaunchedEffect(Unit) { controller.ensureV3Bgm() }
     var secondsToNextMonth by remember { mutableStateOf(0) }
-    LaunchedEffect(controller.timeSpeed, controller.state.year, controller.state.month, controller.latestReport, controller.message, controller.state.activeEvent, controller.settingsVisible, controller.state.examSession, controller.state.battleState, controller.state.conquestState) {
-        if (controller.shouldAutoTick()) {
-            var remainingMillis = monthIntervalMillis(controller.timeSpeed)
-            secondsToNextMonth = ((remainingMillis + 999L) / 1000L).toInt()
-            while (remainingMillis > 0L && controller.shouldAutoTick()) {
-                val step = minOf(250L, remainingMillis)
-                delay(step)
-                remainingMillis -= step
+    LaunchedEffect(controller.timeSpeed) {
+        while (true) {
+            if (controller.shouldAutoTick()) {
+                var remainingMillis = monthIntervalMillis(controller.timeSpeed)
                 secondsToNextMonth = ((remainingMillis + 999L) / 1000L).toInt()
+                while (remainingMillis > 0L && controller.shouldAutoTick() && controller.timeSpeed > 0) {
+                    val step = minOf(250L, remainingMillis)
+                    delay(step)
+                    remainingMillis -= step
+                    secondsToNextMonth = ((remainingMillis + 999L) / 1000L).toInt()
+                }
+                if (controller.shouldAutoTick() && controller.timeSpeed > 0) controller.autoAdvanceTime()
+            } else {
+                secondsToNextMonth = 0
+                delay(500L)
             }
-            if (controller.shouldAutoTick()) controller.autoAdvanceTime()
-        } else {
-            secondsToNextMonth = 0
         }
     }
     val state = controller.state
@@ -368,6 +381,10 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     var elderGuideVisible by remember { mutableStateOf(!state.tutorialCompleted) }
     var guideStrategyPage by remember { mutableStateOf<String?>(null) }
     val guideTargets = remember { mutableStateMapOf<V3GuideFocus, Rect>() }
+    LaunchedEffect(controller.screen) {
+        // 切换页签时清空旧页面的高亮坐标，避免跨页残留的 Rect 被错误地套用在新页面上
+        guideTargets.clear()
+    }
     val contentScroll = rememberScrollState()
     val tutorialStep = state.tutorialStep.coerceIn(0, elderGuideSteps(state).lastIndex)
     val tutorialFocus = elderGuideSteps(state)[tutorialStep].focus
@@ -447,9 +464,12 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             V3EventDialog(event = event, controller = controller)
         }
     }
-    controller.message?.let { message ->
-        V3Dialog(title = "家书提示", onDismiss = controller::clearMessage) {
-            Text(message, color = V3Ink, fontSize = 15.sp, lineHeight = 23.sp)
+    // 新手引导进行中时屏蔽家书提示弹窗，避免遮挡高亮目标（族人/田庄等被遮住无法点击）
+    if (!elderGuideVisible || state.tutorialCompleted) {
+        controller.message?.let { message ->
+            V3Dialog(title = "家书提示", onDismiss = controller::clearMessage) {
+                Text(message, color = V3Ink, fontSize = 15.sp, lineHeight = 23.sp)
+            }
         }
     }
     if (controller.settingsVisible) {
@@ -628,11 +648,58 @@ private fun elderGuideSteps(state: V3GameState): List<V3ElderGuideStep> = listOf
         V3GuideFocus.TimeControls
     ),
     V3ElderGuideStep(
+        V3Screen.Clan,
+        "媒婆",
+        "female_middle",
+        "第五课 · 宗族与婚配",
+        "田庄与月结是家业底色，但族要靠人丁传下去。已切到【宗族】页，请查看高亮的【婚配与提亲】板块：选中待婚族人，再点下提亲对象即可成婚。",
+        "已切到宗族页，请查看婚配与提亲",
+        V3GuideFocus.Marriage
+    ),
+    V3ElderGuideStep(
+        V3Screen.Clan,
+        "媒婆",
+        "female_middle",
+        "第六课 · 宗族晋升",
+        "婚配之后，族望、人口与产业积累到一定程度即可【宗族晋升】，更高品第会解锁军务、议事与天下经营。请查看高亮的宗族晋升面板。",
+        "请点击高亮的宗族晋升板块",
+        V3GuideFocus.ClanPromotion
+    ),
+    V3ElderGuideStep(
+        V3Screen.People,
+        "族老",
+        "male_elder",
+        "第七课 · 族谱与族人",
+        "已切到【族人】页。中间是整族的树状族谱，可拖动浏览。点击任意族人小卡片会弹出详情：培养、派遣、赐名、分家等操作都从这里出发。",
+        "已切到族人页，请点击任意族人卡片",
+        V3GuideFocus.Genealogy
+    ),
+    V3ElderGuideStep(
+        V3Screen.Strategy,
+        "军师",
+        "male_scholar",
+        "第八课 · 大势与路线",
+        "已切到【大势】页。上方是本局路线评估（耕读/商贾/军功/举旗），下方是地方关系。每一步经营都会改变${state.surname}氏的走向。",
+        "已切到大势页，查看路线评估",
+        V3GuideFocus.StrategyContent,
+        strategyPage = "声势"
+    ),
+    V3ElderGuideStep(
+        V3Screen.Strategy,
+        "军师",
+        "male_scholar",
+        "第九课 · 大势页签",
+        "大势页分四个页签：声势（地方关系与路线）、天下（跨县经营）、军务（募兵与征伐）、近事（每月大事）。依次点过即可解锁对应经营内容。",
+        "请点击高亮的『声势』页签",
+        V3GuideFocus.StrategyTabs,
+        strategyPage = "声势"
+    ),
+    V3ElderGuideStep(
         V3Screen.County,
         "族老",
         "male_elder",
         "家业开卷",
-        "你已亲手核账、开地图、派人和过月。往后记住：田庄与佃田养粮，集市、铺面与商队生银；先成家育人，再扩产业与宗族品第。等根基稳了，才轮得到县外天下。",
+        "你已亲手核账、开地图、派人、过月、看婚配、晋升、族谱与大势。往后记住：田庄与佃田养粮，集市铺面生银；先成家育人，再扩产业与品第，根基稳了才轮得到县外天下。",
         "完成引导",
         V3GuideFocus.MonthlyLedger
     )
@@ -710,26 +777,85 @@ private fun V3ElderGuideOverlay(
 
 @Composable
 private fun V3GuideFocusFrame(targetBounds: Rect?) {
-    if (targetBounds == null) return
     val density = LocalDensity.current
-    val paddingPx = with(density) { 6.dp.toPx() }
-    val left = (targetBounds.left - paddingPx).coerceAtLeast(0f)
-    val top = (targetBounds.top - paddingPx).coerceAtLeast(0f)
-    val width = targetBounds.width + paddingPx * 2f
-    val height = targetBounds.height + paddingPx * 2f
+    val paddingPx = with(density) { 8.dp.toPx() }
+    val cornerPx = with(density) { 12.dp.toPx() }
+    val borderPx = with(density) { 3.dp.toPx() }
+    // 全屏半透明黑色遮罩 + 圆角挖洞，洞外拦截点击，洞内点击穿透给底层控件
     Box(
         Modifier
-            .graphicsLayer {
-                translationX = left
-                translationY = top
+            .fillMaxSize()
+            .pointerInput(targetBounds) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pos = event.changes.firstOrNull()?.position
+                        if (targetBounds != null && pos != null) {
+                            val holeLeft = (targetBounds.left - paddingPx).coerceAtLeast(0f)
+                            val holeTop = (targetBounds.top - paddingPx).coerceAtLeast(0f)
+                            val holeRight = (targetBounds.right + paddingPx)
+                            val holeBottom = (targetBounds.bottom + paddingPx)
+                            val inside = pos.x in holeLeft..holeRight && pos.y in holeTop..holeBottom
+                            if (!inside) {
+                                // 吞掉洞外点击，避免误触其它按钮
+                                event.changes.forEach { it.consume() }
+                            }
+                        } else {
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
             }
-            .size(
-                width = with(density) { width.toDp() },
-                height = with(density) { height.toDp() }
-            )
-            .background(Color(0x22FFF4D8), V3PanelShape)
-            .border(3.dp, V3Gold, V3PanelShape)
-    )
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val hole = if (targetBounds != null) {
+                val left = (targetBounds.left - paddingPx).coerceAtLeast(0f)
+                val top = (targetBounds.top - paddingPx).coerceAtLeast(0f)
+                val right = (targetBounds.right + paddingPx).coerceAtMost(size.width)
+                val bottom = (targetBounds.bottom + paddingPx).coerceAtMost(size.height)
+                androidx.compose.ui.geometry.RoundRect(
+                    left = left,
+                    top = top,
+                    right = right,
+                    bottom = bottom,
+                    radiusX = cornerPx,
+                    radiusY = cornerPx
+                )
+            } else null
+
+            // 离屏合成，用 Clear 混合模式挖洞
+            drawIntoCanvas { canvas ->
+                canvas.saveLayer(
+                    Rect(0f, 0f, size.width, size.height),
+                    Paint()
+                )
+                // 先画满半透明黑色
+                drawRect(color = Color(0x99000000))
+                if (hole != null) {
+                    // 再用 Clear 把目标区域掏空（露出底层控件颜色）
+                    val holePath = Path().apply {
+                        addRoundRect(hole)
+                    }
+                    drawPath(
+                        path = holePath,
+                        color = Color.Transparent,
+                        blendMode = BlendMode.Clear
+                    )
+                }
+                canvas.restore()
+            }
+
+            // 在洞边画金色描边（在挖洞之后，不受 Clear 影响）
+            if (hole != null) {
+                val borderPath = Path().apply { addRoundRect(hole) }
+                drawPath(
+                    path = borderPath,
+                    color = V3Gold,
+                    style = Stroke(width = borderPx, cap = StrokeCap.Round)
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -774,6 +900,20 @@ private fun V3ClanPage(
     controller: V3GameController,
     guideTargets: MutableMap<V3GuideFocus, Rect>
 ) {
+    // 教程：第4课（婚配与提亲）/第5课（宗族晋升）属于"浏览高亮面板"型步骤，
+    // 面板已出现在视野内并被 Canvas 挖洞高亮后，稍作停留即自动推进，避免卡住玩家。
+    LaunchedEffect(state.tutorialStep) {
+        when (state.tutorialStep) {
+            4 -> {
+                delay(1800)
+                controller.observeTutorialMarriage()
+            }
+            5 -> {
+                delay(1800)
+                controller.observeTutorialClanPromotion()
+            }
+        }
+    }
     V3Section("宗族", "${V3GameEngine.clanRankName(state)} · 人口 ${V3GameEngine.alivePeople(state).size} · 产业 ${V3GameEngine.builtSiteCount(state)}")
     V3Panel {
         Text(state.clanName, color = V3Red, fontSize = 22.sp, fontWeight = FontWeight.Bold)
@@ -894,6 +1034,7 @@ private fun V3PeoplePage(
         Modifier.guideTarget(V3GuideFocus.Genealogy, guideTargets),
         onSelect = {
             selectedPersonId = it
+            controller.observeTutorialGenealogy()
         }
     )
     person?.let { selected ->
@@ -1101,6 +1242,13 @@ private fun V3StrategyPage(
     LaunchedEffect(forcedPage) {
         if (forcedPage != null) page = forcedPage
     }
+    // 教程：第7课（浏览声势路线内容）自动推进；第8课（点击声势页签）由按钮点击触发
+    LaunchedEffect(state.tutorialStep, page) {
+        if (state.tutorialStep == 7 && page == "声势") {
+            delay(1800)
+            controller.observeTutorialStrategyContent()
+        }
+    }
     V3Section("大势", "当前路线：${V3GameEngine.dominantRoute(state).label}")
     V3Panel {
         Text("路线评估：${ending.title}", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -1114,7 +1262,10 @@ private fun V3StrategyPage(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             listOf("声势", "天下", "军务", "近事").forEach { label ->
-                V3SmallButton(label, Modifier.weight(1f), selected = page == label) { page = label }
+                V3SmallButton(label, Modifier.weight(1f), selected = page == label) {
+                    page = label
+                    if (label == "声势") controller.observeTutorialStrategyTabs()
+                }
             }
         }
     }
@@ -1867,6 +2018,8 @@ private fun V3TimeControls(
     val speedPassStore = remember { SpeedPassStore(context) }
     var remainingPassMillis by remember { mutableStateOf(speedPassStore.remainingMillis()) }
     var adLoading by remember { mutableStateOf(false) }
+    // 点击 2–5 倍锁定按钮时先弹确认窗，确认后再拉广告
+    var confirmSpeed by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(remainingPassMillis > 0L) {
         while (remainingPassMillis > 0L) {
@@ -1876,6 +2029,43 @@ private fun V3TimeControls(
         if (remainingPassMillis <= 0L && controller.timeSpeed > 1) {
             controller.updateTimeSpeed(1)
             controller.showInfo("广告倍速权益已到期，时间流速已自动恢复为 1 倍。")
+        }
+    }
+
+    // 全屏静态遮罩：只有 adLoading=true 时显示；由 onLoadingChanged(false) 可靠关闭
+    AdLoadingOverlay(visible = adLoading, label = "倍速权益加载中…")
+
+    // 观看前确认弹窗
+    confirmSpeed?.let { speed ->
+        Dialog(onDismissRequest = { confirmSpeed = null }) {
+            V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
+                Text("观看广告解锁倍速", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text("是否观看一段激励视频？完整观看并通过奖励校验后，2–5 倍速度全部解锁 20 分钟，期间可随时切换倍率。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+                Text("不观看也可继续以 1 倍速游玩，1 倍永久免费。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton("关闭", Modifier.weight(1f)) { confirmSpeed = null }
+                    V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
+                        val act = activity
+                        confirmSpeed = null
+                        if (act == null) {
+                            controller.showInfo("当前页面无法打开激励广告。")
+                            return@V3SmallButton
+                        }
+                        RewardedAdController.show(
+                            activity = act,
+                            onLoadingChanged = { adLoading = it },
+                            onRewarded = {
+                                val expiresAt = speedPassStore.unlockForTwentyMinutes()
+                                remainingPassMillis = (expiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                                controller.updateTimeSpeed(speed)
+                                controller.showInfo("激励广告奖励已生效：2–5 倍速度全部解锁 20 分钟，当前切换为 ${speed} 倍。")
+                            },
+                            onError = controller::showInfo,
+                            onClosed = { /* AdLoadingOverlay 由 onLoadingChanged(false) 关闭 */ }
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -1890,23 +2080,11 @@ private fun V3TimeControls(
             listOf(1, 2, 3, 4, 5).forEach { speed ->
                 val unlocked = speed == 1 || remainingPassMillis > 0L
                 val label = if (unlocked) "${speed}倍" else "${speed}倍锁定"
-                V3SmallButton(label, Modifier.weight(1f), selected = controller.timeSpeed == speed) {
+                V3SmallButton(label, Modifier.weight(1f), selected = controller.timeSpeed == speed, enabled = !adLoading) {
                     when {
                         speed == 1 || remainingPassMillis > 0L -> controller.updateTimeSpeed(speed)
-                        adLoading -> controller.showInfo("激励广告正在加载，请稍候。")
-                        activity == null -> controller.showInfo("当前页面无法打开激励广告。")
-                        else -> RewardedAdController.show(
-                            activity = activity,
-                            onLoadingChanged = { adLoading = it },
-                            onRewarded = {
-                                val expiresAt = speedPassStore.unlockForTwentyMinutes()
-                                remainingPassMillis = (expiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
-                                controller.updateTimeSpeed(speed)
-                                controller.showInfo("激励广告奖励已生效：2–5 倍速度全部解锁 20 分钟，当前切换为 ${speed} 倍。")
-                            },
-                            onError = controller::showInfo,
-                            onClosed = {}
-                        )
+                        adLoading -> Unit // 遮罩已经在显示，不重复弹提示
+                        else -> confirmSpeed = speed
                     }
                 }
             }
@@ -2343,37 +2521,58 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
     val claimStore = remember { RewardClaimStore(context) }
     val offer = monthlyAdOffer(controller.state)
     var loading by remember { mutableStateOf(false) }
+    var confirmOffer by remember { mutableStateOf(false) }
     var claimed by remember(offer.key) { mutableStateOf(claimStore.hasClaimed(offer.key)) }
+
+    AdLoadingOverlay(visible = loading, label = "机缘加载中…")
+
+    if (confirmOffer && !claimed) {
+        Dialog(onDismissRequest = { confirmOffer = false }) {
+            V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
+                Text(offer.title, color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(offer.subtitle, color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+                Text("完整观看并通过奖励校验后奖励即刻发放；不观看也可直接关闭月报继续游戏。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton("关闭", Modifier.weight(1f)) { confirmOffer = false }
+                    V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
+                        val act = activity
+                        confirmOffer = false
+                        if (act == null) {
+                            controller.showInfo("当前页面无法打开激励视频。")
+                            return@V3SmallButton
+                        }
+                        RewardedAdController.show(
+                            activity = act,
+                            onLoadingChanged = { loading = it },
+                            onRewarded = {
+                                if (!claimStore.hasClaimed(offer.key)) {
+                                    claimStore.markClaimed(offer.key)
+                                    claimed = true
+                                    controller.grantMonthlyReward(
+                                        description = offer.grantedMessage,
+                                        silver = offer.silver,
+                                        grain = offer.grain,
+                                        cohesion = offer.cohesion,
+                                        repairDurability = offer.repairDurability
+                                    )
+                                }
+                            },
+                            onError = controller::showInfo,
+                            onClosed = {}
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     V3Dialog(title = monthlyReportTitle(report.title, report.lines), onDismiss = controller::clearReport) {
         report.lines.forEach { Text("· $it", color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp) }
         if (!claimed) {
             Text("本月可选机缘", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text(offer.subtitle, color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-            V3SmallButton(if (loading) "机缘加载中…" else offer.title, Modifier.fillMaxWidth(), enabled = !loading) {
-                when {
-                    activity == null -> controller.showInfo("当前页面无法打开激励视频。")
-                    loading -> Unit
-                    else -> RewardedAdController.show(
-                        activity = activity,
-                        onLoadingChanged = { loading = it },
-                        onRewarded = {
-                            if (!claimStore.hasClaimed(offer.key)) {
-                                claimStore.markClaimed(offer.key)
-                                claimed = true
-                                controller.grantMonthlyReward(
-                                    description = offer.grantedMessage,
-                                    silver = offer.silver,
-                                    grain = offer.grain,
-                                    cohesion = offer.cohesion,
-                                    repairDurability = offer.repairDurability
-                                )
-                            }
-                        },
-                        onError = controller::showInfo,
-                        onClosed = {}
-                    )
-                }
+            V3SmallButton(offer.title, Modifier.fillMaxWidth(), enabled = !loading) {
+                if (!loading) confirmOffer = true
             }
             Text("这是额外奖励，不观看也可直接关闭月报继续游戏。", color = V3Muted, fontSize = 10.sp)
         }
@@ -2387,7 +2586,47 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
     val claimStore = remember { RewardClaimStore(context) }
     val battleRewardKey = "battle-${state.year}-${state.month}-${battle.target}-${battle.enemyPower}-${battle.turn}"
     var adLoading by remember { mutableStateOf(false) }
+    var confirmBattleReward by remember { mutableStateOf(false) }
     var battleRewardClaimed by remember(battleRewardKey) { mutableStateOf(claimStore.hasClaimed(battleRewardKey)) }
+
+    AdLoadingOverlay(visible = adLoading, label = "军匠联络中…")
+
+    if (confirmBattleReward && battle.finished && !battleRewardClaimed) {
+        Dialog(onDismissRequest = { confirmBattleReward = false }) {
+            V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
+                Text("请军匠战地维护", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text("是否观看一段激励视频？完整观看并通过奖励校验后，全部军械恢复 18 点耐久。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+                Text("不观看也可直接收兵结算，不影响战斗结果。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton("关闭", Modifier.weight(1f)) { confirmBattleReward = false }
+                    V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
+                        val act = activity
+                        confirmBattleReward = false
+                        if (act == null) {
+                            controller.showInfo("当前页面无法打开激励视频。")
+                            return@V3SmallButton
+                        }
+                        RewardedAdController.show(
+                            activity = act,
+                            onLoadingChanged = { adLoading = it },
+                            onRewarded = {
+                                if (!claimStore.hasClaimed(battleRewardKey)) {
+                                    claimStore.markClaimed(battleRewardKey)
+                                    battleRewardClaimed = true
+                                    controller.grantMonthlyReward(
+                                        description = "战地军械维护完成：全部军械耐久 +18。",
+                                        repairDurability = 18
+                                    )
+                                }
+                            },
+                            onError = controller::showInfo,
+                            onClosed = {}
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     Dialog(onDismissRequest = {}) {
         V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 540.dp)) {
@@ -2438,27 +2677,8 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                 }
                 if (battle.finished && !battleRewardClaimed) {
                     Text("战后可选军匠援助：观看一段激励视频，全部军械恢复 18 点耐久。不观看也可直接收兵。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
-                    V3SmallButton(if (adLoading) "军匠联络中…" else "请军匠战地维护", Modifier.fillMaxWidth(), enabled = !adLoading) {
-                        when {
-                            activity == null -> controller.showInfo("当前页面无法打开激励视频。")
-                            adLoading -> Unit
-                            else -> RewardedAdController.show(
-                                activity = activity,
-                                onLoadingChanged = { adLoading = it },
-                                onRewarded = {
-                                    if (!claimStore.hasClaimed(battleRewardKey)) {
-                                        claimStore.markClaimed(battleRewardKey)
-                                        battleRewardClaimed = true
-                                        controller.grantMonthlyReward(
-                                            description = "战地军械维护完成：全部军械耐久 +18。",
-                                            repairDurability = 18
-                                        )
-                                    }
-                                },
-                                onError = controller::showInfo,
-                                onClosed = {}
-                            )
-                        }
+                    V3SmallButton("请军匠战地维护", Modifier.fillMaxWidth(), enabled = !adLoading) {
+                        if (!adLoading) confirmBattleReward = true
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
