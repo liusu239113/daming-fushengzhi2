@@ -30,8 +30,48 @@ jobs:
         with:
           gradle-version: 8.11.1
 
-      - name: Build APK
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Restore release configuration
+        env:
+          TAPTAP_CLIENT_TOKEN: ${{ secrets.TAPTAP_CLIENT_TOKEN }}
+          PRIVACY_POLICY_URL: ${{ secrets.PRIVACY_POLICY_URL }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          required=(
+            TAPTAP_CLIENT_TOKEN
+            PRIVACY_POLICY_URL
+            ANDROID_RELEASE_KEYSTORE_BASE64
+            ANDROID_RELEASE_STORE_PASSWORD
+            ANDROID_RELEASE_KEY_ALIAS
+            ANDROID_RELEASE_KEY_PASSWORD
+          )
+          for name in "${required[@]}"; do
+            test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
+          done
+          mkdir -p keystore
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > keystore/daming-release.p12
+          chmod 600 keystore/daming-release.p12
+          cat > local.properties <<EOF
+          TAPTAP_CLIENT_TOKEN=$TAPTAP_CLIENT_TOKEN
+          PRIVACY_POLICY_URL=$PRIVACY_POLICY_URL
+          RELEASE_STORE_FILE=keystore/daming-release.p12
+          RELEASE_STORE_PASSWORD=$ANDROID_RELEASE_STORE_PASSWORD
+          RELEASE_KEY_ALIAS=$ANDROID_RELEASE_KEY_ALIAS
+          RELEASE_KEY_PASSWORD=$ANDROID_RELEASE_KEY_PASSWORD
+          EOF
+
+      - name: Test and build signed release APK
+        run: gradle :app:testDebugUnitTest :app:assembleRelease --no-daemon --stacktrace -Dfile.encoding=UTF-8
+
+      - name: Verify release signature
+        run: |
+          set -euo pipefail
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify --verbose --print-certs "$apk"
 
       - name: Prepare release files
         id: prep
@@ -40,14 +80,14 @@ jobs:
           set -euo pipefail
           short_sha="${GITHUB_SHA::7}"
           tag="android-${short_sha}"
-          apk="app/build/outputs/apk/debug/app-debug.apk"
-          out="daming-fushengzhi3-${tag}.apk"
+          apk="app/build/outputs/apk/release/app-release.apk"
+          out="daming-fushengzhi3-release-${tag}.apk"
           test -f "$apk"
           cp "$apk" "$out"
           {
             echo "tag=$tag"
             echo "apk=$out"
-            echo "title=大明浮生志3 Android ${short_sha}"
+            echo "title=大明浮生志3 Android Release ${short_sha}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release and upload APK
@@ -59,4 +99,4 @@ jobs:
           gh release create "${{ steps.prep.outputs.tag }}" \
             "${{ steps.prep.outputs.apk }}" \
             --title "${{ steps.prep.outputs.title }}" \
-            --notes "Automated Android APK build for commit ${GITHUB_SHA}."
+            --notes "Signed Android release APK for commit ${GITHUB_SHA}."

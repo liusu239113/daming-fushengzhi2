@@ -5,3 +5,8 @@ local.properties
 *.iml
 .idea/
 app/build/
+.asset-backups/
+keystore/
+*.jks
+*.keystore
+*.p12
