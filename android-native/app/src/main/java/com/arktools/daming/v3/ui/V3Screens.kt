@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -120,6 +121,7 @@ import com.arktools.daming.v3.logic.V3GameEngine
 import com.arktools.daming.v3.logic.V3ProgressionEngine
 import com.arktools.daming.v3.logic.V3ProgressionSnapshot
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 private val V3Ink = Color(0xFFFFF1D2)
 private val V3Paper = Color(0xF0181511)
@@ -374,7 +376,7 @@ private fun Modifier.guideTarget(
     targets: MutableMap<V3GuideFocus, Rect>,
     actions: MutableMap<V3GuideFocus, () -> Unit>? = null,
     onClick: (() -> Unit)? = null
-): Modifier = onGloballyPositioned { coordinates ->
+): Modifier = this.onGloballyPositioned { coordinates ->
     targets[focus] = coordinates.boundsInRoot()
     if (actions != null && onClick != null) actions[focus] = onClick
 }
@@ -403,16 +405,15 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     val screenHeightPx = with(screenDensity) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val tutorialStep = state.tutorialStep.coerceIn(0, elderGuideSteps(state).lastIndex)
     val tutorialFocus = elderGuideSteps(state)[tutorialStep].focus
-    val tutorialTargetBounds = guideTargets[tutorialFocus]
     val localTutorialSteps = setOf(6, 7, 8, 12, 13, 14, 17, 18)
     val tutorialUsesLocalOverlay = tutorialStep in localTutorialSteps
-    var tutorialTargetReady by remember(tutorialStep) { mutableStateOf(false) }
     var tutorialCardAtTop by remember(tutorialStep) { mutableStateOf(false) }
+    var tutorialTargetBounds by remember(tutorialStep) { mutableStateOf<Rect?>(null) }
+    val measuredTutorialTarget = guideTargets[tutorialFocus]
     val cardAtTop = tutorialCardAtTop
     LaunchedEffect(elderGuideVisible, tutorialStep) {
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
         val step = elderGuideSteps(state)[tutorialStep]
-        guideStrategyPage = step.strategyPage
         if (step.tab == V3Screen.County) {
             countyHomePage = when (step.focus) {
                 V3GuideFocus.CountyMap,
@@ -426,6 +427,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             }
         }
         if (controller.screen != step.tab) controller.switchScreen(step.tab)
+        guideStrategyPage = step.strategyPage
     }
     LaunchedEffect(
         elderGuideVisible,
@@ -434,9 +436,9 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         guideStrategyPage,
         contentScroll.maxValue,
         countyHomePage,
-        tutorialTargetBounds != null
+        measuredTutorialTarget
     ) {
-        tutorialTargetReady = false
+        tutorialTargetBounds = null
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
         val step = elderGuideSteps(state)[tutorialStep]
         // 教程只负责把步骤目标带到正确页面，不再在玩家手动切页后强制拉回。
@@ -489,15 +491,15 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             if (adjustment != 0) {
                 contentScroll.scrollTo((contentScroll.value + adjustment).coerceIn(0, contentScroll.maxValue))
             } else {
+                tutorialTargetBounds = bounds
                 tutorialCardAtTop = shouldPlaceCardTop
-                tutorialTargetReady = true
                 return@LaunchedEffect
             }
         }
         val finalBounds = guideTargets[tutorialFocus]
         if (finalBounds != null && finalBounds.bottom > 0f && finalBounds.top < screenHeightPx) {
+            tutorialTargetBounds = finalBounds
             tutorialCardAtTop = finalBounds.center.y > screenHeightPx * 0.55f
-            tutorialTargetReady = true
         }
     }
     V3Background(controller.screen.backgroundAsset()) {
@@ -507,7 +509,8 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                     state,
                     controller,
                     onRequestBackToMenu = { confirmBackToMenu = true },
-                    guideTargets = guideTargets
+                    guideTargets = guideTargets,
+                    tutorialStep = tutorialStep
                 )
                 Column(
                     Modifier.weight(1f).verticalScroll(contentScroll).padding(10.dp).widthIn(max = 760.dp).align(Alignment.CenterHorizontally),
@@ -556,7 +559,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                 V3ElderGuideOverlay(
                     state = state,
                     controller = controller,
-                    targetBounds = tutorialTargetBounds.takeIf { tutorialTargetReady },
+                    targetBounds = tutorialTargetBounds,
                     cardAtTop = cardAtTop,
                     onStrategyPageChange = { guideStrategyPage = it },
                     onDismiss = {
@@ -662,7 +665,7 @@ private fun V3HomePage(
             V3ClanLedgerPanel(
                 state,
                 Modifier.guideTarget(V3GuideFocus.MonthlyLedger, guideTargets),
-                onClick = { controller.advanceTutorial(2); controller.showInfo("族中月账：人丁耗粮是所有活着的族人每月口粮；乡勇耗粮是兵册维护费；险地是风险达到55以上的地点。银粮收支会在每月结算时真正改变库存。") }
+                onClick = { controller.showInfo("族中月账：人丁耗粮是所有活着的族人每月口粮；乡勇耗粮是兵册维护费；险地是风险达到55以上的地点。银粮收支会在每月结算时真正改变库存。") }
             )
             V3Panel(Modifier.guideTarget(V3GuideFocus.MonthlyForecast, guideTargets)) {
                 Text("本月账本", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -905,27 +908,27 @@ private fun elderGuideSteps(state: V3GameState): List<V3ElderGuideStep> {
     V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "再看本月收支", "本月账本预估银粮收支。田庄和佃田补粮，集市、铺面和商队生银；地点控制越高、风险越低，收入越稳定。", "读完后点击下一步", V3GuideFocus.MonthlyForecast),
     V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "第二章 · 县域产业", "地图上的每个地点都有等级、控制、风险和专属用途。接下来会请你亲手打开南乡田庄。", "先了解地图，读完后点击下一步", V3GuideFocus.CountyMap),
     V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "打开南乡田庄", "田庄是前期粮食根基。请点击地图中高亮的南乡田庄图钉，打开真实的地点管理。", "点击南乡田庄图钉", V3GuideFocus.FarmlandPin, requiresAction = true),
-    V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "读懂地点详情", "月产说明这个地点每月带来什么；控制越高，收益越稳；风险越高，越容易减产或出事；等级决定基础产量。", "在田庄详情中点击继续", V3GuideFocus.SiteOverview),
+    V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "读懂地点详情", "月产说明这个地点每月带来什么；控制越高，收益越稳；风险越高，越容易减产或出事；等级决定基础产量。", "在田庄详情中查看高亮信息，读完点击下一步", V3GuideFocus.SiteOverview),
     V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "地点如何经营", "专属事务会立即改变地点或关系；营建升级提高长期产量；派遣族人管田、治理或赈济，则在月结时改善控制、风险和收益。", "查看经营按钮和派遣说明", V3GuideFocus.SiteActions),
     V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "返回家业总览", "地点详情只是查看和建设入口；给谁派什么差事，要到族人详情中决定。现在关闭田庄详情。", "点击关闭，返回家业页", V3GuideFocus.SiteClose, requiresAction = true),
-    V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "家产是第二条收入线", "县域地点之外还有佃田、铺面、作坊、粮仓、商队和团练营。一键营建会按当前银粮与解锁条件处理；前期优先补自己缺少的银或粮。", "点击家产管理，继续", V3GuideFocus.EstateOverview),
-    V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "年度目标不是装饰", "眼前目标给出本年度最紧要的方向。它们完成后会带来资源和路线进展，也是判断下一步经营方向的依据。", "点击眼前目标，继续", V3GuideFocus.AnnualGoals),
+    V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "家产是第二条收入线", "县域地图下方的家产管理包含佃田、铺面、作坊、粮仓、商队和团练营。这里先认识长期建设入口，不要求现在花费资源。", "查看高亮的家产管理区域，读完点击下一步", V3GuideFocus.EstateOverview),
+    V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "年务是额外目标", "总览页底部的年务支线提供额外资源与路线奖励，不会取代顶部章节主线。这里先认识它的位置与作用。", "查看高亮的年务支线，读完点击下一步", V3GuideFocus.AnnualGoals),
     V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "第三章 · 人才经营", "产业不会自己运转。族谱展示亲子关系和每个人当前状态；真正的培养、派差和科举都从族人详情开始。", "点击高亮族人卡片，打开详情", V3GuideFocus.Genealogy, requiresAction = true),
-    V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "读懂一个族人", "学、武、商、谋决定适合的差事；忠影响宗族稳定；绩记录功劳；劳过高会降低办事效果。先看清人，再安排。", "在族人详情中点击继续", V3GuideFocus.PersonOverview),
-    V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "培养决定长期成长", "读书、习武、学算、礼法分别提高学、武、商、谋。培养会占用本月行动，所以不能同时派差；儿童不能外出，但培养成长更快。", "查看培养区域", V3GuideFocus.PersonTraining),
+    V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "读懂一个族人", "学、武、商、谋决定适合的差事；忠影响宗族稳定；绩记录功劳；劳过高会降低办事效果。先看清人，再安排。", "在族人详情中查看高亮信息，读完点击下一步", V3GuideFocus.PersonOverview),
+    V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "培养决定长期成长", "读书、习武、学算、礼法分别提高学、武、商、谋。培养会占用本月行动，所以不能同时派差；儿童不能外出，但培养成长更快。", "查看高亮培养区域，读完点击下一步", V3GuideFocus.PersonTraining),
     V3ElderGuideStep(V3Screen.People, "周管事", "male_middle", "亲手派一次差事", "系统会给出推荐差事。请点击高亮的可用差事，让这名族人本月真正去经营对应地点；月结时才会兑现结果。", "点击高亮差事按钮", V3GuideFocus.PersonTask, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "自动安排其余人手", "手动派差适合精细经营；人多以后可用一键安排，让系统根据缺粮、缺银、地点风险和族人所长处理其余待命者。", "点击一键安排本月派遣与培养", V3GuideFocus.AutoArrange, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "第四章 · 完成一个经营月", "安排只是计划，必须推进月结才会获得产出、成长、婚育进度与事件结果。点击继续，真实推进一个月。", "点击继续，推进一个月", V3GuideFocus.TimeControls, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "阅读月报", "月报会列出银粮变化、地点经营、族人成长和目标进度。不要只看库存数字，要从月报判断下个月该补什么。", "阅读月报后点击知道了", V3GuideFocus.MonthlyReportDismiss, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "处理月度事件", "事件选择会真实改变银粮、关系、族望、凝聚与路线。先看代价和后果，再选择最符合当前家底和长期路线的方案。", "选择一个事件方案；若本月无事件则继续", V3GuideFocus.EventChoice, requiresAction = true),
-    V3ElderGuideStep(V3Screen.Clan, "族老", "male_elder", "第五章 · 宗族成长", "凝聚决定内部稳定，族望决定外部认可，品第决定系统解锁，乡勇负责防务但每月吃粮。四项不能只顾一头。", "点击宗族概况，继续", V3GuideFocus.ClanOverview),
-    V3ElderGuideStep(V3Screen.Clan, "媒婆", "female_middle", "婚配是人口循环起点", "先选待婚族人，再看对象的礼金、粮耗、属性和路线倾向，最后确认成婚。婚后经过备孕和孕期才会添丁，不是立刻增加人口。", "点击婚配与提亲标题", V3GuideFocus.Marriage),
+    V3ElderGuideStep(V3Screen.Clan, "族老", "male_elder", "第五章 · 宗族成长", "宗族概况中的凝聚、族望、品第和乡勇分别代表内部稳定、外部声望、系统解锁与防务规模。这里先认识四项含义。", "查看高亮的宗族概况，读完点击下一步", V3GuideFocus.ClanOverview),
+    V3ElderGuideStep(V3Screen.Clan, "媒婆", "female_middle", "婚配是人口循环起点", "婚配区先选择待婚族人，再查看礼金、粮耗、属性与路线倾向。婚后还要经历备孕和孕期，不会立刻增加人口。", "查看高亮的婚配区域，读完点击下一步", V3GuideFocus.Marriage),
     V3ElderGuideStep(V3Screen.Clan, "媒婆", "female_middle", "先选为谁议亲", "待婚名单只包含符合年龄与婚姻状态的族人。选择不同族人，候选对象也会变化。", "点击高亮的待婚族人", V3GuideFocus.MarriagePerson, requiresAction = true),
-    V3ElderGuideStep(V3Screen.Clan, "媒婆", "female_middle", "看清对象再成婚", "候选对象会改变学武商谋、路线和未来家庭结构。教程不强迫你花资源成婚；正式经营时确认资源充足再点成婚。", "点击候选对象说明，继续", V3GuideFocus.MarriageCandidate),
-    V3ElderGuideStep(V3Screen.Clan, "族老", "male_elder", "品第是主要解锁线", "晋升需要银、粮、人口、产业和族望。小族开放议事与基础募兵，望族开放天下经营和精兵；更高品第才有征伐、举旗和统一资格。", "点击宗族晋升，查看要求", V3GuideFocus.ClanPromotion),
-    V3ElderGuideStep(V3Screen.Strategy, "军师", "male_scholar", "第六章 · 长期路线", "耕读、商贾、军功、割据等路线不是开局选项，而是每次产业、培养、议事、军务和事件选择长期累积的结果。", "点击路线评估，继续", V3GuideFocus.StrategyContent, "声势"),
-    V3ElderGuideStep(V3Screen.Strategy, "军师", "male_scholar", "地方关系", "官府、士绅、乡民、商帮、军镇和流寇关系会改变事件、经营和战争难度。不能只堆银粮而忽视关系。", "点击声势页内容，继续", V3GuideFocus.Relations, "声势"),
-    V3ElderGuideStep(V3Screen.Strategy, "军师", "male_scholar", "宗族议事", "升为小族后每月可议一次方略。赈济、经商、祭祖、团练、讲学分别改变资源、关系与路线；这是每月方向盘。", "查看议事区域或解锁条件", V3GuideFocus.Council, "声势"),
+    V3ElderGuideStep(V3Screen.Clan, "媒婆", "female_middle", "看清对象再成婚", "高亮候选卡会显示对象属性、礼金、粮耗和路线倾向。教程只说明这些信息，不强迫你支付资源成婚。", "查看高亮的候选对象卡，读完点击下一步", V3GuideFocus.MarriageCandidate),
+    V3ElderGuideStep(V3Screen.Clan, "族老", "male_elder", "品第是主要解锁线", "高亮的宗族晋升区列出下一品第所需银、粮、人口、产业和族望，并明确晋升后开放的玩法。", "查看高亮的晋升要求，读完点击下一步", V3GuideFocus.ClanPromotion),
+    V3ElderGuideStep(V3Screen.Strategy, "军师", "male_scholar", "第六章 · 长期路线", "高亮的路线评估会根据产业、培养、议事、军务和事件选择计算当前主路线与终局倾向。", "查看高亮的路线评估，读完点击下一步", V3GuideFocus.StrategyContent, "声势"),
+    V3ElderGuideStep(V3Screen.Strategy, "军师", "male_scholar", "地方关系", "高亮区域列出官府、士绅、乡民、商帮、军镇和流寇关系；极端关系会改变事件、经营和战争难度。", "查看高亮的地方关系，读完点击下一步", V3GuideFocus.Relations, "声势"),
+    V3ElderGuideStep(V3Screen.Strategy, "军师", "male_scholar", "宗族议事", "高亮区域是宗族议事。当前未解锁时会显示明确条件；升为小族后，每月可议定一次家政方略。", "查看高亮的议事区域或解锁条件，读完点击下一步", V3GuideFocus.Council, "声势"),
     V3ElderGuideStep(V3Screen.Strategy, "军师", "male_scholar", "天下经营", "升为望族后可跨县结交、经营和征伐。先接触，再提升影响，最后控制地域；不要在县内根基不稳时急着扩张。", "点击天下页签，查看解锁条件", V3GuideFocus.WorldTab, "天下", requiresAction = true),
     V3ElderGuideStep(V3Screen.Strategy, "武教头", "male_middle", "军务与防务", "小族开放基础募兵，望族和团练营开放精兵与征伐。兵越多每月耗粮越高；装备要购买、穿戴和修复，出战还要选择合适将领。", "点击军务页签，查看解锁条件", V3GuideFocus.MilitaryTab, "军务", requiresAction = true),
     V3ElderGuideStep(V3Screen.Strategy, "沈账房", "male_scholar", "近事是经营记录", "近事记录每月大事、选择和结果。忘记上一月发生了什么时，先来这里复盘，再决定下一步。", "点击近事页签", V3GuideFocus.RecentTab, "近事", requiresAction = true),
@@ -968,9 +971,23 @@ private fun V3LocalGuideOverlay(
             Text(step.title, color = V3Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Text(step.words, color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
             Text(step.action, color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (step.requiresAction && targetBounds == null) {
+                Text(
+                    "正在定位可操作目标，请稍候。目标出现前不会要求你盲点。",
+                    color = V3Red,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text("步骤 ${safeIndex + 1}/${steps.size}", color = V3Muted, fontSize = 10.sp)
             if (step.requiresAction) {
-                V3SmallButton("请完成高亮操作", Modifier.fillMaxWidth(), enabled = false, selected = true) {}
+                V3SmallButton(
+                    if (targetBounds == null) "正在定位目标" else "请完成高亮操作",
+                    Modifier.fillMaxWidth(),
+                    enabled = false,
+                    selected = true
+                ) {}
             } else {
                 V3SmallButton("下一步", Modifier.fillMaxWidth(), selected = true) {
                     controller.advanceTutorial(safeIndex)
@@ -1040,6 +1057,15 @@ private fun V3ElderGuideOverlay(
                     lineHeight = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
+                if (step.requiresAction && targetBounds == null) {
+                    Text(
+                        "正在定位可操作目标，请稍候。目标出现前不会要求你盲点。",
+                        color = V3Red,
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     V3SmallButton("跳过引导", Modifier.weight(1f)) {
                         controller.skipTutorial()
@@ -1055,7 +1081,12 @@ private fun V3ElderGuideOverlay(
                             controller.advanceTutorial(safeIndex)
                         }
                     } else {
-                        V3SmallButton("请完成高亮操作", Modifier.weight(2f), enabled = false, selected = true) {}
+                        V3SmallButton(
+                            if (targetBounds == null) "正在定位目标" else "请完成高亮操作",
+                            Modifier.weight(2f),
+                            enabled = false,
+                            selected = true
+                        ) {}
                     }
                 }
             }
@@ -1452,6 +1483,17 @@ private fun V3GenealogyTree(
     val contentWidthPx = with(density) { contentWidth.dp.toPx() }
     val contentHeightPx = with(density) { contentHeight.dp.toPx() }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(viewportSize, people.firstOrNull()?.id) {
+        val firstPerson = people.firstOrNull() ?: return@LaunchedEffect
+        val target = positions[firstPerson.id] ?: return@LaunchedEffect
+        if (viewportSize != IntSize.Zero) {
+            val centeredX = (viewportSize.width.toFloat() - contentWidthPx) / 2f
+            pan = Offset(
+                viewportSize.width * 0.5f - (target.x + nodeWidth * 0.5f) * density.density - centeredX,
+                0f
+            )
+        }
+    }
     V3Panel(modifier) {
         Text("${clanName}谱系", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text("以开族祖为中心，按亲子关系向下展开；拖动画布查看完整家谱，点卡片查看详情。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
@@ -1480,9 +1522,11 @@ private fun V3GenealogyTree(
                 Modifier
                     .wrapContentSize(Alignment.TopStart, unbounded = true)
                     .requiredSize(contentWidth.dp, contentHeight.dp)
-                    .graphicsLayer {
-                        translationX = pan.x + centeredX
-                        translationY = pan.y
+                    .offset {
+                        IntOffset(
+                            (pan.x + centeredX).roundToInt(),
+                            pan.y.roundToInt()
+                        )
                     }
             ) {
                 AssetImage(GameImages.V3GenealogyBg, null, Modifier.fillMaxSize(), ContentScale.FillBounds, alpha = 0.72f)
@@ -1544,8 +1588,9 @@ private fun V3FamilyMiniNode(
         else -> "待命"
     }
     Box(
-        modifier
+        Modifier
             .offset(x = x.dp, y = y.dp)
+            .then(modifier)
             .width(112.dp)
             .height(nodeHeight.dp)
             .background(V3Paper.copy(alpha = 0.96f), V3SoftShape)
@@ -2052,9 +2097,19 @@ private fun V3CountyMapView(
             val mapHeight = with(density) { mapHeightPx.toDp() }
             val minPanX = frameWidthPx - mapWidthPx
             val minPanY = frameHeightPx - mapHeightPx
+            LaunchedEffect(tutorialStep, frameWidthPx, frameHeightPx) {
+                if (tutorialStep == 5) {
+                    val farmland = siteMapPoint("farmland")
+                    val pinHeightPx = with(density) { 110.dp.toPx() }
+                    pan = Offset(
+                        (frameWidthPx * 0.5f - mapWidthPx * farmland.x).coerceIn(minPanX, 0f),
+                        (frameHeightPx * 0.42f - mapHeightPx * farmland.y + pinHeightPx * 0.15f).coerceIn(minPanY, 0f)
+                    )
+                }
+            }
             val boundedPan = Offset(pan.x.coerceIn(minPanX, 0f), pan.y.coerceIn(minPanY, 0f))
             Box(
-                Modifier.fillMaxSize().horizontalMapDrag { dragAmount ->
+                Modifier.fillMaxSize().freeMapDrag { dragAmount ->
                     pan = Offset(
                         (pan.x + dragAmount.x).coerceIn(minPanX, 0f),
                         (pan.y + dragAmount.y).coerceIn(minPanY, 0f)
@@ -2065,9 +2120,11 @@ private fun V3CountyMapView(
                     Modifier
                         .wrapContentSize(Alignment.TopStart, unbounded = true)
                         .requiredSize(width = mapWidth, height = mapHeight)
-                        .graphicsLayer {
-                            translationX = boundedPan.x
-                            translationY = boundedPan.y
+                        .offset {
+                            IntOffset(
+                                boundedPan.x.roundToInt(),
+                                boundedPan.y.roundToInt()
+                            )
                         }
                 ) {
                     AssetImage(GameImages.V3MapBgPlain, null, Modifier.fillMaxSize(), ContentScale.FillBounds)
@@ -2119,10 +2176,11 @@ private fun V3MapSitePin(
         else -> V3Muted
     }
     Column(
-        modifier.graphicsLayer {
-            translationX = x
-            translationY = y
-        }.width(92.dp).clickable(onClick = onClick),
+        Modifier
+            .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
+            .then(modifier)
+            .width(92.dp)
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -2509,7 +2567,8 @@ private fun V3TopBar(
     state: V3GameState,
     controller: V3GameController,
     onRequestBackToMenu: () -> Unit,
-    guideTargets: MutableMap<V3GuideFocus, Rect>
+    guideTargets: MutableMap<V3GuideFocus, Rect>,
+    tutorialStep: Int
 ) {
     Box(Modifier.fillMaxWidth().guideTarget(V3GuideFocus.TopBar, guideTargets)) {
         AssetImage(GameImages.MingyunPanel, null, Modifier.matchParentSize(), ContentScale.FillBounds)
@@ -2529,7 +2588,7 @@ private fun V3TopBar(
                     V3SmallButton("菜单", Modifier.width(66.dp)) { onRequestBackToMenu() }
                 }
             }
-            V3TimeControls(controller, guideTargets)
+            V3TimeControls(controller, guideTargets, tutorialStep)
             val progression = V3ProgressionEngine.snapshot(state)
             Text(
                 "主线：${progression.mainQuest.title} · ${progression.mainQuest.completedCount}/${progression.mainQuest.totalCount}项",
@@ -2544,10 +2603,10 @@ private fun V3TopBar(
                     .guideTarget(V3GuideFocus.Resources, guideTargets),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                V3ResourceMetric(GameImages.V3IconSilver, "银两", state.silver, V3Gold, Modifier.weight(1f), onClick = { controller.advanceTutorial(1); controller.showInfo("银两：家族的现金储备，用于婚配礼金、产业营建、议事、募兵、购买与修复军械。当前 ${state.silver} 两。") })
-                V3ResourceMetric(GameImages.V3IconGrain, "粮食", state.grain, V3Green, Modifier.weight(1f), onClick = { controller.advanceTutorial(1); controller.showInfo("粮食：人口、乡勇和部分产业的每月消耗品。田庄、佃田、粮仓与赈济会改变粮食。当前 ${state.grain} 石。") })
-                V3ResourceMetric(GameImages.V3IconPopulation, "人口", V3GameEngine.alivePeople(state).size, V3Blue, Modifier.weight(1f), onClick = { controller.advanceTutorial(1); controller.showInfo("人口：当前活着的族人数量。16岁成年，18岁进入婚配名单；婚姻会触发备孕、孕期、出生和下一代成长。当前 ${V3GameEngine.alivePeople(state).size} 人。") })
-                V3ResourceMetric(GameImages.V3IconIndustry, "产业", V3GameEngine.builtSiteCount(state), V3Red, Modifier.weight(1f), onClick = { controller.advanceTutorial(1); controller.showInfo("产业：已建成的县域地点数量。等级、控制和风险共同决定稳定产出；点击县域地图中的地点可查看详情、升级和专属事务。当前 ${V3GameEngine.builtSiteCount(state)} 处。") })
+                V3ResourceMetric(GameImages.V3IconSilver, "银两", state.silver, V3Gold, Modifier.weight(1f), onClick = { controller.showInfo("银两：家族的现金储备，用于婚配礼金、产业营建、议事、募兵、购买与修复军械。当前 ${state.silver} 两。") })
+                V3ResourceMetric(GameImages.V3IconGrain, "粮食", state.grain, V3Green, Modifier.weight(1f), onClick = { controller.showInfo("粮食：人口、乡勇和部分产业的每月消耗品。田庄、佃田、粮仓与赈济会改变粮食。当前 ${state.grain} 石。") })
+                V3ResourceMetric(GameImages.V3IconPopulation, "人口", V3GameEngine.alivePeople(state).size, V3Blue, Modifier.weight(1f), onClick = { controller.showInfo("人口：当前活着的族人数量。16岁成年，18岁进入婚配名单；婚姻会触发备孕、孕期、出生和下一代成长。当前 ${V3GameEngine.alivePeople(state).size} 人。") })
+                V3ResourceMetric(GameImages.V3IconIndustry, "产业", V3GameEngine.builtSiteCount(state), V3Red, Modifier.weight(1f), onClick = { controller.showInfo("产业：已建成的县域地点数量。等级、控制和风险共同决定稳定产出；点击县域地图中的地点可查看详情、升级和专属事务。当前 ${V3GameEngine.builtSiteCount(state)} 处。") })
             }
         }
     }
@@ -2556,7 +2615,8 @@ private fun V3TopBar(
 @Composable
 private fun V3TimeControls(
     controller: V3GameController,
-    guideTargets: MutableMap<V3GuideFocus, Rect>
+    guideTargets: MutableMap<V3GuideFocus, Rect>,
+    tutorialStep: Int
 ) {
     val context = LocalContext.current
     val activity = context as? android.app.Activity
@@ -2614,13 +2674,20 @@ private fun V3TimeControls(
     }
 
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxWidth()
             .guideTarget(V3GuideFocus.TimeControls, guideTargets),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            V3SmallButton(if (controller.timeSpeed == 0) "继续" else "暂停", Modifier.weight(1f), selected = controller.timeSpeed == 0) { controller.togglePause() }
+            V3SmallButton(if (controller.timeSpeed == 0) "继续" else "暂停", Modifier.weight(1f), selected = controller.timeSpeed == 0) {
+                if (tutorialStep == 16 && controller.timeSpeed == 0) {
+                    controller.advanceMonth()
+                    controller.advanceTutorial(16)
+                } else {
+                    controller.togglePause()
+                }
+            }
             listOf(1, 2, 3, 4, 5).forEach { speed ->
                 val unlocked = speed == 1 || remainingPassMillis > 0L
                 V3SpeedButton(
@@ -3048,7 +3115,10 @@ private fun V3EventDialog(event: V3ActiveEvent, controller: V3GameController) {
                                                     Modifier.guideTarget(V3GuideFocus.EventChoice, localTargets)
                                                 } else Modifier
                                             )
-                                    ) { controller.chooseEvent(choice) }
+                                    ) {
+                                        controller.chooseEvent(choice)
+                                        if (eventTutorial) controller.advanceTutorial(18)
+                                    }
                                 }
                             }
                         }
