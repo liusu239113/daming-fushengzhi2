@@ -40,7 +40,7 @@ object V3EventContent {
         )),
         V3ActiveEvent("党争牵连", "书院讲会谈及朝局，县中有心人已将名单送入县衙。", listOf(
             V3EventChoice("约束诸生", "避开党争，书香支不满。", cohesionDelta = 3, gentryDelta = -3, yamenDelta = 4, siteId = "academy", siteRiskDelta = -8, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("scholar", grievanceDelta = 3))),
-            V3EventChoice("力挺清议", "士林声望大增，官府猜忌。", influenceDelta = 8, gentryDelta = 9, yamenDelta = -7, siteId = "academy", siteControlDelta = 6, route = V3Route.Scholar)
+            V3EventChoice("力挺族学公议", "士林声望大增，县衙开始留意。", influenceDelta = 8, gentryDelta = 9, yamenDelta = -7, siteId = "academy", siteControlDelta = 6, route = V3Route.Scholar)
         )),
         V3ActiveEvent("药材短缺", "医馆药柜见底，瘟病未止。海路支称码头有药材可购，但价高。", listOf(
             V3EventChoice("高价购药", "花银压疫，民心上升。", silverDelta = -55, villagersDelta = 8, cohesionDelta = 4, siteId = "clinic", siteRiskDelta = -16, route = V3Route.Hermit),
@@ -358,7 +358,7 @@ object V3EventContent {
             V3EventChoice("祖祠不可分", "主房威严上升，海路支不满。", influenceDelta = 3, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("main", influenceDelta = 3), V3BranchImpact("sea", grievanceDelta = 6)))
         )),
         V3ActiveEvent("书香支清议", "书香支要求宗族在县中公开表态反对苛派。", listOf(
-            V3EventChoice("附和清议", "士绅声望上升，县衙不悦。", influenceDelta = 6, gentryDelta = 8, yamenDelta = -6, route = V3Route.Scholar, branchImpacts = listOf(V3BranchImpact("scholar", influenceDelta = 5, grievanceDelta = -3))),
+            V3EventChoice("附和族中公议", "士绅声望上升，县衙开始留意。", influenceDelta = 6, gentryDelta = 8, yamenDelta = -6, route = V3Route.Scholar, branchImpacts = listOf(V3BranchImpact("scholar", influenceDelta = 5, grievanceDelta = -3))),
             V3EventChoice("不涉公议", "官府关系稳定，书香支不满。", yamenDelta = 4, cohesionDelta = 1, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("scholar", grievanceDelta = 5)))
         )),
         V3ActiveEvent("商支赈粥", "商支愿出钱设粥棚，但要在粥棚挂自家商号名。", listOf(

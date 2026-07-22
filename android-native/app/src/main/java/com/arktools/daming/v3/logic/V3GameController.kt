@@ -114,6 +114,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             state.activeEvent == null &&
             state.examSession == null &&
             state.battleState == null &&
+            state.hexBattleState == null &&
+            state.activeCards.isEmpty() &&
+            state.pendingDice == null &&
             state.conquestState == null
 
     fun autoAdvanceTime() {
@@ -377,6 +380,82 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         state = V3GameEngine.raiseBanner(state)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+    }
+
+    fun chooseCard(cardId: String, choiceId: String) {
+        audio.playSfx(SfxKey.V3Edict)
+        val resolution = V3CardEngine.choose(state, cardId, choiceId)
+        if (resolution == null) {
+            message = "此项家务尚不能处置，或本月议事名额已用尽。"
+            return
+        }
+        state = resolution.state
+        message = resolution.message
+        saveStore.save(state)
+        if (state.pendingDice == null && state.activeCards.isEmpty()) resumeAfterModalIfClear()
+    }
+
+    fun resolveCardDice() {
+        val resolution = V3CardEngine.resolveDice(state) ?: return
+        audio.playSfx(if (resolution.dice?.success == true) SfxKey.V3Success else SfxKey.V3Failure)
+        state = resolution.state
+        message = resolution.message
+        saveStore.save(state)
+        if (state.activeCards.isEmpty()) resumeAfterModalIfClear()
+    }
+
+    fun setHexArms(tileKey: String, arms: com.arktools.daming.v3.data.V3HexArms) {
+        val battle = state.hexBattleState ?: return
+        state = state.copy(hexBattleState = battle.copy(selectedArms = battle.selectedArms + (tileKey to arms)))
+        saveStore.save(state)
+    }
+
+    fun advanceHexTurn() {
+        val battle = state.hexBattleState ?: return
+        val nextTiles = battle.tiles.map { tile ->
+            val selected = battle.selectedArms["${tile.q},${tile.r}"] ?: tile.arms
+            val enemy = when ((tile.q * 7 + tile.r * 11 + battle.turn) % 3) {
+                0 -> com.arktools.daming.v3.data.V3HexArms.Spear
+                1 -> com.arktools.daming.v3.data.V3HexArms.Archer
+                else -> com.arktools.daming.v3.data.V3HexArms.Cavalry
+            }
+            val advantage = if (selected.counters(enemy)) 13 else if (enemy.counters(selected)) -13 else 0
+            val loss = (tile.enemyWave / 4 - advantage / 4).coerceIn(0, 12)
+            tile.copy(arms = selected, garrison = (tile.garrison - loss).coerceAtLeast(0), breached = tile.garrison - loss <= 0, stable = tile.garrison - loss > 0)
+        }
+        val nextTurn = battle.turn + 1
+        val victory = nextTiles.none { it.breached } && nextTurn > battle.maxTurns
+        val finished = victory || nextTiles.any { it.breached } || nextTurn > battle.maxTurns
+        state = state.copy(
+            hexBattleState = battle.copy(
+                turn = nextTurn,
+                tiles = nextTiles,
+                supply = (battle.supply - 8).coerceAtLeast(0),
+                enemyMomentum = (battle.enemyMomentum + if (victory) -12 else 6).coerceIn(0, 100),
+                selectedArms = emptyMap(),
+                log = (battle.log + "第${battle.turn}轮守庄结算，${nextTiles.count { it.breached }}处庄门失守。").takeLast(20),
+                finished = finished,
+                victory = victory
+            )
+        )
+        saveStore.save(state)
+    }
+
+    fun startHexBattle() {
+        state = state.copy(hexBattleState = com.arktools.daming.v3.data.V3HexBattleState.initial())
+        pauseForModal()
+        saveStore.save(state)
+    }
+
+    fun closeHexBattle() {
+        val battle = state.hexBattleState ?: return
+        state = if (battle.victory) {
+            state.copy(hexBattleState = null, garrisonMorale = (state.garrisonMorale + 8).coerceIn(0, 100), influence = (state.influence + 6).coerceIn(0, 100), pendingReports = listOf("六处庄门守住，族谱记下这一夜。"))
+        } else {
+            state.copy(hexBattleState = null, garrisonMorale = (state.garrisonMorale - 10).coerceIn(0, 100), cohesion = (state.cohesion - 8).coerceIn(0, 100), pendingReports = listOf("庄门有失，族内需要重新整顿。"))
+        }
+        saveStore.save(state)
+        resumeAfterModalIfClear()
     }
 
     fun advanceMonth(showReport: Boolean = true) {

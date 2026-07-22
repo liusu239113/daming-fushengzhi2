@@ -21,6 +21,100 @@ object V3Content {
     val creeds = listOf("耕读传家", "重商逐利", "聚族自保", "忠君报国", "明哲保身", "开海远行")
     val crises = listOf("饥荒将至", "流寇逼近", "官府催税", "族产争端", "商路断绝", "瘟疫初起")
 
+    val monthlyCards = listOf(
+        V3MonthlyCard(
+            id = "clan_ancestral_register",
+            pool = V3CardPool.Clan,
+            title = "祠堂灯下修谱",
+            body = "雨声敲在瓦檐上，族老把一卷旧谱摊在灯下。纸页缺了几行，恰好也缺了几户人的去处。",
+            tag = "族务",
+            choices = listOf(
+                V3CardChoice("repair", "请先生补全", "花银请读书人校谱，先把家世接起来。", effects = V3EffectDelta(silver = -12, influence = 4, cohesion = 5, patriarchPrestige = 2, biographicalNote = "在祠堂灯下补全族谱，族人重新有了共同来处。")),
+                V3CardChoice("oral", "召族人共证", "让各房在祖先牌位前说出自己记得的旧事。", effects = V3EffectDelta(cohesion = 8, influence = 2, patriarchConduct = 3, biographicalNote = "召各房共证旧事，族谱添上了纸页之外的人情。"))
+            )
+        ),
+        V3MonthlyCard(
+            id = "trade_river_contract",
+            pool = V3CardPool.Trade,
+            title = "河埠的红契",
+            body = "船户带来一纸红契，说上游米船愿把货交给李氏经手。只是河道近来不太平，价钱和风险都写在同一行。",
+            tag = "商旅",
+            choices = listOf(
+                V3CardChoice("sign", "压银接契", "先付定银，把这条粮路握在手里。", require = V3CardRequire(minSilver = 60), effects = V3EffectDelta(silver = -45, grain = 80, merchants = 8, routeDelta = V3RouteDelta(V3Route.Merchant, 5))),
+                V3CardChoice("share", "邀商共担", "少赚一些，换一条不至于压垮家底的路。", effects = V3EffectDelta(silver = 15, grain = 35, merchants = 4, cohesion = 2, routeDelta = V3RouteDelta(V3Route.Merchant, 3)))
+            )
+        ),
+        V3MonthlyCard(
+            id = "estate_dike_repair",
+            pool = V3CardPool.Estate,
+            title = "春水漫过田埂",
+            body = "一夜暴雨，低田的水已经齐膝。若今日不修堤，秋收便只剩一纸空账。",
+            tag = "产业",
+            choices = listOf(
+                V3CardChoice("hire", "雇短工修堤", "花银买时间，也买一季收成。", require = V3CardRequire(minSilver = 25), effects = V3EffectDelta(silver = -25, grain = 65, patriarchStewardship = 3)),
+                V3CardChoice("clan", "让各房出丁", "不花现银，但会考验各房愿不愿意一起扛。", effects = V3EffectDelta(grain = 35, cohesion = -2, militia = 2, patriarchStewardship = 2))
+            )
+        ),
+        V3MonthlyCard(
+            id = "field_refugees_arrive",
+            pool = V3CardPool.Field,
+            title = "篱外来人",
+            body = "黄昏时，十几户人站在庄门外。他们没有路引，只有几只空碗和一双不肯倒下的眼睛。",
+            tag = "乡野",
+            choices = listOf(
+                V3CardChoice("settle", "开仓收留", "粮食会少，庄门却会记住今日。", require = V3CardRequire(minGrain = 45), effects = V3EffectDelta(grain = -35, refugees = -12, villagers = 6, influence = 3, cohesion = 3)),
+                V3CardChoice("hire", "以工换食", "给他们田埂和水渠的活计，让饭碗凭双手留下。", effects = V3EffectDelta(grain = -18, refugees = -5, patriarchStewardship = 2, villagers = 4)),
+                V3CardChoice("refuse", "闭门不纳", "守住现有粮仓，但流言不会因此停下。", effects = V3EffectDelta(unrest = 8, villagers = -8, influence = -2))
+            )
+        ),
+        V3MonthlyCard(
+            id = "rumor_old_scholar",
+            pool = V3CardPool.Rumor,
+            title = "茶棚里的旧话",
+            body = "茶棚里有人说，县城新来的幕客正在访查各家宗谱。也有人说，他只是想找一户肯替他担保的人。",
+            tag = "风闻",
+            choices = listOf(
+                V3CardChoice("ask", "顺藤打听", "请熟人把话头引到县城去。", dice = true, successRate = 65, successText = "消息落到了实处。", failureText = "茶棚散了，只留下几句真假难辨的闲话。", successEffects = V3EffectDelta(influence = 5, yamen = 4, biographicalNote = "从茶棚风闻中摸到县城的一条隐线。"), failureEffects = V3EffectDelta(silver = -8, influence = -1)),
+                V3CardChoice("ignore", "不沾此事", "族里眼下最要紧的是田庄和粮仓。", effects = V3EffectDelta(patriarchStewardship = 2))
+            )
+        ),
+        V3MonthlyCard(
+            id = "crisis_grain_shortage",
+            pool = V3CardPool.Crisis,
+            title = "粮囤见底",
+            body = "账房把最后一袋陈粮倒在案上，米粒滚过木纹。庄门外的脚步声，比往年更密。",
+            tag = "危局",
+            choices = listOf(
+                V3CardChoice("open", "开仓平粜", "先压住人心，再谋下一季。", require = V3CardRequire(minGrain = 1), effects = V3EffectDelta(grain = -20, unrest = -12, refugees = -4, villagers = 8, influence = 3)),
+                V3CardChoice("borrow", "向商帮借粮", "以未来的货路换今日的活路。", dice = true, successRate = 58, successText = "商帮愿意押这一注。", failureText = "商帮闭门，借据落了空。", successEffects = V3EffectDelta(grain = 55, merchants = 6, unrest = -5), failureEffects = V3EffectDelta(silver = -12, unrest = 8, merchants = -4)),
+                V3CardChoice("guard", "封仓自守", "粮可以少，人心却会先散。", effects = V3EffectDelta(unrest = 10, villagers = -6, garrisonMorale = -4))
+            )
+        ),
+        V3MonthlyCard(
+            id = "visitor_xu_guangqi",
+            pool = V3CardPool.Visitor,
+            title = "西洋钟声入庄",
+            body = "一位远道来的学者在驿路歇脚。他谈测量、农具，也谈天下并非只有旧书里写过的模样。",
+            tag = "访客",
+            choices = listOf(
+                V3CardChoice("host", "请入书房", "以一席清谈换一份见识。", require = V3CardRequire(minInfluence = 30), effects = V3EffectDelta(influence = 4, patriarchPrestige = 4, itemId = "western_clock", biographicalNote = "书房接待远客，第一次听见西洋钟声。")),
+                V3CardChoice("observe", "请看农具", "不问大道，先问怎样让田里多收一成。", effects = V3EffectDelta(grain = 25, patriarchStewardship = 4, itemId = "new_farming_manual"))
+            )
+        ),
+        V3MonthlyCard(
+            id = "annual_repair_ledger",
+            pool = V3CardPool.Annual,
+            title = "岁末清账",
+            body = "年关将近，账房、族谱和各房的口供必须对上。数字不会替人遮掩，但能提醒人还剩多少路可走。",
+            tag = "年务",
+            oncePerGeneration = true,
+            choices = listOf(
+                V3CardChoice("strict", "逐项核账", "耗些心力，换来明白的家底。", effects = V3EffectDelta(silver = 18, cohesion = 3, patriarchStewardship = 4, biographicalNote = "岁末逐项清账，家业终于不再只凭口说。")),
+                V3CardChoice("trust", "交各房自理", "给旁支更多余地，也留下账目模糊处。", effects = V3EffectDelta(cohesion = 5, silver = -8, patriarchConduct = 2))
+            )
+        )
+    )
+
     val initialPeople = listOf(
         V3Person(1, "李慎行", 24, "主房", "开族祖", V3Trait.Smooth, study = 26, martial = 22, commerce = 20, diplomacy = 24, loyalty = 90)
     )
@@ -564,6 +658,15 @@ object V3Content {
             sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${surname}氏宗祠") else it },
             annualGoals = profile.annualGoals,
             routeScores = profile.routeScores,
+            patriarch = V3Patriarch(
+                personId = 1,
+                name = founderName,
+                conduct = (28 + if (root == "没落士族" || root == "寒门佃户") 8 else 2).coerceIn(0, 100),
+                stewardship = (28 + if (root == "江南商族" || root == "海商遗族") 10 else 3).coerceIn(0, 100),
+                prestige = (22 + if (root == "没落士族") 10 else if (creed == "耕读传家") 6 else 2).coerceIn(0, 100),
+                health = (55 + if (root == "边地军户" || root == "山中堡寨") 8 else 0).coerceIn(0, 100)
+            ),
+            cardBudget = if (profile.influence >= 45) 4 else 3,
             tutorialVersion = V3_TUTORIAL_VERSION,
             tutorialStep = 0,
             tutorialCompleted = false,

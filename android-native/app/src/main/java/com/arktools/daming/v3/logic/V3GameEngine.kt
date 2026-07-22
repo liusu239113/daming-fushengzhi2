@@ -191,6 +191,15 @@ object V3GameEngine {
         val migratedTutorialCompleted = if (
             state.tutorialVersion < V3_TUTORIAL_VERSION
         ) false else state.tutorialCompleted
+        val migratedPatriarch = state.patriarch.copy(
+            personId = if (state.patriarch.personId <= 0) 1 else state.patriarch.personId,
+            name = if (state.patriarch.name == "李慎行") migratedFounderName else state.patriarch.name,
+            conduct = state.patriarch.conduct.coerceIn(0, 100),
+            stewardship = state.patriarch.stewardship.coerceIn(0, 100),
+            prestige = state.patriarch.prestige.coerceIn(0, 100),
+            health = state.patriarch.health.coerceIn(0, 100)
+        )
+        val migratedCardBudget = state.cardBudget.coerceIn(3, 5)
         if (
             migratedArmy.total() == state.militia &&
             mergedRegions.size == state.worldRegions.size &&
@@ -199,7 +208,9 @@ object V3GameEngine {
             migratedFounderName == state.founderName &&
             state.tutorialVersion == V3_TUTORIAL_VERSION &&
             migratedTutorialStep == state.tutorialStep &&
-            migratedTutorialCompleted == state.tutorialCompleted
+            migratedTutorialCompleted == state.tutorialCompleted &&
+            migratedPatriarch == state.patriarch &&
+            migratedCardBudget == state.cardBudget
         ) return state
         return state.copy(
             surname = migratedStateSurname,
@@ -208,6 +219,8 @@ object V3GameEngine {
             army = migratedArmy,
             people = migratedPeople,
             worldRegions = mergedRegions,
+            patriarch = migratedPatriarch,
+            cardBudget = migratedCardBudget,
             tutorialVersion = V3_TUTORIAL_VERSION,
             tutorialStep = migratedTutorialStep,
             tutorialCompleted = migratedTutorialCompleted
@@ -1714,6 +1727,8 @@ object V3GameEngine {
             pendingReports = emptyList()
         )
         settledState = maybeAddChild(settledState, detailLines)
+        settledState = V3CardEngine.applyCrisisCascade(settledState, detailLines)
+        settledState = V3CardEngine.refreshMonth(settledState)
 
         val summary = mutableListOf<String>()
         if (state.month == 12) {

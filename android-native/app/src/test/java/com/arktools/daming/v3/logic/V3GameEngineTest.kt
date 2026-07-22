@@ -1,5 +1,7 @@
 package com.arktools.daming.v3.logic
 
+import com.arktools.daming.v3.data.V3HexArms
+import com.arktools.daming.v3.data.V3HexBattleState
 import com.arktools.daming.v3.data.V3ArmyRoster
 import com.arktools.daming.v3.data.V3Content
 import com.arktools.daming.v3.data.V3EquipmentQuality
@@ -584,6 +586,72 @@ class V3GameEngineTest {
         val ending = V3GameEngine.finalizeEnding(resolved)
         assertTrue(resolved.completedStoryFlags.any { it.startsWith("final_decision_") })
         assertTrue(ending.body.contains("宗族最终选择"))
+    }
+
+    @Test
+    fun monthlyCardsRespectBudgetAndChoiceEffects() {
+        val base = V3Content.newGame("寒门佃户", "江南水乡", "耕读传家", "官府催税")
+        val state = V3CardEngine.refreshMonth(base)
+        assertEquals(3, state.cardBudget)
+        assertTrue(state.activeCards.isNotEmpty())
+        val card = state.activeCards.first()
+        val choice = card.choices.first()
+        val result = V3CardEngine.choose(state, card.id, choice.id)
+        assertNotNull(result)
+        assertEquals(1, result!!.state.playedCardsThisMonth)
+        assertTrue(result.state.activeCards.size < state.activeCards.size)
+    }
+
+    @Test
+    fun diceResolutionIsDeterministicAndClearsPendingRoll() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val card = V3Content.monthlyCards.first { it.id == "rumor_old_scholar" }
+        val state = base.copy(activeCards = listOf(card), cardBudget = 3)
+        val pending = requireNotNull(V3CardEngine.choose(state, card.id, "ask"))
+        assertNotNull(pending.state.pendingDice)
+        val resolved = requireNotNull(V3CardEngine.resolveDice(pending.state))
+        assertEquals(null, resolved.state.pendingDice)
+        assertEquals(1, resolved.state.playedCardsThisMonth)
+        val second = requireNotNull(V3CardEngine.choose(state, card.id, "ask"))
+        assertEquals(pending.dice, second.dice)
+    }
+
+    @Test
+    fun crisisCascadeMovesFromGrainShortageToUnrestAndMutiny() {
+        val base = V3Content.newGame("寒门佃户", "中原灾地", "明哲保身", "饥荒将至").copy(
+            grain = -20,
+            refugees = 20,
+            unrestLevel = 40,
+            garrisonMorale = 50,
+            militia = 20,
+            army = V3ArmyRoster(militia = 20)
+        )
+        val next = V3CardEngine.applyCrisisCascade(base)
+        assertEquals("mutiny", next.currentCrisisStage)
+        assertTrue(next.refugees > base.refugees)
+        assertTrue(next.garrisonMorale < base.garrisonMorale)
+        assertTrue(next.militia < base.militia)
+    }
+
+    @Test
+    fun hexArmsFollowCounterTriangle() {
+        assertTrue(V3HexArms.Spear.counters(V3HexArms.Cavalry))
+        assertTrue(V3HexArms.Cavalry.counters(V3HexArms.Archer))
+        assertTrue(V3HexArms.Archer.counters(V3HexArms.Spear))
+        assertTrue(!V3HexArms.Spear.counters(V3HexArms.Archer))
+        assertEquals(6, V3HexBattleState.initial().tiles.size)
+    }
+
+    @Test
+    fun extendedStateRoundTripsThroughJson() {
+        val state = V3Content.newGame("海商遗族", "闽粤海路", "开海远行", "商路断绝")
+            .copy(inventory = listOf("western_clock"), biography = listOf("初见海潮"), plaques = listOf("义门"))
+        val encoded = Json.encodeToString(state)
+        val decoded = Json.decodeFromString<V3GameState>(encoded)
+        assertEquals(state.patriarch, decoded.patriarch)
+        assertEquals(state.inventory, decoded.inventory)
+        assertEquals(state.biography, decoded.biography)
+        assertEquals(state.plaques, decoded.plaques)
     }
 
     private fun assertStateInvariants(state: V3GameState) {

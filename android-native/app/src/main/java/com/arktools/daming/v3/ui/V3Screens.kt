@@ -86,6 +86,10 @@ import com.arktools.daming.ui.components.AssetImage
 import com.arktools.daming.ui.theme.FontPreference
 import com.arktools.daming.ui.theme.FontStyleKey
 import com.arktools.daming.v3.data.V3ActiveEvent
+import com.arktools.daming.v3.data.V3CardChoice
+import com.arktools.daming.v3.data.V3MonthlyCard
+import com.arktools.daming.v3.data.V3HexArms
+import com.arktools.daming.v3.data.V3HexBattleState
 import com.arktools.daming.v3.data.V3BattleState
 import com.arktools.daming.v3.data.V3BattlePhase
 import com.arktools.daming.v3.data.V3Combatant
@@ -581,6 +585,9 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     controller.state.battleState?.let { battle ->
         V3BattleDialog(state = controller.state, battle = battle, controller = controller)
     }
+    controller.state.hexBattleState?.let { hexBattle ->
+        V3HexBattleDialog(battle = hexBattle, controller = controller)
+    }
     controller.state.conquestState?.let { conquest ->
         V3ConquestDialog(target = conquest.targetName, enemyPower = conquest.enemyPower, scale = conquest.scale, controller = controller)
     }
@@ -600,6 +607,8 @@ private fun V3HomePage(
 
     V3Section("家业", "第${progression.chapter.number}章 · ${progression.chapter.title} · ${progression.chapter.theme}")
     V3ActionCenterPanel(progression, controller)
+    V3PatriarchPanel(state, controller)
+    V3MonthlyCardsPanel(state, controller)
     V3ClanLedgerPanel(
         state,
         Modifier.guideTarget(V3GuideFocus.MonthlyLedger, guideTargets),
@@ -3649,4 +3658,98 @@ private fun targetSiteFor(state: V3GameState, task: V3TaskType): V3CountySite? {
                 V3GameEngine.isSiteUnlocked(state, it.type)
         }
         .maxWithOrNull(compareBy<V3CountySite> { it.level }.thenBy { it.risk })
+}
+
+@Composable
+private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
+    V3Panel {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("族长 · ${state.patriarch.name}", color = V3Gold, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text("第${state.patriarch.generation}代 · 任期${state.patriarch.term}月", color = V3Muted, fontSize = 12.sp)
+        }
+        Text("处世 ${state.patriarch.conduct} · 经营 ${state.patriarch.stewardship} · 威望 ${state.patriarch.prestige} · 身板 ${state.patriarch.health}", color = V3Ink, fontSize = 13.sp)
+        Text("流民 ${state.refugees} · 庄内怨气 ${state.unrestLevel} · 守望士气 ${state.garrisonMorale}", color = if (state.unrestLevel >= 35) V3Red else V3Muted, fontSize = 12.sp)
+        if (state.patriarch.capstones.isNotEmpty()) Text("族望匾：${state.patriarch.capstones.joinToString("、")}", color = V3Gold, fontSize = 12.sp)
+        if (state.biography.isNotEmpty()) Text("族谱履历：${state.biography.last()}", color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
+        if (state.year >= 1643 && state.hexBattleState == null) {
+            V3SmallButton("整备六门守庄", Modifier.fillMaxWidth(), selected = true) { controller.startHexBattle() }
+        }
+    }
+}
+
+@Composable
+private fun V3MonthlyCardsPanel(state: V3GameState, controller: V3GameController) {
+    if (state.activeCards.isEmpty() && state.pendingDice == null) return
+    V3Panel {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("本月家务", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("已议 ${state.playedCardsThisMonth}/${state.cardBudget}", color = V3Muted, fontSize = 12.sp)
+        }
+        Text("银粮之外，真正改变家族走向的，是每月摆在案上的几件事。", color = V3Muted, fontSize = 12.sp)
+        state.activeCards.forEach { card ->
+            V3CardPanel(card, state, controller)
+        }
+        state.pendingDice?.let { dice ->
+            V3Panel(Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape)) {
+                Text("签筒已摇", color = V3Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("成功率 ${dice.successRate}% · 签数 ${dice.roll}", color = V3Muted, fontSize = 13.sp)
+                V3SmallButton("揭签看吉凶", Modifier.fillMaxWidth(), selected = true) { controller.resolveCardDice() }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V3CardPanel(card: V3MonthlyCard, state: V3GameState, controller: V3GameController) {
+    Column(Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(card.title, color = V3Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(card.tag.ifBlank { "家务" }, color = V3Gold, fontSize = 12.sp)
+        }
+        Text(card.body, color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
+        card.choices.forEach { choice ->
+            val unlocked = com.arktools.daming.v3.logic.V3CardEngine.meets(choice.require, state)
+            if (!choice.hiddenIfLocked || unlocked) {
+                V3SmallButton(
+                    if (unlocked) choice.label else "${choice.label}（条件不足）",
+                    Modifier.fillMaxWidth(),
+                    selected = unlocked
+                ) {
+                    if (unlocked) controller.chooseCard(card.id, choice.id) else controller.showInfo(choice.require?.label() ?: "此项暂不可行")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V3HexBattleDialog(battle: V3HexBattleState, controller: V3GameController) {
+    V3Dialog(title = "守庄战 · 第${battle.turn}轮", onDismiss = {}) {
+        Text("枪阵克骑突，骑突克弓矢，弓矢克枪阵。", color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
+        battle.tiles.forEach { tile ->
+            val key = "${tile.q},${tile.r}"
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${tile.name} · 驻守${tile.garrison}", color = if (tile.breached) V3Red else V3Ink, fontSize = 13.sp)
+                    Text(if (tile.stable) "庄门尚稳" else "庄门告急", color = V3Muted, fontSize = 11.sp)
+                }
+                V3HexArms.entries.forEach { arms ->
+                    V3SmallButton(
+                        arms.label,
+                        Modifier.padding(start = 3.dp),
+                        selected = (battle.selectedArms[key] ?: tile.arms) == arms
+                    ) {
+                        controller.setHexArms(key, arms)
+                    }
+                }
+            }
+        }
+        if (battle.finished) {
+            Text(if (battle.victory) "六处庄门俱在，守住了这一夜。" else "庄门已破，族人退入祖祠。", color = if (battle.victory) V3Green else V3Red, fontWeight = FontWeight.Bold)
+            V3SmallButton("收下战果", Modifier.fillMaxWidth(), selected = true) { controller.closeHexBattle() }
+        } else {
+            V3SmallButton("结算本轮", Modifier.fillMaxWidth(), selected = true) { controller.advanceHexTurn() }
+        }
+        battle.log.takeLast(3).forEach { Text(it, color = V3Muted, fontSize = 11.sp) }
+    }
 }
