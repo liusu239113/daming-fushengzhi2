@@ -114,7 +114,7 @@ object V3CardEngine {
                 card.id.hashCode() + seed + layerIndex * 31,
                 997
             )
-            rotation + card.weight * 8
+            rotation + card.weight * 1_000
         }
 
     fun canPlay(state: V3GameState, cardId: String, choiceId: String): Boolean {

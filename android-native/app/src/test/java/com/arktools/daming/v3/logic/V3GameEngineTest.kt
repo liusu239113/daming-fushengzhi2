@@ -72,7 +72,11 @@ class V3GameEngineTest {
         assertEquals(V3RelationBand.Allied, V3EventEngine.relationBand(80))
 
         val hostile = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
-            .copy(relations = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税").relations.copy(yamen = -70))
+            .copy(
+                year = 1610,
+                month = 2,
+                relations = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税").relations.copy(yamen = -70)
+            )
         assertTrue(V3EventEngine.generateEvent(hostile)?.title?.contains("敌对") == true)
 
         val allied = hostile.copy(
@@ -895,6 +899,8 @@ class V3GameEngineTest {
     fun hostileRelationEventsTakePriorityOverAlliedInvitations() {
         val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
             .copy(
+                year = 1610,
+                month = 2,
                 relations = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
                     .relations.copy(yamen = 80, garrison = -90)
             )
