@@ -7,6 +7,7 @@ import com.arktools.daming.v3.data.V3EventContent
 import com.arktools.daming.v3.data.V3EventChoice
 import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3RegionStatus
+import com.arktools.daming.v3.data.V3RelationBand
 import com.arktools.daming.v3.data.V3Route
 import kotlin.math.max
 import kotlin.math.min
@@ -50,6 +51,7 @@ object V3EventEngine {
             else -> null
         }
         if (criticalEvent != null) return criticalEvent
+        relationAttitudeEvent(state)?.let { return it }
         chapterMilestoneEvent(state)?.let { return it }
         regionAccordEvent(state)?.let { return it }
         branchFoundingEvent(state)?.let { return it }
@@ -244,6 +246,70 @@ object V3EventEngine {
         return false
     }
 
+    private fun relationAttitudeEvent(state: V3GameState): V3ActiveEvent? {
+        data class RelationSlot(
+            val name: String,
+            val value: Int,
+            val delta: (Int) -> V3EventChoice,
+            val rival: String
+        )
+        val slots = listOf(
+            RelationSlot("县衙", state.relations.yamen, { sign ->
+                if (sign < 0) V3EventChoice("yamen_hostile", "以账册与证人自证清白，拒绝无理摊派。", silverDelta = -18, yamenDelta = 12, influenceDelta = 3, route = V3Route.Loyalist, routeDelta = 6)
+                else V3EventChoice("yamen_allied", "替县衙承担一段可核验的粮税与治安。", silverDelta = -28, grainDelta = -20, yamenDelta = 12, influenceDelta = 5, route = V3Route.Loyalist, routeDelta = 8)
+            }, "县中豪强"),
+            RelationSlot("士绅", state.relations.gentry, { sign ->
+                if (sign < 0) V3EventChoice("gentry_hostile", "在乡约与族学中自证门风，不向冷眼低头。", silverDelta = -16, gentryDelta = 12, influenceDelta = 4, route = V3Route.Scholar, routeDelta = 7)
+                else V3EventChoice("gentry_allied", "共同出资修学，给各家留一张可持续的席位。", silverDelta = -36, gentryDelta = 12, influenceDelta = 7, route = V3Route.Scholar, routeDelta = 9)
+            }, "邻县书院"),
+            RelationSlot("乡民", state.relations.villagers, { sign ->
+                if (sign < 0) V3EventChoice("villagers_hostile", "重订租契与乡约，不让庄门外的怨气继续无名。", grainDelta = -22, silverDelta = -12, villagersDelta = 14, cohesionDelta = 5, route = V3Route.Hermit, routeDelta = 7)
+                else V3EventChoice("villagers_allied", "开义仓并让乡民参与守望，家庄与乡里共担风雨。", grainDelta = -35, villagersDelta = 12, cohesionDelta = 7, route = V3Route.Hermit, routeDelta = 9)
+            }, "流民首领"),
+            RelationSlot("山贼", state.relations.bandits, { sign ->
+                if (sign < 0) V3EventChoice("bandits_hostile", "设伏守道，切断其对田庄与商路的试探。", grainDelta = -18, militiaDelta = 12, banditsDelta = -12, garrisonDelta = 5, route = V3Route.Fortress, routeDelta = 8)
+                else V3EventChoice("bandits_allied", "以粮与互不扰民换一纸山道旧盟。", grainDelta = -28, banditsDelta = 14, garrisonDelta = 4, route = V3Route.Warlord, routeDelta = 8)
+            }, "山道头目"),
+            RelationSlot("商帮", state.relations.merchants, { sign ->
+                if (sign < 0) V3EventChoice("merchants_hostile", "公开账目、重开货路，不让商帮把价钱写成家族命门。", silverDelta = -20, merchantsDelta = 12, influenceDelta = 3, route = V3Route.Merchant, routeDelta = 7)
+                else V3EventChoice("merchants_allied", "以族产入股并固定分润，换来跨县货路。", silverDelta = -55, merchantsDelta = 14, route = V3Route.Merchant, routeDelta = 10)
+            }, "河埠会首"),
+            RelationSlot("军镇", state.relations.garrison, { sign ->
+                if (sign < 0) V3EventChoice("garrison_hostile", "先修粮道与寨墙，拒绝把乡勇交给陌生号令。", silverDelta = -22, grainDelta = -25, garrisonDelta = 12, route = V3Route.Fortress, routeDelta = 7)
+                else V3EventChoice("garrison_allied", "以守庄战约换取兵械、操练与共同守望。", silverDelta = -35, grainDelta = -35, militiaDelta = 18, garrisonDelta = 14, route = V3Route.Loyalist, routeDelta = 9)
+            }, "边镇使者")
+        )
+        val candidates = slots.filter {
+            val band = relationBand(it.value)
+            val flag = "attitude_${it.name}_${band.name}"
+            band in setOf(V3RelationBand.Hostile, V3RelationBand.Allied) &&
+                flag !in state.completedStoryFlags
+        }
+        val slot = candidates.minWithOrNull(
+            compareBy<RelationSlot> {
+                if (relationBand(it.value) == V3RelationBand.Hostile) 0 else 1
+            }.thenBy { it.value }
+        ) ?: return null
+        val band = relationBand(slot.value)
+        val flag = "attitude_${slot.name}_${band.name}"
+        val choice = slot.delta(if (band == V3RelationBand.Hostile) -1 else 1)
+        val title = if (band == V3RelationBand.Hostile) "${slot.name}敌对来书" else "${slot.name}同盟来帖"
+        val body = if (band == V3RelationBand.Hostile) {
+            "${slot.name}关系已落入【${band.label}】。${slot.rival}代表来庄，要求你在一场公开议事中给出答复。"
+        } else {
+            "${slot.name}关系已抵达【${band.label}】。${slot.rival}带着盟约来庄，愿把一段地方利益与李氏相连。"
+        }
+        return V3ActiveEvent(title, body, listOf(choice.copy(storyFlag = flag), V3EventChoice("defer", "暂不正面回应，让关系维持现状。", cohesionDelta = -2, route = V3Route.Hermit, routeDelta = 2, storyFlag = flag)))
+    }
+
+    fun relationBand(value: Int): V3RelationBand = when {
+        value <= -60 -> V3RelationBand.Hostile
+        value <= -30 -> V3RelationBand.Estranged
+        value < 10 -> V3RelationBand.Distant
+        value < 40 -> V3RelationBand.Friendly
+        value < 70 -> V3RelationBand.Close
+        else -> V3RelationBand.Allied
+    }
     private fun chapterMilestoneEvent(state: V3GameState): V3ActiveEvent? {
         fun unseen(title: String): Boolean {
             val milestoneId = chapterMilestoneIds.getValue(title)
@@ -799,7 +865,7 @@ object V3EventEngine {
                 "京中传来大行皇帝崩逝、新君即位。清流称新政可期，县衙却催各族重新表忠。李氏该押注朝局，还是守住家业？",
                 listOf(
                     V3EventChoice("递表称贺", "官府关系提升，花费银两。", silverDelta = -35, yamenDelta = 10, influenceDelta = 3, route = V3Route.Loyalist, routeDelta = 8),
-                    V3EventChoice("资助书院清议", "士林声望上升，党争风险加深。", silverDelta = -45, gentryDelta = 10, yamenDelta = -5, influenceDelta = 6, siteId = "academy", siteRiskDelta = 6, route = V3Route.Scholar, routeDelta = 9),
+                    V3EventChoice("资助书院讲会", "士林声望上升，门户争论的风险加深。", silverDelta = -45, gentryDelta = 10, yamenDelta = -5, influenceDelta = 6, siteId = "academy", siteRiskDelta = 6, route = V3Route.Scholar, routeDelta = 9),
                     V3EventChoice("闭祠修谱", "避开朝局，凝聚上升。", grainDelta = -20, cohesionDelta = 7, route = V3Route.Hermit, routeDelta = 7)
                 )
             )
@@ -897,7 +963,7 @@ object V3EventEngine {
     )
 
     private fun academyDebateEvent() = V3ActiveEvent(
-        title = "书院清议",
+        title = "书院讲会",
         body = "东林书院诸生议论辽饷与党争，书香支认为这是扬名机会，主房却担心卷入朝局。",
         choices = listOf(
             V3EventChoice("资助讲会", "士林声望提升。", silverDelta = -30, gentryDelta = 8, influenceDelta = 5, route = V3Route.Scholar, branchImpacts = listOf(V3BranchImpact("scholar", influenceDelta = 5, loyaltyDelta = 2, grievanceDelta = -3, note = "书香支因讲会大振声名。"), V3BranchImpact("martial", grievanceDelta = 1, note = "武支认为银两不该尽投书院。"))),

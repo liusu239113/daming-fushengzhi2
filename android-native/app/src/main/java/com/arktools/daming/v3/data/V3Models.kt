@@ -516,6 +516,16 @@ data class V3BranchImpact(
 )
 
 @Serializable
+enum class V3RelationBand(val label: String) {
+    Hostile("敌对"),
+    Estranged("交恶"),
+    Distant("冷淡"),
+    Friendly("友善"),
+    Close("深交"),
+    Allied("同盟")
+}
+
+@Serializable
 data class V3Relations(
     val yamen: Int = 0,
     val gentry: Int = 0,
@@ -697,7 +707,8 @@ data class V3MonthlyCard(
     val oncePerGeneration: Boolean = false,
     val choices: List<V3CardChoice>,
     val minChapter: Int = 1,
-    val maxChapter: Int = 6
+    val maxChapter: Int = 6,
+    val crisisLevel: Int = 0 // 1粮荒、2民怨、3庄乱；0表示普通卡
 )
 
 @Serializable
@@ -810,6 +821,7 @@ data class V3GameState(
     val county: String = "江南水乡",
     val creed: String = "耕读传家",
     val crisis: String = "官府催税",
+    val originTraits: List<String> = emptyList(),
     val year: Int = 1601,
     val month: Int = 1,
     val clanRank: Int = 1,
@@ -849,7 +861,7 @@ data class V3GameState(
     val patriarch: V3Patriarch = V3Patriarch(),
     val pendingSuccession: Boolean = false,
     val refugees: Int = 0,                 // 流民
-    val garrisonMorale: Int = 60,          // 乡勇军心 0-100
+    val garrisonMorale: Int = 60,          // 守望士气 0-100
     val unrestLevel: Int = 0,              // 庄内怨气象 0-100（过高触发庄乱）
     val activeCards: List<V3MonthlyCard> = emptyList(),
     val playedCardsThisMonth: Int = 0,
@@ -863,5 +875,6 @@ data class V3GameState(
     val biography: List<String> = emptyList(), // 族谱·履历条目
     val pendingDice: V3DiceRoll? = null,
     val hexBattleState: V3HexBattleState? = null,
+    val hexBattleCompleted: Boolean = false,
     val currentCrisisStage: String? = null // grain_shortage / unrest / mutiny，便于级联
 )

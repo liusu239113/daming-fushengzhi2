@@ -532,6 +532,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                     state.activeEvent == null &&
                     state.examSession == null &&
                     state.battleState == null &&
+                    state.hexBattleState == null &&
                     state.conquestState == null
             ) {
                 V3ElderGuideOverlay(
@@ -579,17 +580,19 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             onCancel = { confirmBackToMenu = false }
         )
     }
-    controller.state.examSession?.let { session ->
-        V3ExamDialog(session = session, controller = controller)
-    }
-    controller.state.battleState?.let { battle ->
-        V3BattleDialog(state = controller.state, battle = battle, controller = controller)
-    }
-    controller.state.hexBattleState?.let { hexBattle ->
-        V3HexBattleDialog(battle = hexBattle, controller = controller)
-    }
-    controller.state.conquestState?.let { conquest ->
-        V3ConquestDialog(target = conquest.targetName, enemyPower = conquest.enemyPower, scale = conquest.scale, controller = controller)
+    if (controller.state.finalEnding == null) {
+        controller.state.examSession?.let { session ->
+            V3ExamDialog(session = session, controller = controller)
+        }
+        controller.state.battleState?.let { battle ->
+            V3BattleDialog(state = controller.state, battle = battle, controller = controller)
+        }
+        controller.state.hexBattleState?.let { hexBattle ->
+            V3HexBattleDialog(battle = hexBattle, controller = controller)
+        }
+        controller.state.conquestState?.let { conquest ->
+            V3ConquestDialog(target = conquest.targetName, enemyPower = conquest.enemyPower, scale = conquest.scale, controller = controller)
+        }
     }
 }
 
@@ -1700,6 +1703,16 @@ private fun V3StrategyPage(
                     repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+            V3Panel {
+                Text("两类战事分工", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("地点讨伐用于主动清剿县域高风险地点；六门守庄只在甲申前夕触发一次，是终章家庄防御。两类战事与地域征伐互斥，不会同时开启。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                V3SmallButton(
+                    "讨伐最高风险地点",
+                    Modifier.fillMaxWidth(),
+                    selected = true,
+                    enabled = state.army.total() >= 15 && !V3GameEngine.hasBlockingEncounter(state)
+                ) { controller.startBattle() }
+            }
             Text("装备与兵册", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text("兵册决定每名将领能带的部曲规模；装备只对已穿戴的族人计入战攻与防御。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
             Text("库存：${state.equipment.count { it.ownerId == null }} 件 · 已装备：${state.equipment.count { it.ownerId != null }} 件", color = V3Ink, fontSize = 13.sp)
@@ -2424,6 +2437,15 @@ private fun V3EndingPage(ending: V3FinalEnding, controller: V3GameController, on
         Text(ending.title, color = V3Red, fontSize = 27.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         Text(ending.body, color = V3Ink, fontSize = 15.sp, lineHeight = 23.sp)
         ending.stats.forEach { stat -> Text("· $stat", color = V3Muted, fontSize = 13.sp) }
+        ending.failureKind?.let { failure ->
+            Text("失败分支：$failure", color = V3Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+        V3SmallButton("展开族谱序", Modifier.fillMaxWidth(), selected = true) {
+            controller.showInfo(controller.genealogyPreface())
+        }
+        V3SmallButton("查看终局履历", Modifier.fillMaxWidth()) {
+            controller.showInfo(controller.endingChronicle().joinToString("\n"))
+        }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         V3Button("重新开局", Modifier.weight(1f), onClick = controller::restartAfterEnding)
@@ -3746,10 +3768,14 @@ private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
         }
         Text("处世 ${state.patriarch.conduct} · 经营 ${state.patriarch.stewardship} · 威望 ${state.patriarch.prestige} · 身板 ${state.patriarch.health}", color = V3Ink, fontSize = 13.sp)
         V3PatriarchRadar(state)
+        if (state.originTraits.isNotEmpty()) {
+            Text("出身特性", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            state.originTraits.forEach { trait -> Text("· $trait", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp) }
+        }
         Text("流民 ${state.refugees} · 庄内怨气 ${state.unrestLevel} · 守望士气 ${state.garrisonMorale}", color = if (state.unrestLevel >= 35) V3Red else V3Muted, fontSize = 12.sp)
         if (state.patriarch.capstones.isNotEmpty()) Text("族望匾：${state.patriarch.capstones.joinToString("、")}", color = V3Gold, fontSize = 12.sp)
         if (state.biography.isNotEmpty()) Text("族谱履历：${state.biography.last()}", color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
-        if (state.year >= 1643 && state.hexBattleState == null) {
+        if (state.year >= 1643 && state.hexBattleState == null && !state.hexBattleCompleted) {
             V3SmallButton("整备六门守庄", Modifier.fillMaxWidth(), selected = true) { controller.startHexBattle() }
         }
     }

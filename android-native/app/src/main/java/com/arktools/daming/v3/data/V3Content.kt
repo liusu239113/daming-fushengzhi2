@@ -11,6 +11,7 @@ data class V3StartProfile(
     val routeScores: Map<V3Route, Int>,
     val routeBonuses: List<Pair<V3Route, Int>>,
     val annualGoals: List<V3AnnualGoal>,
+    val originTraits: List<String>,
     val countyEffect: String,
     val crisisEffect: String
 )
@@ -175,12 +176,149 @@ object V3Content {
         ))
     )
 
-    val visitors = listOf(
-        V3Visitor("xu_xiake", "徐霞客", "行脚地理家", chapters = listOf(V3VisitorChapter(2, "山路初见", "他从山道来，问水源、问桥，也问族人为何只守着一块熟地。", "travel_map"), V3VisitorChapter(4, "再寄山图", "远行书信寄回一张新图，标出乱世中的退路。", "mountain_route"))),
-        V3Visitor("song_yingxing", "宋应星", "格物学者", chapters = listOf(V3VisitorChapter(2, "田边论器", "农具不是粗人的玩意，正是让一家人不饿肚子的学问。", "agriculture_compendium"), V3VisitorChapter(5, "工坊留稿", "他把未刊稿纸交给族中工匠，嘱咐不要让手艺只活在纸上。", "heavenly_crafts_draft"))),
-        V3Visitor("zhang_dai", "张岱", "江南文客", chapters = listOf(V3VisitorChapter(3, "一盏灯", "园林会败，文章会散，唯有记下的人知道曾经有过。", "dream_record"), V3VisitorChapter(6, "旧梦成谱", "他将一段族中旧事写进自己的游记，李氏从此不只存在于本地人的口中。", "family_chronicle"))),
-        V3Visitor("sun_chuanting", "孙传庭", "关中将领", chapters = listOf(V3VisitorChapter(4, "借粮", "军书上的数字落进粮仓，家族第一次被迫回答天下之事。", null), V3VisitorChapter(5, "回信", "他在战事间隙回信，谢的不是粮，而是没有趁乱抬价。", "military_letter")))
+    private val coreVisitors = listOf(
+        V3Visitor("xu_xiake", "徐霞客", "行脚地理家", chapters = listOf(
+            V3VisitorChapter(2, "山路初见", "他从山道来，问水源、问桥，也问族人为何只守着一块熟地。", "travel_map"),
+            V3VisitorChapter(4, "再寄山图", "远行书信寄回一张新图，标出乱世中的退路。", "mountain_route")
+        )),
+        V3Visitor("song_yingxing", "宋应星", "格物学者", chapters = listOf(
+            V3VisitorChapter(2, "田边论器", "农具不是粗人的玩意，正是让一家人不饿肚子的学问。", "agriculture_compendium"),
+            V3VisitorChapter(5, "工坊留稿", "他把未刊稿纸交给族中工匠，嘱咐不要让手艺只活在纸上。", "heavenly_crafts_draft")
+        )),
+        V3Visitor("zhang_dai", "张岱", "江南文客", chapters = listOf(
+            V3VisitorChapter(3, "一盏灯", "园林会败，文章会散，唯有记下的人知道曾经有过。", "dream_record"),
+            V3VisitorChapter(6, "旧梦成谱", "他将一段族中旧事写进自己的游记，族名从此不只存在于本地人的口中。", "family_chronicle")
+        )),
+        V3Visitor("sun_chuanting", "孙传庭", "关中将领", chapters = listOf(
+            V3VisitorChapter(4, "借粮", "军书上的数字落进粮仓，家族第一次被迫回答天下之事。", null),
+            V3VisitorChapter(5, "回信", "他在战事间隙回信，谢的不是粮，而是没有趁乱抬价。", "military_letter")
+        ))
     )
+
+    private val additionalVisitors = listOf(
+        V3Visitor("xu_guangqi", "徐光启", "农政学者", "scholar", listOf(
+            V3VisitorChapter(2, "田亩新法", "他不以空谈入庄，先看水渠、种粮与一亩田能养几口人。", "new_farming_manual"),
+            V3VisitorChapter(4, "农政留卷", "他把一卷农政旧稿托给族学，嘱咐后人先让乡里吃饱，再谈文章。", "agriculture_compendium")
+        )),
+        V3Visitor("tang_ruowang", "汤若望", "历法客卿", "scholar", listOf(
+            V3VisitorChapter(3, "钟声与历", "远客带来一架小钟，也带来一套与旧历不同的算法。", "western_clock"),
+            V3VisitorChapter(5, "推算收成", "他替族里校过节气，提醒庄户不要把一场迟雨当成天意。", "dream_record")
+        )),
+        V3Visitor("li_zhizao", "李之藻", "舆图学人", "scholar", listOf(
+            V3VisitorChapter(2, "舆图摊案", "他把河道、驿路和粮仓画在同一张纸上，家族第一次看见县外的脉络。", "travel_map"),
+            V3VisitorChapter(4, "水路校勘", "一张新图标出险滩与渡口，商路因此少走了几段弯路。", "mountain_route")
+        )),
+        V3Visitor("gu_yanwu", "顾炎武", "经世学者", "scholar", listOf(
+            V3VisitorChapter(4, "天下在事", "他不问空名，只问一县的粮、路、户籍是否真的有人料理。", "family_chronicle"),
+            V3VisitorChapter(6, "日知旧闻", "临别时，他把地方掌故写入札记，提醒族长家声必须落在实事上。", "dream_record")
+        )),
+        V3Visitor("wang_fuzhi", "王夫之", "衡岳遗民", "scholar", listOf(
+            V3VisitorChapter(4, "衡岳来客", "他在山馆谈兵事与家国，却先问族中是否还有可以安顿老幼的粮仓。", "agriculture_compendium"),
+            V3VisitorChapter(6, "船山遗稿", "一卷手稿留在族学，后辈从字里行间读到乱世仍须自立的骨气。", "family_chronicle")
+        )),
+        V3Visitor("huang_zongxi", "黄宗羲", "东浙学者", "scholar", listOf(
+            V3VisitorChapter(3, "学校议", "他谈地方学校，不把读书只看成一房一姓的门面。", "agriculture_compendium"),
+            V3VisitorChapter(5, "明夷待访", "他留下几页论学札记，族中从此把族学与乡里公议放在一起。", "dream_record")
+        )),
+        V3Visitor("fang_yizhi", "方以智", "博物学人", "scholar", listOf(
+            V3VisitorChapter(3, "物理初谈", "他在作坊观察火候、木性与水势，工匠第一次被请到同一张席上。", "heavenly_crafts_draft"),
+            V3VisitorChapter(5, "药炉问答", "他以杂学相赠，提醒族人灾年最贵的不是金银，是能救人的手艺。", "new_farming_manual")
+        )),
+        V3Visitor("chen_zilong", "陈子龙", "松江文士", "scholar", listOf(
+            V3VisitorChapter(3, "松江过庄", "他携一卷诗文来访，席间谈的是江南水患和百姓的活计。", "dream_record"),
+            V3VisitorChapter(5, "危城寄书", "局势渐乱，他寄来一封短札，劝族里莫把文章与粮兵分开。", "military_letter")
+        )),
+        V3Visitor("zhang_pu", "张溥", "复社文士", "scholar", listOf(
+            V3VisitorChapter(2, "七录入门", "他以抄书相勉，族中孩子第一次知道读书也可以成为共同的约定。", "family_chronicle"),
+            V3VisitorChapter(4, "乡评成册", "一册地方人物录留在族学，房支争端多了一份可以核对的公议。", "dream_record")
+        )),
+        V3Visitor("fu_shan", "傅山", "太原遗民", "scholar", listOf(
+            V3VisitorChapter(4, "药炉边见", "他以医与字相赠，要求族里先救病人，再论谁的门第更高。", "new_farming_manual"),
+            V3VisitorChapter(6, "霜红札记", "临行所留的一纸字帖挂在族学，提醒后人守住自己的笔与骨。", "family_chronicle")
+        )),
+        V3Visitor("mao_bijiang", "冒辟疆", "水绘文客", "scholar", listOf(
+            V3VisitorChapter(3, "水绘来客", "他谈园林与旧游，也认真记下庄中妇人如何分粥理账。", "dream_record"),
+            V3VisitorChapter(5, "金陵旧闻", "一段旧都见闻传入族谱，使地方家族也有了天下风云的回声。", "family_chronicle")
+        )),
+        V3Visitor("liu_rushi", "柳如是", "江南才女", "scholar", listOf(
+            V3VisitorChapter(3, "河桥夜话", "她谈诗，也谈一个乱世女子如何替家中守住账本、书信与尊严。", "dream_record"),
+            V3VisitorChapter(5, "尺牍留香", "她留下几封整理过的家书，族中内宅第一次有了自己的文书档案。", "family_chronicle")
+        )),
+        V3Visitor("li_dingguo", "李定国", "西南将领", "martial", listOf(
+            V3VisitorChapter(5, "军路借道", "兵马经过庄外，他只求一段不扰民的粮道和一份明确的军约。", "military_letter"),
+            V3VisitorChapter(6, "守约回报", "他以一封军书回谢族中不抬粮价，守庄战前多了一条可相信的消息。", "mountain_route")
+        )),
+        V3Visitor("zheng_chenggong", "郑成功", "海路统领", "martial", listOf(
+            V3VisitorChapter(4, "海门问舟", "海商带来风向和船图，问李氏愿不愿为远行留一条退路。", "travel_map"),
+            V3VisitorChapter(6, "潮汐军书", "一封海上军书抵达码头，海路与族中船队从此多了一分胆气。", "military_letter")
+        )),
+        V3Visitor("yuan_chonghuan", "袁崇焕", "边镇将领", "martial", listOf(
+            V3VisitorChapter(4, "边堡求粮", "边镇来使只带一张军需清单，族长必须在家底与大势间落笔。", "military_letter"),
+            V3VisitorChapter(5, "城守札记", "他把守城与守庄的道理写在一张纸上，乡勇从此有了分班轮值的章法。", "mountain_route")
+        )),
+        V3Visitor("sun_chuanting_scholar", "孙承宗", "督边老臣", "martial", listOf(
+            V3VisitorChapter(3, "边墙论守", "他看过庄墙，指出真正的防线不只是一道土墙，还包括粮路与人心。", "mountain_route"),
+            V3VisitorChapter(5, "堡寨成法", "一份边堡布置图留在族中，六门守庄从此有了旧例可依。", "military_letter")
+        )),
+        V3Visitor("liu_zhiji", "刘之骥", "乡约长者", "elder", listOf(
+            V3VisitorChapter(1, "乡约初立", "他劝各房把出丁、分粮和婚丧写清楚，免得好心靠临时争吵。", "family_chronicle"),
+            V3VisitorChapter(3, "乡老再议", "灾年重订乡约，乡民关系因一纸可执行的约定而稳住。", "agriculture_compendium")
+        )),
+        V3Visitor("chen_hongshou", "陈洪绶", "新安画客", "artist", listOf(
+            V3VisitorChapter(3, "新安过笔", "他为族中画了一幅庄门图，画里没有华屋，只有各房正在修堤。", "dream_record"),
+            V3VisitorChapter(5, "家乘留形", "一卷画稿让后人看见乱世中的普通人，也看见家族为何没有散。", "family_chronicle")
+        )),
+        V3Visitor("wu_weishan", "吴伟业", "江南诗人", "scholar", listOf(
+            V3VisitorChapter(3, "梅村听雨", "他从旧都来，写下驿路风雨，也记下庄门一锅分给众人的粥。", "dream_record"),
+            V3VisitorChapter(5, "诗入家乘", "一首长诗被抄入族谱，家族的沉浮第一次有了完整的韵脚。", "family_chronicle")
+        )),
+        V3Visitor("li_yu", "李渔", "戏曲文客", "artist", listOf(
+            V3VisitorChapter(4, "闲情入庄", "他教族中妇人修补戏台，也教族长知道体面不是挥霍。", "dream_record"),
+            V3VisitorChapter(6, "一台家戏", "族人在祠堂前演了一出家史，孩子们终于听懂祖辈为何守住这块地。", "family_chronicle")
+        )),
+        V3Visitor("shuai_fan", "帅范", "河工老吏", "official", listOf(
+            V3VisitorChapter(2, "河工查堤", "他沿着水渠敲堤脚，指出一处看不见的渗漏。", "new_farming_manual"),
+            V3VisitorChapter(4, "水册留庄", "河工册记下了闸口与粮仓的位置，来年水患少了一场。", "travel_map")
+        )),
+        V3Visitor("pan_jixun", "潘季驯", "治河名臣", "official", listOf(
+            V3VisitorChapter(2, "堤上问粮", "他谈治河不只谈泥沙，还问修堤之后庄里谁来种田。", "new_farming_manual"),
+            V3VisitorChapter(4, "束水成约", "一份旧河工法被留下，田庄的经营与水患应对从此连在一起。", "agriculture_compendium")
+        )),
+        V3Visitor("hai_rui", "海瑞", "清直长者", "official", listOf(
+            V3VisitorChapter(2, "过县问租", "他不先看门第，只问佃户的租契是否让人活得下去。", "family_chronicle"),
+            V3VisitorChapter(4, "清丈留名", "他留下的丈量规矩让族产清点少了几分房支争执。", "travel_map")
+        )),
+        V3Visitor("zhang_juzheng", "张居正", "持衡相臣", "official", listOf(
+            V3VisitorChapter(1, "考成旧法", "一位旧学官谈起考成法，族长第一次把每一处家产都列入月账。", "agriculture_compendium"),
+            V3VisitorChapter(3, "一条鞭影", "赋役与田亩被放在一张表上，家族终于看清银粮如何流失。", "family_chronicle")
+        )),
+        V3Visitor("shen_shixing", "申时行", "江南名臣", "official", listOf(
+            V3VisitorChapter(2, "中和过席", "他谈处世不以逢迎为先，而以让一县的人还能坐下来为先。", "dream_record"),
+            V3VisitorChapter(4, "乡绅成约", "一纸士绅乡约让县衙、族里与乡民各退一步。", "family_chronicle")
+        )),
+        V3Visitor("chen_yuanyuan", "陈圆圆", "秦淮旧人", "artist", listOf(
+            V3VisitorChapter(4, "乱世避席", "她从兵乱中来，带来的不是传闻，而是一群需要安置的妇孺。", "family_chronicle"),
+            V3VisitorChapter(6, "旧曲新谱", "族中为流离者留下一处屋舍，旧曲被写成提醒后人的家训。", "dream_record")
+        )),
+        V3Visitor("li_xiangjun", "李香君", "秦淮才女", "artist", listOf(
+            V3VisitorChapter(4, "桃花扇影", "她不求族长替谁争名，只求把一封未寄出的家书送到安全处。", "family_chronicle"),
+            V3VisitorChapter(6, "扇面留痕", "扇面上的题字被收入家乘，记录乱世中仍有人守信。", "dream_record")
+        )),
+        V3Visitor("xu_fudong", "徐枋", "吴中遗民", "scholar", listOf(
+            V3VisitorChapter(4, "吴中避兵", "他谈避祸不是逃掉责任，而是先保存能继续做事的人。", "mountain_route"),
+            V3VisitorChapter(6, "白云旧约", "一纸避居约定让族中老幼有了真正的退路。", "family_chronicle")
+        )),
+        V3Visitor("qian_qianyi", "钱谦益", "东林名士", "scholar", listOf(
+            V3VisitorChapter(3, "虞山议学", "他带来士林消息，也提醒族长声名若没有粮田支撑，终究只是纸上风。", "dream_record"),
+            V3VisitorChapter(5, "文契相交", "一纸文契把族学与地方书院联结起来，科举路线多了一层助力。", "family_chronicle")
+        )),
+        V3Visitor("li_shi", "李时珍", "本草医家", "healer", listOf(
+            V3VisitorChapter(2, "药圃问诊", "他教族人把荒地分出一角种药，灾年少一分求医的路。", "new_farming_manual"),
+            V3VisitorChapter(4, "本草留方", "一册验方留在医馆，乡民关系与族中身板都因此更稳。", "agriculture_compendium")
+        ))
+    )
+
+    val visitors: List<V3Visitor> = coreVisitors + additionalVisitors
 
     val items = listOf(
         V3Item("western_clock", "西洋自鸣钟", "relic", "每次接待访客时，额外获得1点族望。", V3EffectDelta(influence = 1)),
@@ -203,7 +341,117 @@ object V3Content {
         "郡望" to "家名跨过县界，成为地方不能绕开的姓氏。"
     )
 
-    val allMonthlyCards = monthlyCards + extendedCards
+    val allMonthlyCards: List<V3MonthlyCard> get() = completeMonthlyCards
+
+    private fun generatedCard(
+        id: String,
+        pool: V3CardPool,
+        title: String,
+        body: String,
+        tag: String,
+        effects: V3EffectDelta,
+        counterEffects: V3EffectDelta,
+        minChapter: Int = 1,
+        crisisLevel: Int = 0
+    ): V3MonthlyCard = V3MonthlyCard(
+        id = id,
+        pool = pool,
+        title = title,
+        body = body,
+        tag = tag,
+        weight = 8,
+        minChapter = minChapter,
+        crisisLevel = crisisLevel,
+        choices = listOf(
+            V3CardChoice("act", "按议定办理", "不把眼前的难处推给下一个月。", effects = effects),
+            V3CardChoice("wait", "暂缓处置", "省下眼前的力气，但风声会继续积在门外。", effects = counterEffects)
+        )
+    )
+
+    val additionalMonthlyCards = listOf(
+        generatedCard("clan_01", V3CardPool.Clan, "祠门换瓦", "春雨将至，祠堂的旧瓦一片片松动。", "族务", V3EffectDelta(silver = -12, cohesion = 3, patriarchStewardship = 1), V3EffectDelta(cohesion = -2)),
+        generatedCard("clan_02", V3CardPool.Clan, "族规重抄", "旧族规被油烟熏黑，族老请人重新誊写。", "族务", V3EffectDelta(silver = -8, influence = 3, cohesion = 2), V3EffectDelta(influence = -1)),
+        generatedCard("clan_03", V3CardPool.Clan, "房支分席", "清明祭后，各房为席位争了半日。", "族务", V3EffectDelta(cohesion = 5, influence = 2), V3EffectDelta(cohesion = -4, unrest = 2)),
+        generatedCard("clan_04", V3CardPool.Clan, "族老做寿", "老族老过七旬，几房都来问该备什么礼。", "内宅", V3EffectDelta(silver = -10, cohesion = 4, patriarchPrestige = 2), V3EffectDelta(cohesion = -2)),
+        generatedCard("clan_05", V3CardPool.Clan, "义学借屋", "村口孩子想识字，族学却还没有足够的桌案。", "族务", V3EffectDelta(silver = -16, influence = 4, villagers = 4), V3EffectDelta(villagers = -3)),
+        generatedCard("clan_06", V3CardPool.Clan, "收养孤侄", "族谱外有个失怙的孩子，抱着旧布包站在门槛前。", "内宅", V3EffectDelta(grain = -12, cohesion = 5, villagers = 2), V3EffectDelta(cohesion = -3, unrest = 2)),
+        generatedCard("clan_07", V3CardPool.Clan, "春祭缺牲", "牲口涨价，祭期却不能往后推。", "族务", V3EffectDelta(silver = -8, influence = 2), V3EffectDelta(influence = -2, cohesion = -1)),
+        generatedCard("clan_08", V3CardPool.Clan, "旁房借谱", "旁房来借旧谱，声称要为远亲补名。", "族务", V3EffectDelta(cohesion = 4, influence = 2), V3EffectDelta(cohesion = -3)),
+        generatedCard("clan_09", V3CardPool.Clan, "婚书复核", "媒人拿来两家婚书，请族长落印。", "内宅", V3EffectDelta(cohesion = 3, influence = 2), V3EffectDelta(cohesion = -2)),
+        generatedCard("clan_10", V3CardPool.Clan, "族产清点", "库房钥匙交到案上，账本却少了两页。", "族务", V3EffectDelta(silver = 20, cohesion = 2, patriarchStewardship = 2), V3EffectDelta(silver = -12, unrest = 4)),
+        generatedCard("trade_01", V3CardPool.Trade, "米价翻红", "河埠米价一夜翻涨，船户都在等下一阵风。", "商旅", V3EffectDelta(silver = 28, grain = -12, merchants = 4), V3EffectDelta(silver = -8, grain = 8)),
+        generatedCard("trade_02", V3CardPool.Trade, "盐船靠岸", "盐船在雾里靠岸，船主只肯与有担保的人做买卖。", "商旅", V3EffectDelta(silver = 24, merchants = 6, yamen = -2), V3EffectDelta(merchants = -4)),
+        generatedCard("trade_03", V3CardPool.Trade, "布行邀约", "布行掌柜邀你入股，账面漂亮，风险也漂亮。", "商旅", V3EffectDelta(silver = -35, merchants = 8, routeDelta = V3RouteDelta(V3Route.Merchant, 5)), V3EffectDelta(merchants = -3)),
+        generatedCard("trade_04", V3CardPool.Trade, "商队缺脚", "往北的商队少了脚夫，货物压在仓里。", "商旅", V3EffectDelta(silver = 18, grain = -4, merchants = 3), V3EffectDelta(silver = -6)),
+        generatedCard("trade_05", V3CardPool.Trade, "码头抽税", "码头新换了管事，过一船便要多一笔钱。", "商旅", V3EffectDelta(silver = -18, yamen = 4, merchants = 3), V3EffectDelta(silver = -10, merchants = -3)),
+        generatedCard("trade_06", V3CardPool.Trade, "外地客商", "外地客商想看你家的作坊和账本。", "商旅", V3EffectDelta(silver = 15, patriarchStewardship = 2, merchants = 5), V3EffectDelta(merchants = -2)),
+        generatedCard("trade_07", V3CardPool.Trade, "货栈失火", "夜半货栈起火，火光照见半条河。", "商旅", V3EffectDelta(silver = -28, cohesion = 2, garrisonMorale = 3), V3EffectDelta(silver = -45, unrest = 4)),
+        generatedCard("trade_08", V3CardPool.Trade, "账房收徒", "账房先生年老，想把算盘交给族中后辈。", "商旅", V3EffectDelta(silver = -8, patriarchStewardship = 4, merchants = 2), V3EffectDelta(silver = -5)),
+        generatedCard("field_01", V3CardPool.Field, "祈雨三日", "云层压在田埂上，雨却迟迟不落。", "乡野", V3EffectDelta(grain = 20, villagers = 4, cohesion = 2), V3EffectDelta(grain = -14, unrest = 3)),
+        generatedCard("field_02", V3CardPool.Field, "猎户献皮", "猎户送来一张虎皮，只求换几石粮。", "乡野", V3EffectDelta(grain = -10, garrisonMorale = 5, bandits = -3), V3EffectDelta(villagers = -2)),
+        generatedCard("field_03", V3CardPool.Field, "佃户换契", "佃户说旧契太重，愿用劳作换一纸新约。", "乡野", V3EffectDelta(villagers = 8, cohesion = 3, silver = -8), V3EffectDelta(villagers = -8, unrest = 5)),
+        generatedCard("field_04", V3CardPool.Field, "田鼠成灾", "田间留下密密的洞，幼苗一夜少了半畦。", "乡野", V3EffectDelta(grain = -18, villagers = -3), V3EffectDelta(grain = -22, villagers = -3)),
+        generatedCard("field_05", V3CardPool.Field, "水车停转", "河渠淤泥堵住水车，田庄等着一场清淤。", "乡野", V3EffectDelta(silver = -14, grain = 28, patriarchStewardship = 2), V3EffectDelta(grain = -18)),
+        generatedCard("field_06", V3CardPool.Field, "夜巡遇险", "巡庄人在芦苇里发现新脚印。", "乡野", V3EffectDelta(garrisonMorale = 6, militia = 2, bandits = -4), V3EffectDelta(garrisonMorale = -5, bandits = 5)),
+        generatedCard("rumor_01", V3CardPool.Rumor, "县城新谣", "县城茶馆里传出一桩与李氏有关的闲话。", "风闻", V3EffectDelta(influence = 3, yamen = 2), V3EffectDelta(influence = -2)),
+        generatedCard("rumor_02", V3CardPool.Rumor, "北地灾报", "北地来的脚夫说，饥民正在沿运河南下。", "风闻", V3EffectDelta(grain = -8, refugees = 4, patriarchConduct = 2), V3EffectDelta(refugees = 8, unrest = 3)),
+        generatedCard("rumor_03", V3CardPool.Rumor, "旧官来信", "一封无署名的旧信，提到县衙即将换人。", "风闻", V3EffectDelta(yamen = 5, influence = 2), V3EffectDelta(yamen = -3)),
+        generatedCard("rumor_04", V3CardPool.Rumor, "山中火光", "山脊上的火光一晚比一晚近。", "风闻", V3EffectDelta(garrisonMorale = 5, bandits = -5), V3EffectDelta(garrisonMorale = -4, bandits = 6)),
+        generatedCard("rumor_05", V3CardPool.Rumor, "船工密语", "船工说海口有一条不在册的货路。", "风闻", V3EffectDelta(merchants = 6, silver = 12, routeDelta = V3RouteDelta(V3Route.Overseas, 4)), V3EffectDelta(merchants = -2)),
+        generatedCard("estate_01", V3CardPool.Estate, "仓门加固", "旧粮仓的木门遇潮，锁眼已经发黑。", "产业", V3EffectDelta(silver = -10, grain = 12, patriarchStewardship = 2), V3EffectDelta(grain = -12)),
+        generatedCard("estate_02", V3CardPool.Estate, "作坊招匠", "一名逃来的工匠会烧窑，只求一处能遮雨的屋檐。", "产业", V3EffectDelta(silver = -18, patriarchStewardship = 5, cohesion = 2), V3EffectDelta(silver = -5)),
+        generatedCard("estate_03", V3CardPool.Estate, "集市换契", "集市摊主愿以租金换一处固定棚位。", "产业", V3EffectDelta(silver = 24, merchants = 4, influence = 2), V3EffectDelta(silver = -8, merchants = -3)),
+        generatedCard("estate_04", V3CardPool.Estate, "医馆缺药", "医馆说药材涨价，病人却一日多过一日。", "产业", V3EffectDelta(silver = -16, villagers = 5, unrest = -4), V3EffectDelta(villagers = -5, unrest = 5)),
+        generatedCard("estate_05", V3CardPool.Estate, "寨墙补缝", "寨墙裂了一道缝，正好能让一个人侧身钻过。", "产业", V3EffectDelta(silver = -20, garrisonMorale = 5, bandits = -4), V3EffectDelta(garrisonMorale = -6, bandits = 5)),
+        generatedCard("estate_06", V3CardPool.Estate, "桥梁重修", "进庄的桥被洪水冲空了桥脚。", "产业", V3EffectDelta(silver = -16, influence = 4, villagers = 4), V3EffectDelta(influence = -3)),
+        generatedCard("estate_07", V3CardPool.Estate, "商铺换匾", "铺面掌柜想把李氏的名号挂得更醒目。", "产业", V3EffectDelta(silver = -12, influence = 5, merchants = 4), V3EffectDelta(influence = -2)),
+        generatedCard("estate_08", V3CardPool.Estate, "田契归档", "几十张新旧田契堆在案头，稍有疏忽便会错一行。", "产业", V3EffectDelta(silver = 14, patriarchStewardship = 3, cohesion = 2), V3EffectDelta(silver = -10, cohesion = -2)),
+        generatedCard("chain_01", V3CardPool.Chain, "旧债追门", "十年前的借据被人从箱底翻出，债主已经站在门外。", "讼案", V3EffectDelta(silver = -22, yamen = 4, cohesion = 2), V3EffectDelta(silver = -45, yamen = -4, unrest = 4)),
+        generatedCard("chain_02", V3CardPool.Chain, "田界争讼", "两家的田界只隔一块倒下的界碑。", "讼案", V3EffectDelta(silver = -12, yamen = 5, influence = 2), V3EffectDelta(yamen = -4, cohesion = -3)),
+        generatedCard("chain_03", V3CardPool.Chain, "族学名额", "县学愿给族中孩子一个旁听名额。", "章节", V3EffectDelta(silver = -12, influence = 5, routeDelta = V3RouteDelta(V3Route.Scholar, 6)), V3EffectDelta(influence = -2)),
+        generatedCard("chain_04", V3CardPool.Chain, "军需借道", "军需车队想借庄道过境，留下的却是一张空白欠条。", "讼案", V3EffectDelta(garrison = 6, yamen = 3, silver = -12), V3EffectDelta(garrison = -5, influence = -2)),
+        generatedCard("chain_05", V3CardPool.Chain, "旁支分门", "旁支说自己已经足够富裕，想另立祠门。", "族务", V3EffectDelta(cohesion = 6, influence = -2), V3EffectDelta(cohesion = -8, unrest = 4)),
+        generatedCard("chain_06", V3CardPool.Chain, "妇人理账", "几位主母把散乱的内宅账本带到族长案前。", "内宅", V3EffectDelta(silver = 18, cohesion = 3, patriarchConduct = 2), V3EffectDelta(silver = -8, cohesion = -2)),
+        generatedCard("annual_01", V3CardPool.Annual, "春耕誓约", "春耕前，各房要在祠堂立下今年的田亩约。", "年务", V3EffectDelta(grain = 25, cohesion = 4, patriarchStewardship = 2), V3EffectDelta(grain = -12, cohesion = -3)),
+        generatedCard("annual_02", V3CardPool.Annual, "秋收分粮", "秋收入仓，分粮的秤杆比往年更沉。", "年务", V3EffectDelta(grain = 40, cohesion = 3, villagers = 3), V3EffectDelta(grain = 12, cohesion = -5)),
+        generatedCard("annual_03", V3CardPool.Annual, "岁末祭祖", "岁末风紧，祠堂灯火仍得按旧例点满。", "年务", V3EffectDelta(silver = -12, influence = 4, cohesion = 5), V3EffectDelta(influence = -3, cohesion = -2)),
+        generatedCard("annual_04", V3CardPool.Annual, "族学月考", "族学先生把孩子们的卷子摊在案上。", "年务", V3EffectDelta(influence = 5, patriarchPrestige = 2, routeDelta = V3RouteDelta(V3Route.Scholar, 5)), V3EffectDelta(influence = -2)),
+        generatedCard("annual_05", V3CardPool.Annual, "冬藏验仓", "第一场霜落下，账房请族长亲自验仓。", "年务", V3EffectDelta(grain = 30, patriarchStewardship = 3), V3EffectDelta(grain = -15, refugees = 4)),
+        generatedCard("home_01", V3CardPool.Clan, "抓周开席", "孩子抓住一枚算盘，满堂人都笑了。", "内宅", V3EffectDelta(silver = 8, cohesion = 4, routeDelta = V3RouteDelta(V3Route.Merchant, 3)), V3EffectDelta(cohesion = -1)),
+        generatedCard("home_02", V3CardPool.Clan, "母亲问安", "远房母亲来信，问家中是否还留着旧宅。", "内宅", V3EffectDelta(cohesion = 4, influence = 2), V3EffectDelta(cohesion = -2)),
+        generatedCard("home_03", V3CardPool.Clan, "媒人过门", "媒人带来一户相合的人家，请族长先看门第。", "内宅", V3EffectDelta(silver = -6, cohesion = 4, influence = 2), V3EffectDelta(cohesion = -2)),
+        generatedCard("home_04", V3CardPool.Clan, "主母设粥", "内宅想在庄门设粥，却先要知道粮仓还能撑几日。", "内宅", V3EffectDelta(grain = -18, refugees = -4, villagers = 6, unrest = -5), V3EffectDelta(unrest = 6, villagers = -4)),
+        generatedCard("home_05", V3CardPool.Clan, "祖母遗匣", "祖母留下的木匣里，只有一张褪色的婚书。", "内宅", V3EffectDelta(cohesion = 4, influence = 3, patriarchPrestige = 2), V3EffectDelta(cohesion = -2)),
+        generatedCard("home_06", V3CardPool.Clan, "兄弟夜谈", "兄弟坐在廊下，第一次谈起各房日后要分什么。", "内宅", V3EffectDelta(cohesion = 5, patriarchConduct = 3), V3EffectDelta(cohesion = -7, unrest = 3)),
+        generatedCard("crisis_grain_01", V3CardPool.Crisis, "粮荒·舍粥", "粮仓见底后，庄门外只剩一口大锅能说话。", "灾变", V3EffectDelta(grain = -30, refugees = -8, villagers = 8, unrest = -8), V3EffectDelta(unrest = 12, refugees = 8), crisisLevel = 1),
+        generatedCard("crisis_grain_02", V3CardPool.Crisis, "粮荒·借种", "佃户请求留下明年的种粮，不肯再把最后一袋交租。", "灾变", V3EffectDelta(grain = -20, villagers = 10, cohesion = 3), V3EffectDelta(grain = 10, villagers = -12, unrest = 8), crisisLevel = 1),
+        generatedCard("crisis_grain_03", V3CardPool.Crisis, "粮荒·开仓", "账房跪在地上说，再开三日仓，冬粮就不够了。", "灾变", V3EffectDelta(grain = -45, refugees = -12, influence = 4), V3EffectDelta(refugees = 12, unrest = 10), crisisLevel = 1),
+        generatedCard("crisis_grain_04", V3CardPool.Crisis, "粮荒·米船", "一条米船停在河心，只要现银就能靠岸。", "灾变", V3EffectDelta(silver = -55, grain = 85, merchants = 5), V3EffectDelta(grain = -22, refugees = 8), crisisLevel = 1),
+        generatedCard("crisis_grain_05", V3CardPool.Crisis, "粮荒·逃户", "最先离开的不是外乡人，而是熟悉田埂的佃户。", "灾变", V3EffectDelta(grain = -8, refugees = -6, villagers = 5), V3EffectDelta(refugees = 16, cohesion = -5), crisisLevel = 1),
+        generatedCard("crisis_unrest_01", V3CardPool.Crisis, "民怨·抗租", "佃户把租契撕成两半，站在祠堂前等你的话。", "灾变", V3EffectDelta(silver = -15, villagers = 12, unrest = -12, cohesion = 4), V3EffectDelta(villagers = -15, unrest = 14, cohesion = -5), crisisLevel = 2),
+        generatedCard("crisis_unrest_02", V3CardPool.Crisis, "民怨·堵门", "庄门被柴车堵住，乡民说今天必须有个说法。", "灾变", V3EffectDelta(grain = -18, villagers = 8, unrest = -10), V3EffectDelta(unrest = 16, garrisonMorale = -8), crisisLevel = 2),
+        generatedCard("crisis_unrest_03", V3CardPool.Crisis, "民怨·旧怨", "几户人翻出十年前的欠账，怨气终于找到名字。", "灾变", V3EffectDelta(silver = -22, cohesion = 5, unrest = -8), V3EffectDelta(cohesion = -8, unrest = 12), crisisLevel = 2),
+        generatedCard("crisis_unrest_04", V3CardPool.Crisis, "民怨·断契", "乡民愿意留下，但要把旧租契烧在祠堂门外。", "灾变", V3EffectDelta(silver = -28, villagers = 15, cohesion = 4, unrest = -15), V3EffectDelta(villagers = -12, unrest = 18), crisisLevel = 2),
+        generatedCard("crisis_unrest_05", V3CardPool.Crisis, "民怨·乡约", "乡老提议重订一份乡约，把各户的分担写清楚。", "灾变", V3EffectDelta(silver = -10, influence = 4, villagers = 10, unrest = -10), V3EffectDelta(influence = -3, unrest = 12), crisisLevel = 2),
+        generatedCard("crisis_mutiny_01", V3CardPool.Crisis, "庄乱·欠饷", "乡勇把刀放在桌上，说守庄不能只靠家声。", "灾变", V3EffectDelta(silver = -35, garrisonMorale = 18, unrest = -12, cohesion = 3), V3EffectDelta(garrisonMorale = -15, unrest = 18), crisisLevel = 3),
+        generatedCard("crisis_mutiny_02", V3CardPool.Crisis, "庄乱·夺门", "有人在夜里摸向西寨门，火把照出熟人的脸。", "灾变", V3EffectDelta(militia = -2, garrisonMorale = 12, unrest = -10), V3EffectDelta(militia = -8, garrisonMorale = -18, unrest = 22), crisisLevel = 3),
+        generatedCard("crisis_mutiny_03", V3CardPool.Crisis, "庄乱·分甲", "甲胄被各房私藏，乡勇不知该听谁的号令。", "灾变", V3EffectDelta(cohesion = 8, garrisonMorale = 10, unrest = -8), V3EffectDelta(cohesion = -12, garrisonMorale = -15), crisisLevel = 3),
+        generatedCard("crisis_mutiny_04", V3CardPool.Crisis, "庄乱·外援", "山外有人愿来助守，但要先把一处田契交出去。", "灾变", V3EffectDelta(silver = -20, garrisonMorale = 15, bandits = -8), V3EffectDelta(garrisonMorale = -12, bandits = 12), crisisLevel = 3),
+        generatedCard("crisis_mutiny_05", V3CardPool.Crisis, "庄乱·最后一夜", "祖祠外的鼓声没有停，六处庄门都在等一个决定。", "灾变", V3EffectDelta(militia = -3, cohesion = 8, garrisonMorale = 15, unrest = -15), V3EffectDelta(militia = -12, cohesion = -15, garrisonMorale = -20), crisisLevel = 3)
+    )
+
+    val completeMonthlyCards = monthlyCards + extendedCards + additionalMonthlyCards
+
+    fun crisisCardsFor(state: V3GameState): List<V3MonthlyCard> {
+        val stage = when {
+            state.currentCrisisStage == "mutiny" -> 3
+            state.currentCrisisStage == "unrest" -> 2
+            state.currentCrisisStage == "grain_shortage" -> 1
+            else -> 0
+        }
+        return additionalMonthlyCards.filter { card -> card.crisisLevel in 1..stage }
+    }
+
 
     val initialPeople = listOf(
         V3Person(1, "李慎行", 24, "主房", "开族祖", V3Trait.Smooth, study = 26, martial = 22, commerce = 20, diplomacy = 24, loyalty = 90)
@@ -510,7 +758,7 @@ object V3Content {
             control = 26,
             risk = 18,
             status = V3SiteStatus.Stable,
-            desc = "士林清议之所，推动耕读、士绅与仕途路线。",
+            desc = "士林讲会之所，推动耕读、士绅与仕途路线。",
             taskTypes = listOf(V3TaskType.Study, V3TaskType.Diplomacy)
         ),
         V3CountySite(
@@ -579,7 +827,43 @@ object V3Content {
             if (root == "边地军户" || root == "山中堡寨") 12 else 3
         var relations = V3Relations()
         var rebelHeat = 0
+        val originTraits = mutableListOf<String>()
         val routeBonuses = mutableListOf<Pair<V3Route, Int>>()
+
+        when (root) {
+            "寒门佃户" -> {
+                cohesion += 8
+                relations = relations.copy(villagers = 12)
+                originTraits += "同乡相护：粮荒时流民转化较慢"
+            }
+            "没落士族" -> {
+                influence += 12
+                relations = relations.copy(gentry = 14, yamen = 4)
+                originTraits += "旧谱余荫：族望与士绅初始关系更高"
+            }
+            "边地军户" -> {
+                militia += 10
+                relations = relations.copy(garrison = 16)
+                originTraits += "边堡军籍：守庄战初始驻守更强"
+            }
+            "江南商族" -> {
+                silver += 24
+                relations = relations.copy(merchants = 18)
+                originTraits += "账房传家：商旅卡更容易带来银两"
+            }
+            "山中堡寨" -> {
+                militia += 8
+                rebelHeat += 8
+                relations = relations.copy(bandits = 8, garrison = 5)
+                originTraits += "山寨旧盟：山贼关系较好，但官府猜忌更深"
+            }
+            "海商遗族" -> {
+                silver += 18
+                relations = relations.copy(merchants = 15, yamen = -4)
+                routeBonuses += V3Route.Overseas to 8
+                originTraits += "海路遗契：海外路线与码头经营起步更快"
+            }
+        }
 
         val creedRoute = when (creed) {
             "耕读传家" -> V3Route.Scholar
@@ -684,6 +968,7 @@ object V3Content {
             routeScores = routeScores,
             routeBonuses = routeBonuses,
             annualGoals = goalsFor(creed, crisis),
+            originTraits = originTraits,
             countyEffect = countyEffect,
             crisisEffect = crisisEffect
         )
@@ -739,6 +1024,7 @@ object V3Content {
             grain = profile.grain,
             influence = profile.influence,
             cohesion = profile.cohesion,
+            originTraits = profile.originTraits,
             militia = profile.militia,
             army = V3ArmyRoster(militia = profile.militia),
             relations = profile.relations,

@@ -190,7 +190,7 @@ object V3EventContent {
     private val personArcSeeds = listOf(
         PersonArcSeed(1, "开族祖", "main", "shrine", V3Route.Hermit, "整肃族规", "主房权威与诸房利益难以两全"),
         PersonArcSeed(2, "李承岳", "martial", "fort", V3Route.Fortress, "操练乡勇", "武备扩张会招来县衙猜忌"),
-        PersonArcSeed(3, "李若兰", "scholar", "academy", V3Route.Scholar, "主持讲会", "清议声名越高，党争牵连越深"),
+        PersonArcSeed(3, "李若兰", "scholar", "academy", V3Route.Scholar, "主持讲会", "士林声名越高，门户争论牵连越深"),
         PersonArcSeed(4, "李仲财", "merchant", "market", V3Route.Merchant, "重整商号", "银钱流转越快，账目越难服众"),
         PersonArcSeed(5, "李济民", "second", "clinic", V3Route.Hermit, "救治乡里", "仁名能安民，也会耗尽药粮"),
         PersonArcSeed(6, "李守砚", "scholar", "academy", V3Route.Scholar, "备考乡试", "少年求名太急，容易被士林利用"),
@@ -357,7 +357,7 @@ object V3EventContent {
             V3EventChoice("准立小祠", "海外路线与海路支提升。", silverDelta = -35, cohesionDelta = -1, route = V3Route.Overseas, routeDelta = 8, branchImpacts = listOf(V3BranchImpact("sea", influenceDelta = 6, loyaltyDelta = 4, grievanceDelta = -4))),
             V3EventChoice("祖祠不可分", "主房威严上升，海路支不满。", influenceDelta = 3, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("main", influenceDelta = 3), V3BranchImpact("sea", grievanceDelta = 6)))
         )),
-        V3ActiveEvent("书香支清议", "书香支要求宗族在县中公开表态反对苛派。", listOf(
+        V3ActiveEvent("书香支讲会", "书香支要求宗族在县中公开表态反对苛派。", listOf(
             V3EventChoice("附和族中公议", "士绅声望上升，县衙开始留意。", influenceDelta = 6, gentryDelta = 8, yamenDelta = -6, route = V3Route.Scholar, branchImpacts = listOf(V3BranchImpact("scholar", influenceDelta = 5, grievanceDelta = -3))),
             V3EventChoice("不涉公议", "官府关系稳定，书香支不满。", yamenDelta = 4, cohesionDelta = 1, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("scholar", grievanceDelta = 5)))
         )),
@@ -416,7 +416,7 @@ object V3EventContent {
             V3EventChoice("出面担保", "商路稳定，风险自担。", silverDelta = -30, grainDelta = 50, merchantsDelta = 8, route = V3Route.Merchant),
             V3EventChoice("拒绝担保", "避免牵连，商帮不满。", merchantsDelta = -6, cohesionDelta = 2, route = V3Route.Hermit)
         )),
-        V3ActiveEvent("清议榜文", "城中贴出清议榜文，称各族应共抗苛派。", listOf(
+        V3ActiveEvent("士林榜文", "城中贴出士林榜文，称各族应共抗苛派。", listOf(
             V3EventChoice("暗中资助", "士林声望上升。", silverDelta = -25, gentryDelta = 10, yamenDelta = -5, route = V3Route.Scholar),
             V3EventChoice("撕榜避祸", "官府满意，士林失望。", yamenDelta = 6, gentryDelta = -6, route = V3Route.Loyalist)
         )),
@@ -598,7 +598,7 @@ object V3EventContent {
         CountyManagementSeed("farmland", "南乡田庄", V3Route.Hermit, "佃约、水利与秋粮估产难以两全", "佃户"),
         CountyManagementSeed("market", "西河集市", V3Route.Merchant, "货价、牙行与商帮分润不断起争", "商帮"),
         CountyManagementSeed("yamen", "清河县衙", V3Route.Loyalist, "税册、徭役和差役勒索压到乡里", "书吏"),
-        CountyManagementSeed("academy", "东林书院", V3Route.Scholar, "讲会、束脩和党争清议暗流涌动", "士子"),
+        CountyManagementSeed("academy", "东林书院", V3Route.Scholar, "讲会、束脩和门户争论暗流涌动", "士子"),
         CountyManagementSeed("clinic", "仁心医馆", V3Route.Hermit, "药材、病患和义诊开支日日紧逼", "郎中"),
         CountyManagementSeed("fort", "北山寨堡", V3Route.Fortress, "墙垣、哨探和乡勇粮饷都要补足", "武支"),
         CountyManagementSeed("dock", "三江码头", V3Route.Overseas, "船税、海货和巡查风声互相牵扯", "海商"),

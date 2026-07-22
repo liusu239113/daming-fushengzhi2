@@ -244,8 +244,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun startConquest(regionId: String) {
         audio.playSfx(SfxKey.V3Dispute)
+        val hadConquest = state.conquestState != null
         state = V3GameEngine.startConquest(state, regionId)
-        message = state.pendingReports.firstOrNull()
+        if (!hadConquest && state.conquestState != null) pauseForModal()
+        message = if (state.conquestState == null) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
     }
 
@@ -255,6 +257,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+        resumeAfterModalIfClear()
     }
 
     fun cancelConquest() {
@@ -262,6 +265,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         state = V3GameEngine.cancelConquest(state)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+        resumeAfterModalIfClear()
     }
 
     fun proclaimUnification() {
@@ -321,7 +325,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
     fun startBattle() {
         audio.playSfx(SfxKey.V3Dispute)
+        val hadBattle = state.battleState != null
         state = V3GameEngine.startBattle(state)
+        if (!hadBattle && state.battleState != null) pauseForModal()
         message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
     }
@@ -360,6 +366,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+        resumeAfterModalIfClear()
     }
 
     fun resolveBattle() {
@@ -368,6 +375,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
         saveStore.save(state)
+        resumeAfterModalIfClear()
     }
 
     fun cancelBattle() {
@@ -375,6 +383,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         state = V3GameEngine.cancelBattle(state)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+        resumeAfterModalIfClear()
     }
 
     fun raiseBanner() {
@@ -430,7 +439,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
                 else -> com.arktools.daming.v3.data.V3HexArms.Cavalry
             }
             val advantage = if (selected.counters(enemy)) 13 else if (enemy.counters(selected)) -13 else 0
-            val loss = (tile.enemyWave / 4 - advantage / 4).coerceIn(0, 12)
+            val baseLoss = (tile.enemyWave / 4 - advantage / 4).coerceIn(0, 12)
+            val loss = if (tile.stable) baseLoss else (baseLoss + 3).coerceAtMost(12)
             tile.copy(arms = selected, garrison = (tile.garrison - loss).coerceAtLeast(0), breached = tile.garrison - loss <= 0, stable = tile.garrison - loss > 0)
         }
         val nextTurn = battle.turn + 1
@@ -444,8 +454,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             hexBattleState = battle.copy(
                 turn = nextTurn,
                 tiles = nextTiles,
-                supply = (battle.supply - 8).coerceAtLeast(0),
-                enemyMomentum = (battle.enemyMomentum + if (victory) -12 else 6).coerceIn(0, 100),
+                supply = supplyAfter,
+                enemyMomentum = momentumAfter,
                 selectedArms = emptyMap(),
                 log = (battle.log + "第${battle.turn}轮守庄结算，${nextTiles.count { it.breached }}处庄门失守。").takeLast(20),
                 finished = finished,
@@ -455,18 +465,52 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    private fun hexBattleInitialState(): com.arktools.daming.v3.data.V3HexBattleState {
+        val initial = com.arktools.daming.v3.data.V3HexBattleState.initial()
+        val originBonus = if (state.originTraits.any { it.startsWith("边堡军籍") }) 3 else 0
+        val letterBonus = if ("military_letter" in state.inventory) 2 else 0
+        val moraleBonus = ((state.garrisonMorale - 60) / 10).coerceIn(-3, 4)
+        val totalBonus = originBonus + letterBonus + moraleBonus
+        return initial.copy(
+            tiles = initial.tiles.map { tile ->
+                tile.copy(garrison = (tile.garrison + totalBonus).coerceAtLeast(8))
+            },
+            log = listOf(
+                "终章守庄整备：六处庄门依照出身、军书与守望士气配置驻守。"
+            )
+        )
+    }
+
     fun startHexBattle() {
-        state = state.copy(hexBattleState = com.arktools.daming.v3.data.V3HexBattleState.initial())
+        if (state.year < 1643) {
+            message = "六门守庄只在甲申前夕的最终守庄玩法中开启。"
+            return
+        }
+        if (state.hexBattleCompleted) {
+            message = "六门守庄已经结算过，本局不会重复开启。"
+            return
+        }
+        if (V3GameEngine.hasBlockingEncounter(state)) {
+            message = "当前已有待处理的战事、考试或终局事务，六门守庄不会与其他玩法重叠。"
+            return
+        }
+        state = state.copy(
+            hexBattleState = hexBattleInitialState()
+        )
         pauseForModal()
         saveStore.save(state)
     }
 
     fun closeHexBattle() {
         val battle = state.hexBattleState ?: return
+        if (!battle.finished) {
+            message = "守庄战尚未结束，请先结算当前轮次。"
+            return
+        }
         state = if (battle.victory) {
-            state.copy(hexBattleState = null, garrisonMorale = (state.garrisonMorale + 8).coerceIn(0, 100), influence = (state.influence + 6).coerceIn(0, 100), pendingReports = listOf("六处庄门守住，族谱记下这一夜。"))
+            state.copy(hexBattleState = null, hexBattleCompleted = true, garrisonMorale = (state.garrisonMorale + 8).coerceIn(0, 100), influence = (state.influence + 6).coerceIn(0, 100), pendingReports = listOf("六处庄门守住，族谱记下这一夜。"))
         } else {
-            state.copy(hexBattleState = null, garrisonMorale = (state.garrisonMorale - 10).coerceIn(0, 100), cohesion = (state.cohesion - 8).coerceIn(0, 100), pendingReports = listOf("庄门有失，族内需要重新整顿。"))
+            state.copy(hexBattleState = null, hexBattleCompleted = true, garrisonMorale = (state.garrisonMorale - 10).coerceIn(0, 100), cohesion = (state.cohesion - 8).coerceIn(0, 100), pendingReports = listOf("庄门有失，族内需要重新整顿。"))
         }
         saveStore.save(state)
         resumeAfterModalIfClear()
@@ -665,7 +709,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     private fun resumeAfterModalIfClear() {
         val blocked = latestReport != null || message != null || settingsVisible || state.activeEvent != null ||
-            state.examSession != null || state.battleState != null || state.conquestState != null || state.finalEnding != null
+            state.examSession != null || state.battleState != null || state.hexBattleState != null || state.conquestState != null || state.finalEnding != null
         if (blocked) return
         resumeSpeedAfterModal?.let { speed ->
             timeSpeed = speed
@@ -715,6 +759,10 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         )
         saveStore.save(state)
     }
+
+    fun genealogyPreface(): String = V3GameEngine.genealogyPreface(state)
+
+    fun endingChronicle(): List<String> = V3GameEngine.endingChronicle(state)
 
     fun openPlayGuide() {
         audio.playSfx(SfxKey.UiSelect)

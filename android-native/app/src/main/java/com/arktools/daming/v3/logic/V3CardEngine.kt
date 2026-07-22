@@ -8,6 +8,7 @@ import com.arktools.daming.v3.data.V3EffectDelta
 import com.arktools.daming.v3.data.V3Content
 import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3MonthlyCard
+import com.arktools.daming.v3.data.V3RouteDelta
 import kotlin.math.abs
 
 /**
@@ -38,11 +39,13 @@ object V3CardEngine {
 
     fun refreshMonth(state: V3GameState, cards: List<V3MonthlyCard> = V3Content.allMonthlyCards): V3GameState {
         val generationSeen = state.seenCardGenerations[state.patriarch.generation].orEmpty()
-        val visitorCards = visitorChainCards(state)
+        val visitorCards = visitorIntroCards(state) + visitorChainCards(state)
         val available = (cards + visitorCards).distinctBy { it.id }.filter { card ->
             val chapter = V3ProgressionEngine.currentChapter(state).number
             chapter in card.minChapter..card.maxChapter &&
                 card.id !in state.activeCards.map { it.id } &&
+                (card.pool != V3CardPool.Crisis || crisisCardApplies(card, state)) &&
+                (card.pool != V3CardPool.Annual || annualCardApplies(card, state)) &&
                 (!card.once || card.id !in state.seenCardIds) &&
                 (!card.oncePerGeneration || card.id !in generationSeen)
         }
@@ -69,31 +72,49 @@ object V3CardEngine {
     ): List<V3MonthlyCard> {
         if (available.isEmpty() || limit <= 0) return emptyList()
         val chosen = linkedSetOf<String>()
-        val layers = listOf(
-            available.filter { it.pool == V3CardPool.Crisis && crisisCardApplies(it, state) },
-            available.filter { it.pool == V3CardPool.Annual && it.id !in chosen },
-            available.filter { it.tag.contains("章节") || it.pool == V3CardPool.Chain },
+        val prioritizedLayers = listOf(
+            available.filter { it.pool == V3CardPool.Crisis },
+            available.filter { it.tag.contains("章节") },
             available.filter { it.pool == V3CardPool.Visitor && visitorCardApplies(it, state) },
+            available.filter { it.pool == V3CardPool.Annual },
+            available.filter { it.pool == V3CardPool.Exam },
             available.filter { it.tag.contains("关系") && relationshipCardApplies(it, state) },
-            available.filter { it.tag.contains("族长") && patriarchCardApplies(it, state) },
-            available.filter { it.pool == V3CardPool.Field || it.pool == V3CardPool.Estate },
-            available.filter { it.once && it.id !in state.seenCardIds },
-            available.filter { it.pool == V3CardPool.Rumor },
-            available.filter { it.pool == V3CardPool.Clan || it.pool == V3CardPool.Trade },
-            available.filter { it.id !in chosen }
+            available.filter { it.tag.contains("族长") && patriarchCardApplies(it, state) }
         )
-        val seed = stableSeed(state)
-        layers.forEachIndexed { index, layer ->
-            if (chosen.size >= limit) return@forEachIndexed
-            val candidates = layer.filter { it.id !in chosen }
-            if (candidates.isEmpty()) return@forEachIndexed
-            val ordered = candidates.sortedWith(compareByDescending<V3MonthlyCard> { it.weight }.thenBy {
-                abs((it.id.hashCode() + seed + index * 31) % 997)
-            })
-            ordered.take(limit - chosen.size).forEach { chosen += it.id }
+        val rotatingPool = available.filter {
+            it.id !in chosen &&
+                it.pool !in setOf(
+                    V3CardPool.Crisis,
+                    V3CardPool.Visitor,
+                    V3CardPool.Annual,
+                    V3CardPool.Exam
+                ) &&
+                !it.tag.contains("章节")
         }
+        val seed = stableSeed(state)
+        prioritizedLayers.forEachIndexed { index, layer ->
+            if (chosen.size >= limit) return@forEachIndexed
+            val candidates = orderedCandidates(layer.filter { it.id !in chosen }, seed, index)
+            candidates.firstOrNull()?.let { chosen += it.id }
+        }
+        orderedCandidates(rotatingPool.filter { it.id !in chosen }, seed, prioritizedLayers.size)
+            .take(limit - chosen.size)
+            .forEach { chosen += it.id }
         return chosen.mapNotNull { id -> available.firstOrNull { it.id == id } }
     }
+
+    private fun orderedCandidates(
+        cards: List<V3MonthlyCard>,
+        seed: Int,
+        layerIndex: Int
+    ): List<V3MonthlyCard> =
+        cards.sortedByDescending { card ->
+            val rotation = Math.floorMod(
+                card.id.hashCode() + seed + layerIndex * 31,
+                997
+            )
+            rotation + card.weight * 8
+        }
 
     fun canPlay(state: V3GameState, cardId: String, choiceId: String): Boolean {
         if (state.playedCardsThisMonth >= state.cardBudget) return false
@@ -139,7 +160,7 @@ object V3CardEngine {
         } else {
             choice.effects.plus(if (success) choice.successEffects else choice.failureEffects)
         }
-        var next = applyDelta(state, delta)
+        var next = applyDelta(state, applyOriginTraitBonus(state, card, delta))
         val nextSeen = if (card.once) {
             (next.seenCardIds + card.id).distinct()
         } else next.seenCardIds
@@ -262,6 +283,43 @@ object V3CardEngine {
         return applyDelta(state, recurring)
     }
 
+    private fun applyOriginTraitBonus(
+        state: V3GameState,
+        card: V3MonthlyCard,
+        delta: V3EffectDelta
+    ): V3EffectDelta {
+        if (state.originTraits.isEmpty()) return delta
+        var result = delta
+        state.originTraits.forEach { trait ->
+            result = when {
+                trait.startsWith("同乡相护") && card.crisisLevel == 1 ->
+                    result.copy(refugees = result.refugees - 2)
+                trait.startsWith("账房传家") && card.pool == V3CardPool.Trade ->
+                    result.copy(silver = result.silver + 5)
+                trait.startsWith("边堡军籍") && card.pool == V3CardPool.Crisis ->
+                    result.copy(garrisonMorale = result.garrisonMorale + 3)
+                trait.startsWith("旧谱余荫") && (card.tag == "科举" || card.tag == "关系") ->
+                    result.copy(influence = result.influence + 2)
+                trait.startsWith("山寨旧盟") && card.tag == "灾变" ->
+                    result.copy(bandits = result.bandits + 2, yamen = result.yamen - 1)
+                trait.startsWith("海路遗契") && (card.pool == V3CardPool.Trade || card.tag == "商旅") ->
+                    result.copy(
+                        silver = result.silver + 4,
+                        routeDelta = result.routeDelta ?: V3RouteDelta(V3Route.Overseas, 1)
+                    )
+                else -> result
+            }
+        }
+        return result
+    }
+
+    private fun crisisLevel(state: V3GameState): Int = when (crisisStage(state)) {
+        "mutiny" -> 3
+        "unrest" -> 2
+        "grain_shortage" -> 1
+        else -> 0
+    }
+
     private fun applyDelta(state: V3GameState, delta: V3EffectDelta): V3GameState {
         val relations = state.relations.copy(
             yamen = clamp(state.relations.yamen + delta.yamen),
@@ -325,6 +383,50 @@ object V3CardEngine {
             applyDelta(result, acquiredEffects)
         }
     }
+
+    private fun visitorIntroCards(state: V3GameState): List<V3MonthlyCard> =
+        V3Content.visitors.mapNotNull { visitor ->
+            if (visitor.id in state.seenVisitors || state.visitorProgress.containsKey(visitor.id)) return@mapNotNull null
+            val first = visitor.chapters.firstOrNull() ?: return@mapNotNull null
+            if (first.chapter > V3ProgressionEngine.currentChapter(state).number) return@mapNotNull null
+            V3MonthlyCard(
+                id = "visitor_intro_${visitor.id}",
+                pool = V3CardPool.Visitor,
+                title = "${visitor.name}：${first.title}",
+                body = first.body,
+                tag = "访客",
+                weight = 22,
+                once = true,
+                minChapter = first.chapter,
+                choices = listOf(
+                    V3CardChoice(
+                        id = "receive",
+                        label = "请入庄中",
+                        desc = "让远客在族谱上留下姓名，也把这一段见闻留下。",
+                        effects = first.effects.plus(
+                            V3EffectDelta(
+                                itemId = first.giftItemId,
+                                visitorId = visitor.id,
+                                visitorProgress = 1,
+                                biographicalNote = "${visitor.name}初次过庄：${first.title}。"
+                            )
+                        )
+                    ),
+                    V3CardChoice(
+                        id = "farewell",
+                        label = "以礼送行",
+                        desc = "不把远客留在门内，但仍结下一段可追溯的善缘。",
+                        effects = V3EffectDelta(
+                            silver = -6,
+                            influence = 2,
+                            visitorId = visitor.id,
+                            visitorProgress = 1,
+                            biographicalNote = "${visitor.name}初次过庄，族人以礼相送。"
+                        )
+                    )
+                )
+            )
+        }
 
     private fun visitorChainCards(state: V3GameState): List<V3MonthlyCard> =
         V3Content.visitors.flatMap { visitor ->
@@ -397,13 +499,32 @@ object V3CardEngine {
         abs((stableSeed(state) + card.id.hashCode() * 3 + choice.id.hashCode()) % 100)
 
     private fun crisisCardApplies(card: V3MonthlyCard, state: V3GameState): Boolean =
-        card.id.contains(crisisStage(state).orEmpty()) || crisisStage(state) != null
+        if (card.crisisLevel == 0) {
+            crisisStage(state) != null
+        } else {
+            card.crisisLevel <= crisisLevel(state)
+        }
+
+    private fun annualCardApplies(card: V3MonthlyCard, state: V3GameState): Boolean =
+        when (card.id) {
+            "annual_repair_ledger", "annual_03" -> state.month == 12
+            "annual_01" -> state.month == 2
+            "annual_02" -> state.month == 9
+            "annual_04" -> state.month == 4
+            "annual_05" -> state.month == 11
+            else -> true
+        }
 
     private fun visitorCardApplies(card: V3MonthlyCard, state: V3GameState): Boolean =
         card.id !in state.seenCardIds
 
     private fun relationshipCardApplies(card: V3MonthlyCard, state: V3GameState): Boolean =
-        state.relations.yamen < 20 || state.relations.gentry < 20 || state.relations.villagers < 20 || state.relations.merchants < 20
+        state.relations.yamen < 20 ||
+            state.relations.gentry < 20 ||
+            state.relations.villagers < 20 ||
+            state.relations.bandits < 20 ||
+            state.relations.merchants < 20 ||
+            state.relations.garrison < 20
 
     private fun patriarchCardApplies(card: V3MonthlyCard, state: V3GameState): Boolean =
         state.patriarch.health < 45 || state.patriarch.conduct >= 70 || state.patriarch.stewardship >= 70 || state.patriarch.prestige >= 70

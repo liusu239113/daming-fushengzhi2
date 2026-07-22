@@ -11,6 +11,7 @@ import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3Gender
 import com.arktools.daming.v3.data.V3Person
 import com.arktools.daming.v3.data.V3RegionStatus
+import com.arktools.daming.v3.data.V3RelationBand
 import com.arktools.daming.v3.data.V3Route
 import com.arktools.daming.v3.data.V3Trait
 import com.arktools.daming.v3.data.V3TroopType
@@ -23,6 +24,87 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class V3GameEngineTest {
+    @Test
+    fun completeCardAndVisitorContentIsReachable() {
+        assertTrue(V3Content.allMonthlyCards.size >= 60)
+        assertTrue(V3Content.visitors.size >= 30)
+        assertEquals(5, V3Content.additionalMonthlyCards.count { it.crisisLevel == 1 })
+        assertEquals(5, V3Content.additionalMonthlyCards.count { it.crisisLevel == 2 })
+        assertEquals(5, V3Content.additionalMonthlyCards.count { it.crisisLevel == 3 })
+        assertEquals(6, V3Content.roots.size)
+        V3Content.roots.forEach { root ->
+            val state = V3Content.newGame(root, "江南水乡", "耕读传家", "饥荒将至")
+            assertTrue(state.originTraits.isNotEmpty())
+        }
+    }
+
+    @Test
+    fun visitorIntroCardCanStartEveryVisitorChain() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(clanRank = 4, year = 1610)
+        val refreshed = V3CardEngine.refreshMonth(base, emptyList())
+        val intros = refreshed.activeCards.filter { it.id.startsWith("visitor_intro_") }
+        assertTrue(intros.isNotEmpty())
+        val intro = intros.first()
+        val resolved = V3CardEngine.choose(refreshed, intro.id, "receive")
+        assertNotNull(resolved)
+        val visitorId = intro.id.removePrefix("visitor_intro_")
+        assertEquals(1, resolved?.state?.visitorProgress?.get(visitorId))
+    }
+
+    @Test
+    fun originTraitsChangeCardResolutionByOrigin() {
+        val card = V3Content.additionalMonthlyCards.first { it.id == "trade_01" }
+        val merchant = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+        val plain = merchant.copy(originTraits = emptyList())
+        val withTrait = V3CardEngine.resolve(merchant, card, card.choices.first(), null).state
+        val withoutTrait = V3CardEngine.resolve(plain, card, card.choices.first(), null).state
+        assertEquals(withoutTrait.silver + 5, withTrait.silver)
+    }
+
+    @Test
+    fun extremeRelationsMapToSixBandsAndTriggerAttitudeEvent() {
+        assertEquals(V3RelationBand.Hostile, V3EventEngine.relationBand(-70))
+        assertEquals(V3RelationBand.Estranged, V3EventEngine.relationBand(-40))
+        assertEquals(V3RelationBand.Distant, V3EventEngine.relationBand(0))
+        assertEquals(V3RelationBand.Friendly, V3EventEngine.relationBand(20))
+        assertEquals(V3RelationBand.Close, V3EventEngine.relationBand(50))
+        assertEquals(V3RelationBand.Allied, V3EventEngine.relationBand(80))
+
+        val hostile = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(relations = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税").relations.copy(yamen = -70))
+        assertTrue(V3EventEngine.generateEvent(hostile)?.title?.contains("敌对") == true)
+
+        val allied = hostile.copy(
+            completedStoryFlags = emptyList(),
+            relations = hostile.relations.copy(yamen = 80)
+        )
+        assertTrue(V3EventEngine.generateEvent(allied)?.title?.contains("同盟") == true)
+    }
+    @Test
+    fun finalFailureKindsAndGenealogyPrefaceAreRecorded() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        assertEquals("从龙失败", V3GameEngine.failureKind(base.copy(
+            militia = 0,
+            army = V3ArmyRoster(),
+            relations = base.relations.copy(garrison = -10),
+            routeScores = base.routeScores + (V3Route.Loyalist to 80)
+        )))
+        assertEquals("抗清殉族", V3GameEngine.failureKind(base.copy(
+            militia = 0,
+            army = V3ArmyRoster(),
+            completedStoryFlags = listOf("抗清守约")
+        )))
+        assertEquals("出海覆舟", V3GameEngine.failureKind(base.copy(
+            routeScores = base.routeScores + (V3Route.Overseas to 80),
+            sites = base.sites.map { site -> if (site.id == "dock") site.copy(risk = 90) else site }
+        )))
+        val preface = V3GameEngine.genealogyPreface(base.copy(plaques = listOf("义门")))
+        assertTrue(preface.contains("氏族谱序"))
+        assertTrue(preface.contains("义门"))
+        assertTrue(V3GameEngine.endingChronicle(base).isNotEmpty())
+    }
+
     @Test
     fun recurringItemsApplyOnlyDuringMonthlySettlement() {
         val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
@@ -712,6 +794,113 @@ class V3GameEngineTest {
         assertTrue(V3HexArms.Archer.counters(V3HexArms.Spear))
         assertTrue(!V3HexArms.Spear.counters(V3HexArms.Archer))
         assertEquals(6, V3HexBattleState.initial().tiles.size)
+    }
+
+    @Test
+    fun normalizedSaveRestoresTraitsAndKeepsOnlyOneEncounter() {
+        val base = V3Content.newGame("边地军户", "西北边堡", "聚族自保", "流寇逼近")
+            .copy(
+                clanRank = 3,
+                militia = 90,
+                army = V3ArmyRoster(militia = 90),
+                originTraits = emptyList(),
+                currentCrisisStage = "stale_stage"
+            )
+        val battle = requireNotNull(V3GameEngine.startBattle(base).battleState)
+        val conflicted = base.copy(
+            battleState = battle,
+            hexBattleState = V3HexBattleState.initial(),
+            conquestState = com.arktools.daming.v3.data.V3ConquestState(
+                regionId = "neighbor_county",
+                enemyPower = 60,
+                rewardSilver = 10,
+                rewardGrain = 10,
+                rewardInfluence = 2,
+                targetName = "临水县",
+                scale = "地域征伐"
+            )
+        )
+
+        val normalized = V3GameEngine.normalizeState(conflicted)
+
+        assertTrue(normalized.originTraits.any { it.startsWith("边堡军籍") })
+        assertEquals(null, normalized.currentCrisisStage)
+        assertNotNull(normalized.hexBattleState)
+        assertEquals(null, normalized.battleState)
+        assertEquals(null, normalized.conquestState)
+    }
+
+    @Test
+    fun encounterEntriesAreMutuallyExclusive() {
+        val base = V3Content.newGame("边地军户", "西北边堡", "聚族自保", "流寇逼近")
+            .copy(
+                clanRank = 3,
+                militia = 90,
+                army = V3ArmyRoster(militia = 90)
+            )
+        val battling = V3GameEngine.startBattle(base)
+        assertNotNull(battling.battleState)
+
+        val rejectedConquest = V3GameEngine.startConquest(battling, "neighbor_county")
+        assertEquals(null, rejectedConquest.conquestState)
+        assertNotNull(rejectedConquest.battleState)
+        assertTrue(rejectedConquest.pendingReports.single().contains("不能同时"))
+    }
+
+    @Test
+    fun cardSelectionUsesLayerQuotasAndAnnualCalendar() {
+        val crisisState = V3Content.newGame("寒门佃户", "中原灾地", "明哲保身", "饥荒将至")
+            .copy(
+                grain = -20,
+                refugees = 20,
+                unrestLevel = 70,
+                garrisonMorale = 30,
+                clanRank = 4
+            )
+        val crisisCards = V3Content.additionalMonthlyCards.filter { it.crisisLevel > 0 }
+        val selectedCrisis = V3CardEngine.selectPriorityCards(crisisState, crisisCards, 5)
+        assertEquals(1, selectedCrisis.count { it.pool == com.arktools.daming.v3.data.V3CardPool.Crisis })
+
+        val springCard = V3Content.additionalMonthlyCards.first { it.id == "annual_01" }
+        val wrongMonth = V3CardEngine.refreshMonth(crisisState.copy(
+            grain = 100,
+            refugees = 0,
+            unrestLevel = 0,
+            garrisonMorale = 70,
+            month = 3
+        ), listOf(springCard))
+        assertTrue(wrongMonth.activeCards.none { it.id == springCard.id })
+
+        val spring = V3CardEngine.refreshMonth(crisisState.copy(
+            grain = 100,
+            refugees = 0,
+            unrestLevel = 0,
+            garrisonMorale = 70,
+            month = 2
+        ), listOf(springCard))
+        assertTrue(spring.activeCards.any { it.id == springCard.id })
+
+        val resolvedCrisis = V3CardEngine.refreshMonth(crisisState.copy(
+            grain = 100,
+            refugees = 0,
+            unrestLevel = 0,
+            garrisonMorale = 70,
+            currentCrisisStage = "mutiny"
+        ), crisisCards)
+        assertTrue(resolvedCrisis.activeCards.none { it.pool == com.arktools.daming.v3.data.V3CardPool.Crisis })
+        assertEquals(null, resolvedCrisis.currentCrisisStage)
+    }
+
+    @Test
+    fun hostileRelationEventsTakePriorityOverAlliedInvitations() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(
+                relations = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+                    .relations.copy(yamen = 80, garrison = -90)
+            )
+
+        val event = requireNotNull(V3EventEngine.generateEvent(base))
+        assertEquals("军镇敌对来书", event.title)
     }
 
     @Test

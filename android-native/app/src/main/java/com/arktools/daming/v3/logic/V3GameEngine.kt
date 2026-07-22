@@ -40,6 +40,7 @@ import com.arktools.daming.v3.data.V3ConquestState
 import com.arktools.daming.v3.data.V3ExamQuestion
 import com.arktools.daming.v3.data.V3ExamSession
 import com.arktools.daming.v3.data.V3ExamStage
+import com.arktools.daming.v3.data.V3HexBattleState
 import kotlin.math.max
 import kotlin.math.min
 
@@ -142,6 +143,12 @@ object V3GameEngine {
     }
 
     fun normalizeState(state: V3GameState): V3GameState {
+        val normalizedCrisisStage = V3CardEngine.crisisStage(state)
+        val normalizedOriginTraits = if (state.originTraits.isNotEmpty()) {
+            state.originTraits
+        } else {
+            V3Content.startProfile(state.root, state.county, state.creed, state.crisis).originTraits
+        }
         val surnameFromClan = V3Content.sanitizeSurname(
             state.clanName
                 .removeSuffix("氏宗族")
@@ -201,6 +208,15 @@ object V3GameEngine {
             health = state.patriarch.health.coerceIn(0, 100)
         )
         val migratedCardBudget = state.cardBudget.coerceIn(3, 5)
+        val normalizedEncounterState = when {
+            state.finalEnding != null -> Triple<V3BattleState?, V3HexBattleState?, V3ConquestState?>(null, null, null)
+            state.hexBattleState != null -> Triple(null, state.hexBattleState, null)
+            state.battleState != null -> Triple(state.battleState, null, null)
+            else -> Triple(null, null, state.conquestState)
+        }
+        val normalizedBattleState = normalizedEncounterState.first
+        val normalizedHexBattleState = normalizedEncounterState.second
+        val normalizedConquestState = normalizedEncounterState.third
         if (
             migratedArmy.total() == state.militia &&
             mergedRegions.size == state.worldRegions.size &&
@@ -211,7 +227,12 @@ object V3GameEngine {
             migratedTutorialStep == state.tutorialStep &&
             migratedTutorialCompleted == state.tutorialCompleted &&
             migratedPatriarch == state.patriarch &&
-            migratedCardBudget == state.cardBudget
+            migratedCardBudget == state.cardBudget &&
+            normalizedOriginTraits == state.originTraits &&
+            normalizedCrisisStage == state.currentCrisisStage &&
+            normalizedBattleState == state.battleState &&
+            normalizedHexBattleState == state.hexBattleState &&
+            normalizedConquestState == state.conquestState
         ) return state
         return state.copy(
             surname = migratedStateSurname,
@@ -222,6 +243,11 @@ object V3GameEngine {
             worldRegions = mergedRegions,
             patriarch = migratedPatriarch,
             cardBudget = migratedCardBudget,
+            originTraits = normalizedOriginTraits,
+            currentCrisisStage = normalizedCrisisStage,
+            battleState = normalizedBattleState,
+            hexBattleState = normalizedHexBattleState,
+            conquestState = normalizedConquestState,
             tutorialVersion = V3_TUTORIAL_VERSION,
             tutorialStep = migratedTutorialStep,
             tutorialCompleted = migratedTutorialCompleted
@@ -454,8 +480,21 @@ object V3GameEngine {
         )
     }
 
+    fun hasBlockingEncounter(state: V3GameState): Boolean =
+        state.finalEnding != null ||
+            state.activeEvent != null ||
+            state.examSession != null ||
+            state.battleState != null ||
+            state.hexBattleState != null ||
+            state.conquestState != null ||
+            state.pendingSuccession ||
+            state.pendingDice != null ||
+            state.activeCards.isNotEmpty()
+
     fun startConquest(state: V3GameState, regionId: String): V3GameState {
-        if (state.conquestState != null) return state
+        if (hasBlockingEncounter(state)) {
+            return state.copy(pendingReports = listOf("当前已有待处理的战事、考试或终局事务，不能同时发动地域征伐。"))
+        }
         if (!isUnlocked(state, "Conquest")) return state.copy(pendingReports = listOf("征伐尚未解锁：宗族升为望族后方可发动县外征伐。"))
         val region = state.worldRegions.firstOrNull { it.id == regionId } ?: return state
         if (region.status == V3RegionStatus.Pacified || region.status == V3RegionStatus.Controlled) return state.copy(pendingReports = listOf("${region.name}已在掌中，继续经营即可。"))
@@ -509,6 +548,9 @@ object V3GameEngine {
     }
 
     fun proclaimUnification(state: V3GameState): V3GameState {
+        if (hasBlockingEncounter(state)) {
+            return state.copy(pendingReports = listOf("请先结清当前战事、考试或事件，再议定天下终局。"))
+        }
         val controlled = controlledRegionCount(state)
         val realmControlled = state.worldRegions.any { it.id == "all_realm" && (it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified) }
         val power = state.unificationProgress + state.militia / 6 + state.influence / 2 + estateLevelTotal(state) * 2 + alivePeople(state).size * 2
@@ -1083,6 +1125,9 @@ object V3GameEngine {
     fun examQuestion(session: V3ExamSession): V3ExamQuestion? = V3Content.examQuestions.firstOrNull { it.id == session.questionId }
 
     fun startExam(state: V3GameState, personId: Int): V3GameState {
+        if (hasBlockingEncounter(state)) {
+            return state.copy(pendingReports = listOf("当前已有待处理的战事、事件或终局事务，不能同时开考。"))
+        }
         val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
         val stage = nextExamStage(person) ?: return state.copy(pendingReports = listOf("${person.name}已过乡试，暂不需要继续考试。"))
         val academy = state.sites.firstOrNull { it.type == V3CountySiteType.Academy }
@@ -1252,7 +1297,9 @@ object V3GameEngine {
         return state.copy(equipment = equipment, pendingReports = listOf("${person.name}装备【${item.name}】：战斗时计入攻击与防御。"))
     }
     fun startBattle(state: V3GameState): V3GameState {
-        if (state.battleState != null) return state
+        if (hasBlockingEncounter(state)) {
+            return state.copy(pendingReports = listOf("当前已有待处理的战事、考试或终局事务，不能同时发起地点讨伐。"))
+        }
         if (!isUnlocked(state, "Recruit")) return state.copy(pendingReports = listOf("军务尚未成形：先升为小族，或修建寨堡后再讨伐。"))
         if (state.army.total() < 15) return state.copy(pendingReports = listOf("兵册不足15，不宜出兵。先募乡勇或筑寨。"))
         val riskySite = state.sites.maxByOrNull { it.risk } ?: return state
@@ -1469,6 +1516,9 @@ object V3GameEngine {
     }
 
     fun raiseBanner(state: V3GameState): V3GameState {
+        if (hasBlockingEncounter(state)) {
+            return state.copy(pendingReports = listOf("请先结清当前战事、考试、事件或月内家务，再议举旗。"))
+        }
         if (!isUnlocked(state, "RaiseBanner")) return state.copy(pendingReports = listOf("举旗尚未解锁：至少需要县中大姓品第，并有80名以上兵册。"))
         val controlled = state.sites.count { it.control >= 60 && it.risk <= 45 }
         val power = state.militia + state.influence + controlled * 18 + state.rebelHeat
@@ -1928,10 +1978,15 @@ object V3GameEngine {
 
     fun failureKind(state: V3GameState): String? = when {
         state.pendingSuccession && patriarchCandidates(state).isEmpty() -> "族长病逝"
+        state.currentCrisisStage == "mutiny" && state.garrisonMorale <= 0 -> "庄毁人亡"
         state.grain <= -300 -> "举族逃荒"
         state.cohesion <= 0 -> "兄弟阋墙"
-        state.currentCrisisStage == "mutiny" && state.garrisonMorale <= 0 -> "庄毁人亡"
         state.silver <= -300 -> "抄家流徙"
+        state.routeScores[V3Route.Loyalist]?.let { it >= 80 } == true &&
+            state.relations.garrison < 0 && state.militia <= 0 -> "从龙失败"
+        state.completedStoryFlags.any { it.contains("抗清") } && state.militia <= 0 -> "抗清殉族"
+        state.routeScores[V3Route.Overseas]?.let { it >= 80 } == true &&
+            state.sites.firstOrNull { it.id == "dock" }?.risk?.let { it >= 90 } == true -> "出海覆舟"
         else -> null
     }
 
@@ -1957,6 +2012,9 @@ object V3GameEngine {
             "兄弟阋墙" -> "各房争产离散，主房再也无法维持共同家业。"
             "庄毁人亡" -> "乡勇溃散、庄门失守，田庄与祠堂都没能熬过这场乱局。"
             "抄家流徙" -> "债务彻底压垮家计，田契、铺面与族产被迫抵押，宗族经营宣告失败。"
+            "从龙失败" -> "族中押上粮银与乡勇，却没有等来可以兑现的庇护，家业在错误的押注中耗尽。"
+            "抗清殉族" -> "族人以最后的兵粮守住旧约，家乘留下忠烈一页，却再没有下一代可以续写。"
+            "出海覆舟" -> "船队在风暴与乱军之间失散，码头、货契与远行族人一同沉入海雾。"
             else -> null
         }
         val routeBody = when (preview.route) {
@@ -1999,6 +2057,20 @@ object V3GameEngine {
         )
     }
 
+    fun genealogyPreface(state: V3GameState): String {
+        val living = alivePeople(state)
+        val first = living.minByOrNull { it.generation }?.name ?: state.founderName
+        val last = living.maxByOrNull { it.generation }?.name ?: first
+        val plaques = state.plaques.joinToString("、").ifBlank { "尚未立匾" }
+        return "${state.surname}氏族谱序\n\n${state.year}年${state.month}月，${state.surname}氏由${first}起家，至今传至${last}一代。先人以田庄为本，以宗祠为心，在县域风雨与世道变迁之间，留下${living.size}位族人的姓名。\n\n家业所立：${plaques}。\n\n后人读此谱，当知族望不只在门楣，也在每一次分粮、修堤、护邻、教子与守约之中。无论后来迁往何处，今日写下的名字都应记得：家族不是一人之功，而是许多人把各自的一盏灯交到下一代手中。"
+    }
+
+    fun endingChronicle(state: V3GameState): List<String> = buildList {
+        add("${state.year}年${state.month}月，${state.surname}氏一局家业收束。")
+        addAll(state.biography.takeLast(12))
+        failureKind(state)?.let { add("终局：$it。") }
+        add(genealogyPreface(state).lineSequence().first())
+    }
     private fun growPeople(people: List<V3Person>, assignments: Map<Int, V3TaskType>, lines: MutableList<String>, yearEnded: Boolean): List<V3Person> {
         return people.map { person ->
             val nextAgeMonths = (person.ageMonths.coerceAtLeast(person.age * 12) + 1)
