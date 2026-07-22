@@ -70,10 +70,11 @@ class V3GameEngineTest {
         val state = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
 
         assertEquals(32, V3GameController.TUTORIAL_STEP_COUNT)
-        assertEquals(12_000L, V3GameController.TUTORIAL_EXPLANATION_AUTO_ADVANCE_MILLIS)
         assertEquals(0, state.tutorialStep)
         assertTrue(V3GameController.tutorialStepRequiresAction(0).not())
         assertTrue(V3GameController.tutorialStepRequiresAction(1).not())
+        assertTrue(V3GameController.tutorialStepRequiresAction(2).not())
+        assertTrue(V3GameController.tutorialStepRequiresAction(3).not())
         assertTrue(V3GameController.tutorialStepRequiresAction(5))
         assertTrue(V3GameController.tutorialStepRequiresAction(14))
         assertTrue(V3GameController.tutorialStepRequiresAction(16))

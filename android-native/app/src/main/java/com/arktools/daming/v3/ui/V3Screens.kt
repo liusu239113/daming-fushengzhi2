@@ -426,14 +426,16 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             }
         }
         if (controller.screen != step.tab) controller.switchScreen(step.tab)
-        if (!step.requiresAction) {
-            delay(V3GameController.TUTORIAL_EXPLANATION_AUTO_ADVANCE_MILLIS)
-            if (elderGuideVisible && controller.state.tutorialStep == tutorialStep) {
-                controller.advanceTutorial(tutorialStep)
-            }
-        }
     }
-    LaunchedEffect(elderGuideVisible, tutorialStep, controller.screen, guideStrategyPage, contentScroll.maxValue) {
+    LaunchedEffect(
+        elderGuideVisible,
+        tutorialStep,
+        controller.screen,
+        guideStrategyPage,
+        contentScroll.maxValue,
+        countyHomePage,
+        tutorialTargetBounds != null
+    ) {
         tutorialTargetReady = false
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
         val step = elderGuideSteps(state)[tutorialStep]
@@ -541,8 +543,6 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             if (
                 elderGuideVisible &&
                     !tutorialUsesLocalOverlay &&
-                    tutorialTargetReady &&
-                    tutorialTargetBounds != null &&
                     state.finalEnding == null &&
                     controller.latestReport == null &&
                     controller.message == null &&
@@ -556,7 +556,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                 V3ElderGuideOverlay(
                     state = state,
                     controller = controller,
-                    targetBounds = tutorialTargetBounds,
+                    targetBounds = tutorialTargetBounds.takeIf { tutorialTargetReady },
                     cardAtTop = cardAtTop,
                     onStrategyPageChange = { guideStrategyPage = it },
                     onDismiss = {
@@ -899,7 +899,7 @@ private data class V3ElderGuideStep(
 
 private fun elderGuideSteps(state: V3GameState): List<V3ElderGuideStep> {
     val steps = listOf(
-    V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "第一章 · 先认家底", "顶栏记录宗族、年月、危机和当前品第。经营不是盲点按钮：先看年月与危机，再决定这个月保粮、挣钱、育人还是压风险。", "本页只作说明，无需点击顶栏；可点击下一步或等待自动继续", V3GuideFocus.TopBar),
+    V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "第一章 · 先认家底", "顶栏记录宗族、年月、危机和当前品第。经营不是盲点按钮：先看年月与危机，再决定这个月保粮、挣钱、育人还是压风险。", "本页只作说明，无需点击顶栏；读完点击下一步", V3GuideFocus.TopBar),
     V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "银、粮、人、业", "银两用于婚配、营建、议事和军务；粮食供养族人与乡勇；人口决定能派多少人；产业决定稳定月产。任何一项见底，家族都会失去周转能力。", "读完后点击下一步；平时可点击资源查看说明", V3GuideFocus.Resources),
     V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "先看固定负担", "族中月账显示每月必付的人丁口粮、乡勇维护和高风险地点。扩人口、养兵之前，必须先确认粮仓能否承受。", "读完后点击下一步", V3GuideFocus.MonthlyLedger),
     V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "再看本月收支", "本月账本预估银粮收支。田庄和佃田补粮，集市、铺面和商队生银；地点控制越高、风险越低，收入越稳定。", "读完后点击下一步", V3GuideFocus.MonthlyForecast),
@@ -945,15 +945,16 @@ private fun V3LocalGuideOverlay(
     state: V3GameState,
     controller: V3GameController,
     targetBounds: Rect?,
-    cardAtTop: Boolean,
-    onTargetClick: () -> Unit
+    cardAtTop: Boolean
 ) {
-    if (targetBounds == null) return
     val steps = elderGuideSteps(state)
     val safeIndex = state.tutorialStep.coerceIn(0, steps.lastIndex)
     val step = steps[safeIndex]
     Box(Modifier.fillMaxSize()) {
-        V3GuideFocusFrame(targetBounds, blockInput = step.requiresAction)
+        V3GuideFocusFrame(
+            targetBounds = targetBounds,
+            blockInput = step.requiresAction && targetBounds != null
+        )
         Column(
             Modifier
                 .align(if (cardAtTop) Alignment.TopCenter else Alignment.BottomCenter)
@@ -997,7 +998,10 @@ private fun V3ElderGuideOverlay(
     }
     val cardAlignment = if (cardAtTop) Alignment.TopCenter else Alignment.BottomCenter
     Box(Modifier.fillMaxSize()) {
-        V3GuideFocusFrame(targetBounds, blockInput = step.requiresAction)
+        V3GuideFocusFrame(
+            targetBounds = targetBounds,
+            blockInput = step.requiresAction && targetBounds != null
+        )
         Box(
             Modifier
                 .align(cardAlignment)
@@ -1636,22 +1640,11 @@ private fun V3PersonDetailDialog(
             }
             focus?.let { currentFocus ->
                 val bounds = localTargets[currentFocus]
-                val recommended = recommendedAvailableTask(state, person)
-                val targetSite = recommended?.second
                 V3LocalGuideOverlay(
                     state = state,
                     controller = controller,
                     targetBounds = bounds,
-                    cardAtTop = (bounds?.center?.y ?: 0f) > 360f,
-                    onTargetClick = {
-                        when (tutorialStep) {
-                            12, 13 -> controller.advanceTutorial(tutorialStep)
-                            14 -> if (targetSite != null && recommended != null) {
-                                controller.assignTask(person.id, targetSite.id, recommended.first)
-                                onDismiss()
-                            }
-                        }
-                    }
+                    cardAtTop = (bounds?.center?.y ?: 0f) > 360f
                 )
             }
         }
@@ -2233,16 +2226,7 @@ private fun V3SiteManageDialog(
                     state = state,
                     controller = controller,
                     targetBounds = bounds,
-                    cardAtTop = currentFocus != V3GuideFocus.SiteOverview,
-                    onTargetClick = {
-                        when (tutorialStep) {
-                            6, 7 -> controller.advanceTutorial(tutorialStep)
-                            8 -> {
-                                controller.advanceTutorial(8)
-                                onDismiss()
-                            }
-                        }
-                    }
+                    cardAtTop = currentFocus != V3GuideFocus.SiteOverview
                 )
             }
         }
@@ -3076,8 +3060,7 @@ private fun V3EventDialog(event: V3ActiveEvent, controller: V3GameController) {
                     state = controller.state,
                     controller = controller,
                     targetBounds = localTargets[V3GuideFocus.EventChoice],
-                    cardAtTop = true,
-                    onTargetClick = { event.choices.firstOrNull()?.let(controller::chooseEvent) }
+                    cardAtTop = true
                 )
             }
         }
@@ -3118,8 +3101,7 @@ private fun V3Dialog(
                     state = tutorialState,
                     controller = tutorialController,
                     targetBounds = localTargets[V3GuideFocus.MonthlyReportDismiss],
-                    cardAtTop = true,
-                    onTargetClick = onDismiss
+                    cardAtTop = true
                 )
             }
         }

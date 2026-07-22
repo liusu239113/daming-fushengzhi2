@@ -84,10 +84,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     companion object {
         // 完整教程包含界面导览、地点/族人弹窗教学和首月经营闭环。
         const val TUTORIAL_STEP_COUNT = 32
-        const val TUTORIAL_EXPLANATION_AUTO_ADVANCE_MILLIS = 12_000L
 
         // 只有会真实改变玩法状态或打开下一层操作界面的步骤才要求点击。
-        // 其余步骤属于说明导览，可由“下一步”或自动计时推进。
+        // 其余步骤属于说明导览，由明确的“下一步”按钮推进。
         val TUTORIAL_ACTION_STEPS: Set<Int> = setOf(
             5, 8, 11, 14, 15, 16, 17, 18, 21, 27, 28, 29
         )
