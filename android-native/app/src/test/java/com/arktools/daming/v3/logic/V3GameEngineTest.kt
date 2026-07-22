@@ -53,6 +53,19 @@ class V3GameEngineTest {
     }
 
     @Test
+    fun visitorChoicesRemainPlayableAndWriteAContinuingStory() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(year = 1610, month = 1, clanRank = 4)
+        val refreshed = V3CardEngine.refreshMonth(base, emptyList())
+        val visitor = refreshed.activeCards.first { it.id.startsWith("visitor_intro_") }
+        assertEquals(com.arktools.daming.v3.data.V3CardPool.Visitor, visitor.pool)
+        val resolution = requireNotNull(V3CardEngine.choose(refreshed, visitor.id, visitor.choices.first().id))
+        assertTrue(resolution.message.isNotBlank())
+        assertTrue(resolution.state.visitorProgress.values.any { it >= 1 })
+        assertTrue(resolution.state.biography.any { it.contains("初次") })
+    }
+
+    @Test
     fun originTraitsChangeCardResolutionByOrigin() {
         val card = V3Content.additionalMonthlyCards.first { it.id == "trade_01" }
         val merchant = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")

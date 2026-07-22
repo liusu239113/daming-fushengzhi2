@@ -7,6 +7,7 @@ import com.arktools.daming.audio.GameAudio
 import com.arktools.daming.data.BgmKey
 import com.arktools.daming.data.SfxKey
 import com.arktools.daming.persistence.V3SaveStore
+import com.arktools.daming.v3.data.V3CardPool
 import com.arktools.daming.v3.data.V3Content
 import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3MonthlyReport
@@ -181,11 +182,18 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun autoArrangeMonth() {
         audio.playSfx(SfxKey.V3Edict)
+        val beforeAssigned = state.people.count { it.alive && (it.currentTask != null || it.trainingFocus != null) }
         state = V3GameEngine.autoArrangeMonth(state)
-        if (state.people.any { it.alive && (it.currentTask != null || it.trainingFocus != null) }) {
+        val afterAssigned = state.people.count { it.alive && (it.currentTask != null || it.trainingFocus != null) }
+        if (afterAssigned > 0) {
             completeTutorialAction(15)
         }
-        message = if (state.tutorialCompleted) state.pendingReports.firstOrNull() else null
+        val arrangedCount = (afterAssigned - beforeAssigned).coerceAtLeast(0)
+        message = when {
+            arrangedCount > 0 -> "一键安排已完成：本次为 $arrangedCount 名待命族人安排了差事或培养。月结后兑现经营与成长结果。"
+            afterAssigned > 0 -> "当前可用族人均已有差事或培养安排，无需重复安排。"
+            else -> "当前没有可安排的成年待命族人，或可用地点尚未解锁。请先查看族人状态与县域地点。"
+        }
         saveStore.save(state)
     }
 
@@ -409,7 +417,29 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             return
         }
         state = resolution.state
-        message = resolution.message
+        val visitorId = resolution.choice.effects.visitorId
+        val remainingVisitorChapters = visitorId?.let { id ->
+            V3Content.visitors
+                .firstOrNull { visitor -> visitor.id == id }
+                ?.chapters
+                ?.size
+                ?.minus(state.visitorProgress[id] ?: 0)
+                ?.coerceAtLeast(0)
+        }
+        message = if (resolution.card.pool == V3CardPool.Visitor) {
+            buildString {
+                append(resolution.message)
+                if (remainingVisitorChapters != null && remainingVisitorChapters > 0) {
+                    append("\n\n这段来访已写入家乘。尚有")
+                    append(remainingVisitorChapters)
+                    append("章后续，将在家族阶段和来访条件满足后继续。")
+                } else {
+                    append("\n\n这位访客的故事已经收束，相关物品、关系与履历均已写入家业。")
+                }
+            }
+        } else {
+            resolution.message
+        }
         saveStore.save(state)
         if (state.pendingDice == null && state.activeCards.isEmpty()) resumeAfterModalIfClear()
     }
@@ -672,7 +702,6 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun showInfo(text: String) {
         audio.click()
-        if (!state.tutorialCompleted) return
         pauseForModal()
         message = text
     }
