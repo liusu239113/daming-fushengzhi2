@@ -8,6 +8,7 @@ import com.arktools.daming.v3.data.V3EffectDelta
 import com.arktools.daming.v3.data.V3Content
 import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3MonthlyCard
+import com.arktools.daming.v3.data.V3Route
 import com.arktools.daming.v3.data.V3RouteDelta
 import kotlin.math.abs
 
