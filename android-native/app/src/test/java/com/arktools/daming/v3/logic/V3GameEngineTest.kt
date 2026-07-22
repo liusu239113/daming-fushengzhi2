@@ -66,6 +66,32 @@ class V3GameEngineTest {
     }
 
     @Test
+    fun tutorialSeparatesExplanationsFromRequiredGameplayActions() {
+        val state = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+
+        assertEquals(32, V3GameController.TUTORIAL_STEP_COUNT)
+        assertEquals(12_000L, V3GameController.TUTORIAL_EXPLANATION_AUTO_ADVANCE_MILLIS)
+        assertEquals(0, state.tutorialStep)
+        assertTrue(V3GameController.tutorialStepRequiresAction(0).not())
+        assertTrue(V3GameController.tutorialStepRequiresAction(1).not())
+        assertTrue(V3GameController.tutorialStepRequiresAction(5))
+        assertTrue(V3GameController.tutorialStepRequiresAction(14))
+        assertTrue(V3GameController.tutorialStepRequiresAction(16))
+        assertTrue(V3GameController.tutorialStepRequiresAction(17))
+        assertTrue(V3GameController.tutorialStepRequiresAction(18))
+        assertTrue(V3GameController.tutorialStepRequiresAction(31).not())
+        assertEquals(
+            setOf(5, 8, 11, 14, 15, 16, 17, 18, 21, 27, 28, 29),
+            V3GameController.TUTORIAL_ACTION_STEPS
+        )
+        assertTrue(
+            V3GameController.TUTORIAL_ACTION_STEPS.all {
+                it in 0 until V3GameController.TUTORIAL_STEP_COUNT
+            }
+        )
+    }
+
+    @Test
     fun originTraitsChangeCardResolutionByOrigin() {
         val card = V3Content.additionalMonthlyCards.first { it.id == "trade_01" }
         val merchant = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
