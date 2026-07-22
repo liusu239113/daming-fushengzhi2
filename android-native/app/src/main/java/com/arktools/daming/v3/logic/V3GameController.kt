@@ -13,6 +13,7 @@ import com.arktools.daming.v3.data.V3MonthlyReport
 import com.arktools.daming.v3.data.V3Screen
 import com.arktools.daming.v3.data.V3TaskType
 import com.arktools.daming.v3.data.V3TrainingType
+import com.arktools.daming.v3.data.V3Person
 import com.arktools.daming.v3.data.V3EventChoice
 import com.arktools.daming.v3.data.V3EstateType
 import com.arktools.daming.v3.data.V3TroopType
@@ -115,6 +116,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             state.examSession == null &&
             state.battleState == null &&
             state.hexBattleState == null &&
+            state.pendingSuccession == false &&
             state.activeCards.isEmpty() &&
             state.pendingDice == null &&
             state.conquestState == null
@@ -382,6 +384,14 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun succeedPatriarch(personId: Int) {
+        audio.playSfx(SfxKey.V3Success)
+        state = V3GameEngine.succeedPatriarch(state, personId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+        resumeAfterModalIfClear()
+    }
+
     fun chooseCard(cardId: String, choiceId: String) {
         audio.playSfx(SfxKey.V3Edict)
         val resolution = V3CardEngine.choose(state, cardId, choiceId)
@@ -414,7 +424,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         val battle = state.hexBattleState ?: return
         val nextTiles = battle.tiles.map { tile ->
             val selected = battle.selectedArms["${tile.q},${tile.r}"] ?: tile.arms
-            val enemy = when ((tile.q * 7 + tile.r * 11 + battle.turn) % 3) {
+            val enemy = when (Math.floorMod(tile.q * 7 + tile.r * 11 + battle.turn, 3)) {
                 0 -> com.arktools.daming.v3.data.V3HexArms.Spear
                 1 -> com.arktools.daming.v3.data.V3HexArms.Archer
                 else -> com.arktools.daming.v3.data.V3HexArms.Cavalry
@@ -424,8 +434,12 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             tile.copy(arms = selected, garrison = (tile.garrison - loss).coerceAtLeast(0), breached = tile.garrison - loss <= 0, stable = tile.garrison - loss > 0)
         }
         val nextTurn = battle.turn + 1
-        val victory = nextTiles.none { it.breached } && nextTurn > battle.maxTurns
-        val finished = victory || nextTiles.any { it.breached } || nextTurn > battle.maxTurns
+        val supplyAfter = (battle.supply - 8 - nextTiles.count { it.breached } * 3).coerceAtLeast(0)
+        val momentumAfter = (battle.enemyMomentum + nextTiles.count { it.breached } * 8 + if (supplyAfter == 0) 15 else -4).coerceIn(0, 100)
+        val supplyFailure = supplyAfter == 0
+        val momentumFailure = momentumAfter >= 100
+        val victory = nextTiles.none { it.breached } && nextTurn > battle.maxTurns && !supplyFailure && !momentumFailure
+        val finished = victory || nextTiles.any { it.breached } || nextTurn > battle.maxTurns || supplyFailure || momentumFailure
         state = state.copy(
             hexBattleState = battle.copy(
                 turn = nextTurn,

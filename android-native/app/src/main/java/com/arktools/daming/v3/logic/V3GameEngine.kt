@@ -15,6 +15,7 @@ import com.arktools.daming.v3.data.V3Gender
 import com.arktools.daming.v3.data.V3GoalMetric
 import com.arktools.daming.v3.data.V3MonthlyForecast
 import com.arktools.daming.v3.data.V3MonthlyReport
+import com.arktools.daming.v3.data.V3Patriarch
 import com.arktools.daming.v3.data.V3Person
 import com.arktools.daming.v3.data.V3RankCost
 import com.arktools.daming.v3.data.V3RegionStatus
@@ -1728,6 +1729,9 @@ object V3GameEngine {
         )
         settledState = maybeAddChild(settledState, detailLines)
         settledState = V3CardEngine.applyCrisisCascade(settledState, detailLines)
+        settledState = V3CardEngine.applyInventoryEffects(settledState, detailLines)
+        settledState = advancePatriarch(settledState, detailLines)
+        settledState = unlockAutomaticPlaques(settledState, detailLines)
         settledState = V3CardEngine.refreshMonth(settledState)
 
         val summary = mutableListOf<String>()
@@ -1850,10 +1854,89 @@ object V3GameEngine {
         state.year > 1644 ||
             (state.year == 1644 && state.month >= 5)
 
-    fun isFailureEnding(state: V3GameState): Boolean =
-        state.cohesion <= 0 ||
-            state.silver <= -300 ||
-            state.grain <= -300
+    fun patriarchCandidates(state: V3GameState): List<V3Person> =
+        alivePeople(state)
+            .filter { it.id != state.patriarch.personId && it.age >= CHILD_ADULT_AGE }
+            .sortedWith(compareByDescending<V3Person> { it.generation }.thenByDescending { it.merit })
+
+    fun succeedPatriarch(state: V3GameState, personId: Int): V3GameState {
+        if (!state.pendingSuccession) return state
+        val heir = patriarchCandidates(state).firstOrNull { it.id == personId } ?: return state
+        val nextGeneration = maxOf(state.patriarch.generation + 1, heir.generation)
+        val nextPatriarch = V3Patriarch(
+            personId = heir.id,
+            name = heir.name,
+            generation = nextGeneration,
+            conduct = ((heir.diplomacy + heir.loyalty) / 2).coerceIn(20, 90),
+            stewardship = ((heir.commerce + heir.study) / 2).coerceIn(20, 90),
+            prestige = ((heir.merit / 4) + heir.loyalty / 3).coerceIn(15, 85),
+            health = (100 - heir.fatigue / 2).coerceIn(45, 90),
+            capstones = state.patriarch.capstones,
+            term = 0
+        )
+        return state.copy(
+            patriarch = nextPatriarch,
+            pendingSuccession = false,
+            seenCardGenerations = state.seenCardGenerations + (nextGeneration to emptyList()),
+            biography = (state.biography + "${heir.name}承继族长之位，家业换了掌灯人。").take(80),
+            pendingReports = listOf("族长继任：${heir.name}接过族印，旧一代的账本交到了新一代手中。")
+        )
+    }
+
+    private fun advancePatriarch(state: V3GameState, lines: MutableList<String>): V3GameState {
+        val current = state.patriarch
+        val holder = state.people.firstOrNull { it.id == current.personId && it.alive }
+        val agePenalty = when {
+            holder == null -> 3
+            holder.age >= 75 -> 3
+            holder.age >= 65 -> 2
+            holder.age >= 55 -> 1
+            else -> 0
+        }
+        val nextHealth = (current.health - 1 - agePenalty).coerceAtLeast(0)
+        val next = current.copy(health = nextHealth, term = current.term + 1)
+        if (nextHealth > 0 && holder != null) return state.copy(patriarch = next)
+        val candidates = patriarchCandidates(state)
+        lines += if (holder == null) {
+            "族长${current.name}已不在，族中需要推举继任者。"
+        } else {
+            "族长${current.name}身板已衰，族印暂交族老保管，候选继任者等待议定。"
+        }
+        return state.copy(
+            patriarch = next,
+            pendingSuccession = true
+        )
+    }
+
+    private fun unlockAutomaticPlaques(state: V3GameState, lines: MutableList<String>): V3GameState {
+        val unlocks = buildList {
+            if (state.patriarch.stewardship >= 85) add("耕读之家")
+            if (state.patriarch.conduct >= 85 && state.relations.villagers >= 45) add("义门")
+            if (state.patriarch.prestige >= 85 || state.clanRank >= 3) add("望族")
+            if (state.garrisonMorale >= 85 && state.militia >= 45) add("守望匾")
+            if (state.clanRank >= 4 && controlledRegionCount(state) >= 2) add("郡望")
+        }
+        val fresh = unlocks.filter { it !in state.plaques }
+        if (fresh.isEmpty()) return state
+        fresh.forEach { plaque -> lines += "族中立下【$plaque】匾，家声又添一笔。" }
+        return state.copy(
+            plaques = (state.plaques + fresh).distinct(),
+            patriarch = state.patriarch.copy(capstones = (state.patriarch.capstones + fresh).distinct()),
+            biography = (state.biography + fresh.map { "家业立下【$it】匾，后人以此记先人。" }).take(80)
+        )
+    }
+
+    fun failureKind(state: V3GameState): String? = when {
+        state.pendingSuccession && patriarchCandidates(state).isEmpty() -> "族长病逝"
+        state.grain <= -300 -> "举族逃荒"
+        state.cohesion <= 0 -> "兄弟阋墙"
+        state.currentCrisisStage == "mutiny" && state.garrisonMorale <= 0 -> "庄毁人亡"
+        state.silver <= -300 -> "抄家流徙"
+        else -> null
+    }
+
+    fun isFailureEnding(state: V3GameState): Boolean = failureKind(state) != null
+
 
     fun shouldAutoEnd(state: V3GameState): Boolean =
         isTimelineEnding(state) || isFailureEnding(state)
@@ -1867,10 +1950,13 @@ object V3GameEngine {
             .lastOrNull { it.startsWith("final_decision_") }
             ?.removePrefix("final_decision_")
         val decisionText = finalDecision?.let { "甲申前夜，宗族最终选择【$it】。" }.orEmpty()
-        val failureCause = when {
-            state.cohesion <= 0 -> "宗族凝聚归零，各房争产离散，主房再也无法维持共同家业。"
-            state.silver <= -300 -> "债务彻底压垮家计，田契、铺面与族产被迫抵押，宗族经营宣告失败。"
-            state.grain <= -300 -> "粮仓长期亏空，族人与佃户相继逃散，延续家业已无现实基础。"
+        val kind = failureKind(state)
+        val failureCause = when (kind) {
+            "族长病逝" -> "族长病逝而族中无人能承继族印，家业失去共同的掌灯人。"
+            "举族逃荒" -> "粮仓长期亏空，族人与佃户相继逃散，延续家业已无现实基础。"
+            "兄弟阋墙" -> "各房争产离散，主房再也无法维持共同家业。"
+            "庄毁人亡" -> "乡勇溃散、庄门失守，田庄与祠堂都没能熬过这场乱局。"
+            "抄家流徙" -> "债务彻底压垮家计，田契、铺面与族产被迫抵押，宗族经营宣告失败。"
             else -> null
         }
         val routeBody = when (preview.route) {
@@ -1908,7 +1994,8 @@ object V3GameEngine {
                 "统一进度：${state.unificationProgress}",
                 "稳定地点：$stableSites / ${state.sites.size}",
                 "最有功绩族人：${bestPerson?.name ?: "无"}（${bestPerson?.merit ?: 0}）"
-            )
+            ),
+            failureKind = kind
         )
     }
 

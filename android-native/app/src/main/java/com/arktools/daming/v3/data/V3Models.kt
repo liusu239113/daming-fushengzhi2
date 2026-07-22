@@ -564,7 +564,8 @@ data class V3FinalEnding(
     val score: Int,
     val title: String,
     val body: String,
-    val stats: List<String>
+    val stats: List<String>,
+    val failureKind: String? = null
 )
 
 // ============================================================
@@ -662,6 +663,8 @@ data class V3EffectDelta(
     val plaqueId: String? = null,
     val itemId: String? = null,
     val biographicalNote: String? = null,
+    val visitorId: String? = null,
+    val visitorProgress: Int? = null,
     val routeDelta: V3RouteDelta? = null
 )
 
@@ -721,7 +724,8 @@ data class V3Item(
     val name: String,
     val kind: String,    // book/weapon/deed/relic/western
     val desc: String,
-    val effects: V3EffectDelta = V3EffectDelta()
+    val effects: V3EffectDelta = V3EffectDelta(),
+    val recurring: Boolean = false
 )
 
 @Serializable
@@ -779,7 +783,17 @@ data class V3HexBattleState(
                 Triple(1, 0, "东南田道"), Triple(0, 1, "南塘埂"), Triple(-1, 1, "西麓哨卡")
             )
             return V3HexBattleState(
-                tiles = base.map { (q, r, n) -> V3HexTile(q, r, n, garrison = 18) }
+                tiles = base.mapIndexed { index, (q, r, n) ->
+                    V3HexTile(
+                        q = q,
+                        r = r,
+                        name = n,
+                        garrison = 18,
+                        enemyWave = 22 + index * 4
+                    )
+                },
+                supply = 80,
+                enemyMomentum = 40
             )
         }
     }
@@ -833,6 +847,7 @@ data class V3GameState(
 
     // —— P0 融合字段 ——
     val patriarch: V3Patriarch = V3Patriarch(),
+    val pendingSuccession: Boolean = false,
     val refugees: Int = 0,                 // 流民
     val garrisonMorale: Int = 60,          // 乡勇军心 0-100
     val unrestLevel: Int = 0,              // 庄内怨气象 0-100（过高触发庄乱）
@@ -840,6 +855,7 @@ data class V3GameState(
     val playedCardsThisMonth: Int = 0,
     val cardBudget: Int = 3,               // 本月可出牌数
     val seenCardIds: List<String> = emptyList(),
+    val seenCardGenerations: Map<Int, List<String>> = emptyMap(),
     val seenVisitors: List<String> = emptyList(),
     val visitorProgress: Map<String, Int> = emptyMap(),
     val plaques: List<String> = emptyList(), // 族望匾 id 列表

@@ -115,6 +115,96 @@ object V3Content {
         )
     )
 
+    val extendedCards = listOf(
+        V3MonthlyCard("clan_branch_covenant", V3CardPool.Chain, "旁支归宗", "远房族人带着一纸旧契回到祠堂。他们要的不是银两，而是族谱上一个不再被抹去的位置。", "旧案", weight = 14, choices = listOf(
+            V3CardChoice("verify", "验契入谱", "按祖训核验，不让真支流落在外。", dice = true, successRate = 72, successText = "旧契与谱牒相合，远房人跪在祖牌前。", failureText = "契纸破损，争执反而更深。", successEffects = V3EffectDelta(cohesion = 8, influence = 4, visitorId = "branch_covenant", visitorProgress = 1, biographicalNote = "远房归宗，族谱重新接上了一支断线。"), failureEffects = V3EffectDelta(cohesion = -5, unrest = 5)),
+            V3CardChoice("buy", "以银息争", "不查旧账，先用银两换眼前安静。", require = V3CardRequire(minSilver = 35), effects = V3EffectDelta(silver = -35, cohesion = 2, visitorId = "branch_covenant", visitorProgress = 1))
+        )),
+        V3MonthlyCard("relation_yamen_cold", V3CardPool.Chain, "县衙冷帖", "县衙递来一张没有落款的冷帖：往年欠税、今岁估粮，都等着李氏给个说法。", "关系", weight = 15, choices = listOf(
+            V3CardChoice("visit", "带账登门", "把账本摊开，先求一个可执行的期限。", require = V3CardRequire(minPatriarchStat = "conduct", minPatriarchStatValue = 35), effects = V3EffectDelta(yamen = 8, silver = -20, patriarchConduct = 4, biographicalNote = "族长带账登门，给家业争来一季喘息。")),
+            V3CardChoice("avoid", "托人转圜", "省下登门的体面，也留下官府的不快。", effects = V3EffectDelta(yamen = -5, silver = -8, unrest = 2))
+        )),
+        V3MonthlyCard("relation_gentry_proud", V3CardPool.Chain, "士绅试席", "县中名门设席，却把李氏安排在屏风之后。席位是一桩小事，也是一家人今后要站在哪里。", "关系", weight = 13, choices = listOf(
+            V3CardChoice("accept", "入席听谈", "先听完，再让人知道李氏不是来争一张椅子。", effects = V3EffectDelta(gentry = 8, influence = 4, patriarchConduct = 3)),
+            V3CardChoice("leave", "转身离席", "不受轻慢，但从此少一条往来门路。", effects = V3EffectDelta(gentry = -7, cohesion = 3, patriarchPrestige = 3))
+        )),
+        V3MonthlyCard("relation_villager_anger", V3CardPool.Crisis, "乡民叩门", "佃户把破了口的粮袋带到祠堂。他们说，今秋的租若照旧交，家里就没有明年。", "关系", weight = 18, choices = listOf(
+            V3CardChoice("reduce_rent", "减租一成", "少收一季，换来田庄不散。", require = V3CardRequire(minPatriarchStat = "stewardship", minPatriarchStatValue = 35), effects = V3EffectDelta(grain = -15, villagers = 12, cohesion = 5, unrest = -10, patriarchStewardship = 3)),
+            V3CardChoice("enforce", "照契收取", "账面不亏，人心却在门外。", effects = V3EffectDelta(silver = 25, villagers = -12, unrest = 12, cohesion = -4))
+        )),
+        V3MonthlyCard("crisis_refugee_wave", V3CardPool.Crisis, "第二批流民", "渡口传来消息，灾区又有一批人沿河而下。庄门前的空地已经不够搭棚。", "危局", weight = 20, choices = listOf(
+            V3CardChoice("open_new_field", "拨荒地安置", "把荒地交给他们，先让人活下来。", require = V3CardRequire(minGrain = 55), effects = V3EffectDelta(grain = -45, refugees = -18, villagers = 10, cohesion = 4, influence = 3, storyFlag = "refugee_settlement", plaqueId = "义门")),
+            V3CardChoice("fort_gate", "只收青壮", "让能下地、能守夜的人先入庄。", effects = V3EffectDelta(refugees = -6, militia = 5, villagers = -4, unrest = 7, garrisonMorale = 2))
+        )),
+        V3MonthlyCard("crisis_mutiny_warning", V3CardPool.Crisis, "乡勇欠饷", "夜巡的火把一支支熄灭。乡勇把旧甲放在案上，说再没有饷银，守庄便只是族老的一句空话。", "危局", weight = 22, choices = listOf(
+            V3CardChoice("pay", "先发半饷", "压下怨声，家账再薄一层。", require = V3CardRequire(minSilver = 30), effects = V3EffectDelta(silver = -30, garrisonMorale = 14, unrest = -8, militia = 3, plaqueId = "守望匾")),
+            V3CardChoice("council", "让各房共担", "把守庄从主房的事，变成全族的事。", effects = V3EffectDelta(cohesion = 7, garrisonMorale = 5, unrest = -4, silver = -12)),
+            V3CardChoice("dismiss", "遣散一半", "眼下省银，庄门从此变薄。", effects = V3EffectDelta(silver = 18, militia = -8, garrisonMorale = -18, unrest = 8))
+        )),
+        V3MonthlyCard("exam_county_card", V3CardPool.Exam, "县试名额", "县中书吏送来名额，族里读书的孩子终于可以把名字写上考册。", "科举", minChapter = 1, weight = 12, choices = listOf(
+            V3CardChoice("prepare", "送子入试", "花束脩，也给族里一个向上攀的念头。", require = V3CardRequire(minSilver = 20, minPatriarchStat = "prestige", minPatriarchStatValue = 25), effects = V3EffectDelta(silver = -20, influence = 3, routeDelta = V3RouteDelta(V3Route.Scholar, 6), storyFlag = "exam_county_ready", biographicalNote = "族中第一次把名字写进县试名册。")),
+            V3CardChoice("farm", "先守田庄", "读书不只在考场，家底也不能断。", effects = V3EffectDelta(grain = 20, patriarchStewardship = 2))
+        )),
+        V3MonthlyCard("exam_provincial_card", V3CardPool.Exam, "乡试秋闱", "族中后辈已过县府两关，乡试的门槛隔着一场秋雨。", "科举", minChapter = 3, weight = 14, choices = listOf(
+            V3CardChoice("sponsor", "倾力供给", "给他盘缠、书卷与一间安静屋子。", require = V3CardRequire(minSilver = 80, minInfluence = 45), dice = true, successRate = 55, successText = "秋闱放榜，族中添了一名举子。", failureText = "名落孙山，盘缠也随秋风去了。", successEffects = V3EffectDelta(silver = -80, influence = 12, gentry = 8, routeDelta = V3RouteDelta(V3Route.Scholar, 12), itemId = "provincial_certificate", plaqueId = "耕读之家", biographicalNote = "族中后辈中举，族谱添上了一行墨色极重的字。"), failureEffects = V3EffectDelta(silver = -80, cohesion = -2, patriarchPrestige = -2)),
+            V3CardChoice("share", "各房分担", "不让一房独负，也不把所有希望压在一人身上。", effects = V3EffectDelta(silver = -35, cohesion = 5, routeDelta = V3RouteDelta(V3Route.Scholar, 5)))
+        )),
+        V3MonthlyCard("visitor_xu_xiake", V3CardPool.Visitor, "徐霞客过庄", "徐霞客自山道来，鞋底沾着远方的泥。他不问族里有多少银，只问哪一条路通向未曾写入舆图的地方。", "访客", minChapter = 2, weight = 16, once = true, choices = listOf(
+            V3CardChoice("map", "请他绘路", "用一顿薄酒换一张能留在族谱里的图。", effects = V3EffectDelta(silver = -10, influence = 5, itemId = "travel_map", visitorId = "xu_xiake", visitorProgress = 1, biographicalNote = "徐霞客过庄，留下了一张标着水源与山路的图。")),
+            V3CardChoice("guide", "请他入山", "让族人替他引路，也让族人见见山外。", effects = V3EffectDelta(patriarchConduct = 2, bandits = -4, visitorId = "xu_xiake", visitorProgress = 1, routeDelta = V3RouteDelta(V3Route.Hermit, 5)))
+        )),
+        V3MonthlyCard("visitor_song_yingxing", V3CardPool.Visitor, "宋应星论器", "宋应星带着一册未刊的稿纸，在田埂边谈水车、农具和那些被士人忽略的手艺。", "访客", minChapter = 2, weight = 15, once = true, choices = listOf(
+            V3CardChoice("workshop", "请他看作坊", "让书本与工匠在同一张案上说话。", effects = V3EffectDelta(silver = -18, grain = 35, patriarchStewardship = 6, itemId = "heavenly_crafts_draft", visitorId = "song_yingxing", visitorProgress = 1, biographicalNote = "宋应星论器，族中第一次把工匠的名字写进家乘。")),
+            V3CardChoice("copy", "请抄一册", "把一份手艺留给后来人。", effects = V3EffectDelta(silver = -12, influence = 4, itemId = "agriculture_compendium", visitorId = "song_yingxing", visitorProgress = 1))
+        )),
+        V3MonthlyCard("visitor_zhang_dai", V3CardPool.Visitor, "张岱访灯", "张岱从江南来，谈园林、旧梦和一个家族怎样在乱世里保住审美与体面。", "访客", minChapter = 3, weight = 12, once = true, choices = listOf(
+            V3CardChoice("record", "请他记族事", "把今日的灯影，留给后世读。", effects = V3EffectDelta(influence = 6, patriarchPrestige = 5, itemId = "dream_record", visitorId = "zhang_dai", visitorProgress = 1, biographicalNote = "张岱访灯，族中第一次认真记录日常的光影。")),
+            V3CardChoice("quiet", "只饮一盏", "不求文章，求这一夜不被兵乱打扰。", effects = V3EffectDelta(cohesion = 4, visitorId = "zhang_dai", visitorProgress = 1))
+        )),
+        V3MonthlyCard("visitor_sun_chuanting", V3CardPool.Visitor, "孙传庭借粮", "孙传庭经过县境，军书上的数字比庄里的粮囤更冷。他没有空话，只问能否借出一批粮。", "访客", minChapter = 4, weight = 17, once = true, choices = listOf(
+            V3CardChoice("lend", "借粮济急", "军粮出仓，家族也与一场大势结了缘。", require = V3CardRequire(minGrain = 100), effects = V3EffectDelta(grain = -100, garrison = 12, influence = 8, routeDelta = V3RouteDelta(V3Route.Loyalist, 8), visitorId = "sun_chuanting", visitorProgress = 1, biographicalNote = "孙传庭借粮，族中第一次感到天下兵事压到了自家粮仓。")),
+            V3CardChoice("refuse", "留粮守庄", "先守住族人，日后再谈更大的事。", effects = V3EffectDelta(cohesion = 4, garrison = -5, visitorId = "sun_chuanting", visitorProgress = 1))
+        )),
+        V3MonthlyCard("capstone_family_school", V3CardPool.Clan, "族学成规", "族学终于有了固定的先生、束脩与课表。有人提议把这件事刻在匾上，告诉后人这家人靠什么站稳。", "匾额", minChapter = 2, once = true, choices = listOf(
+            V3CardChoice("hang", "悬耕读匾", "从今日起，读书不再只是某一房的私事。", require = V3CardRequire(minInfluence = 50, minCohesion = 55), effects = V3EffectDelta(plaqueId = "耕读之家", influence = 8, cohesion = 6, patriarchPrestige = 5, storyFlag = "plaque_study")),
+            V3CardChoice("fund", "先办族学", "匾额可以晚些，孩子不能再晚一年。", effects = V3EffectDelta(silver = -35, influence = 5, routeDelta = V3RouteDelta(V3Route.Scholar, 8)))
+        )),
+        V3MonthlyCard("capstone_charity_gate", V3CardPool.Clan, "义门初成", "灾年里，祠门没有关。乡民说起李氏，先说那口粥锅，再说家里有几间铺面。", "匾额", minChapter = 3, once = true, choices = listOf(
+            V3CardChoice("name", "立义门匾", "把这一季的取舍写进家声。", require = V3CardRequire(minInfluence = 70, minRelationVillagers = 45), effects = V3EffectDelta(plaqueId = "义门", influence = 10, villagers = 8, cohesion = 5, storyFlag = "plaque_charity")),
+            V3CardChoice("anonymous", "不留名字", "救人本不该先问谁的名号。", effects = V3EffectDelta(villagers = 12, cohesion = 4))
+        ))
+    )
+
+    val visitors = listOf(
+        V3Visitor("xu_xiake", "徐霞客", "行脚地理家", chapters = listOf(V3VisitorChapter(2, "山路初见", "他从山道来，问水源、问桥，也问族人为何只守着一块熟地。", "travel_map"), V3VisitorChapter(4, "再寄山图", "远行书信寄回一张新图，标出乱世中的退路。", "mountain_route"))),
+        V3Visitor("song_yingxing", "宋应星", "格物学者", chapters = listOf(V3VisitorChapter(2, "田边论器", "农具不是粗人的玩意，正是让一家人不饿肚子的学问。", "agriculture_compendium"), V3VisitorChapter(5, "工坊留稿", "他把未刊稿纸交给族中工匠，嘱咐不要让手艺只活在纸上。", "heavenly_crafts_draft"))),
+        V3Visitor("zhang_dai", "张岱", "江南文客", chapters = listOf(V3VisitorChapter(3, "一盏灯", "园林会败，文章会散，唯有记下的人知道曾经有过。", "dream_record"), V3VisitorChapter(6, "旧梦成谱", "他将一段族中旧事写进自己的游记，李氏从此不只存在于本地人的口中。", "family_chronicle"))),
+        V3Visitor("sun_chuanting", "孙传庭", "关中将领", chapters = listOf(V3VisitorChapter(4, "借粮", "军书上的数字落进粮仓，家族第一次被迫回答天下之事。", null), V3VisitorChapter(5, "回信", "他在战事间隙回信，谢的不是粮，而是没有趁乱抬价。", "military_letter")))
+    )
+
+    val items = listOf(
+        V3Item("western_clock", "西洋自鸣钟", "relic", "每次接待访客时，额外获得1点族望。", V3EffectDelta(influence = 1)),
+        V3Item("new_farming_manual", "新式农具图", "book", "每月田庄结算额外获得5石粮。", V3EffectDelta(grain = 5), recurring = true),
+        V3Item("provincial_certificate", "乡试中举文书", "deed", "提升士绅关系与耕读声名。", V3EffectDelta(gentry = 4, influence = 4)),
+        V3Item("travel_map", "山河行记图", "book", "山道风险降低，隐世路线更稳。", V3EffectDelta(routeDelta = V3RouteDelta(V3Route.Hermit, 3))),
+        V3Item("agriculture_compendium", "农政全书抄本", "book", "经营能力提升，粮食更稳定。", V3EffectDelta(patriarchStewardship = 3)),
+        V3Item("heavenly_crafts_draft", "天工开物稿", "book", "作坊与产业收益提升。", V3EffectDelta(patriarchStewardship = 4)),
+        V3Item("dream_record", "陶庵梦忆抄", "book", "履历与族望更易被后人记住。", V3EffectDelta(patriarchPrestige = 5)),
+        V3Item("family_chronicle", "江南旧梦录", "relic", "解锁一条额外族谱履历。", V3EffectDelta(influence = 3)),
+        V3Item("military_letter", "军镇回信", "deed", "守庄战前获得额外守望士气。", V3EffectDelta(garrisonMorale = 8)),
+        V3Item("mountain_route", "山中退路图", "map", "危局时减少流民与怨气增长。", V3EffectDelta(unrest = -3), recurring = true)
+    )
+
+    val plaques = mapOf(
+        "耕读之家" to "族学与科举让一家人的名字从乡里走进书页。",
+        "义门" to "灾年不闭祠门，家声先从一锅粥开始。",
+        "守望匾" to "六处庄门有人守，夜里的火把没有全部熄灭。",
+        "望族" to "各房各业终于被同一卷族谱系在一起。",
+        "郡望" to "家名跨过县界，成为地方不能绕开的姓氏。"
+    )
+
+    val allMonthlyCards = monthlyCards + extendedCards
+
     val initialPeople = listOf(
         V3Person(1, "李慎行", 24, "主房", "开族祖", V3Trait.Smooth, study = 26, martial = 22, commerce = 20, diplomacy = 24, loyalty = 90)
     )

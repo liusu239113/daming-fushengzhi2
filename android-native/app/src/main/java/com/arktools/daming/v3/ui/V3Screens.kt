@@ -609,6 +609,7 @@ private fun V3HomePage(
     V3ActionCenterPanel(progression, controller)
     V3PatriarchPanel(state, controller)
     V3MonthlyCardsPanel(state, controller)
+    V3ArchivePanel(state, controller)
     V3ClanLedgerPanel(
         state,
         Modifier.guideTarget(V3GuideFocus.MonthlyLedger, guideTargets),
@@ -3661,6 +3662,82 @@ private fun targetSiteFor(state: V3GameState, task: V3TaskType): V3CountySite? {
 }
 
 @Composable
+private fun V3ArchivePanel(state: V3GameState, controller: V3GameController) {
+    var expanded by remember { mutableStateOf(false) }
+    V3Panel {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("族谱与家传", color = V3Gold, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            V3SmallButton(if (expanded) "收起" else "展开", selected = false) { expanded = !expanded }
+        }
+        Text("履历 ${state.biography.size} 条 · 物品 ${state.inventory.size} 件 · 匾额 ${state.plaques.size} 方", color = V3Muted, fontSize = 12.sp)
+        if (expanded) {
+            if (state.plaques.isNotEmpty()) {
+                Text("封翁匾", color = V3Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                state.plaques.forEach { plaque ->
+                    Text("【$plaque】${V3Content.plaques[plaque].orEmpty()}", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+                }
+            }
+            if (state.inventory.isNotEmpty()) {
+                Text("家传物品", color = V3Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                state.inventory.mapNotNull { id -> V3Content.items.firstOrNull { it.id == id } }.forEach { item ->
+                    Text("${item.name}：${item.desc}", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+                }
+            }
+            if (state.biography.isNotEmpty()) {
+                Text("家乘履历", color = V3Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                state.biography.takeLast(8).reversed().forEach { note ->
+                    Text("· $note", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+                }
+            }
+            if (state.pendingSuccession) {
+                Text("族长继任", color = V3Red, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("${state.patriarch.name}已无法继续执掌族印，请从候选人中推举下一代族长。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                V3GameEngine.patriarchCandidates(state).take(4).forEach { person ->
+                    V3SmallButton("推举${person.name} · 功${person.merit}", Modifier.fillMaxWidth(), selected = true) {
+                        controller.succeedPatriarch(person.id)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V3PatriarchRadar(state: V3GameState) {
+    val values = listOf(
+        state.patriarch.conduct,
+        state.patriarch.stewardship,
+        state.patriarch.prestige,
+        state.patriarch.health
+    )
+    Canvas(Modifier.fillMaxWidth().height(150.dp).padding(8.dp)) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val radius = minOf(size.width, size.height) * 0.34f
+        val points = values.mapIndexed { index, value ->
+            val angle = (-Math.PI / 2.0 + index * Math.PI / 2.0)
+            Offset(
+                center.x + kotlin.math.cos(angle).toFloat() * radius * value / 100f,
+                center.y + kotlin.math.sin(angle).toFloat() * radius * value / 100f
+            )
+        }
+        val outline = Path().apply {
+            points.forEachIndexed { index, point -> if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y) }
+            close()
+        }
+        drawPath(outline, V3Gold.copy(alpha = 0.28f), style = Stroke(width = 2f))
+        drawPath(outline, V3Gold.copy(alpha = 0.22f))
+        values.indices.forEach { index ->
+            val angle = (-Math.PI / 2.0 + index * Math.PI / 2.0)
+            val edge = Offset(
+                center.x + kotlin.math.cos(angle).toFloat() * radius,
+                center.y + kotlin.math.sin(angle).toFloat() * radius
+            )
+            drawLine(V3Muted.copy(alpha = 0.45f), center, edge, strokeWidth = 1f)
+        }
+    }
+}
+
+@Composable
 private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
     V3Panel {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -3668,6 +3745,7 @@ private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
             Text("第${state.patriarch.generation}代 · 任期${state.patriarch.term}月", color = V3Muted, fontSize = 12.sp)
         }
         Text("处世 ${state.patriarch.conduct} · 经营 ${state.patriarch.stewardship} · 威望 ${state.patriarch.prestige} · 身板 ${state.patriarch.health}", color = V3Ink, fontSize = 13.sp)
+        V3PatriarchRadar(state)
         Text("流民 ${state.refugees} · 庄内怨气 ${state.unrestLevel} · 守望士气 ${state.garrisonMorale}", color = if (state.unrestLevel >= 35) V3Red else V3Muted, fontSize = 12.sp)
         if (state.patriarch.capstones.isNotEmpty()) Text("族望匾：${state.patriarch.capstones.joinToString("、")}", color = V3Gold, fontSize = 12.sp)
         if (state.biography.isNotEmpty()) Text("族谱履历：${state.biography.last()}", color = V3Muted, fontSize = 12.sp, lineHeight = 17.sp)
@@ -3679,7 +3757,13 @@ private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
 
 @Composable
 private fun V3MonthlyCardsPanel(state: V3GameState, controller: V3GameController) {
-    if (state.activeCards.isEmpty() && state.pendingDice == null) return
+    if (state.activeCards.isEmpty() && state.pendingDice == null) {
+        V3Panel {
+            Text("本月家务", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("案上暂时无急务。下月结算后，新的访客、族务与危局会依条件出现。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+        }
+        return
+    }
     V3Panel {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("本月家务", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -3690,7 +3774,11 @@ private fun V3MonthlyCardsPanel(state: V3GameState, controller: V3GameController
             V3CardPanel(card, state, controller)
         }
         state.pendingDice?.let { dice ->
-            V3Panel(Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape)) {
+            val shake = remember(dice.cardId, dice.choiceId) { Animatable(0f) }
+            LaunchedEffect(dice.cardId, dice.choiceId) {
+                shake.animateTo(1f, animationSpec = keyframes { durationMillis = 600 })
+            }
+            V3Panel(Modifier.fillMaxWidth().graphicsLayer { rotationZ = shake.value * 5f }.background(V3PaperDeep, V3SoftShape)) {
                 Text("签筒已摇", color = V3Gold, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Text("成功率 ${dice.successRate}% · 签数 ${dice.roll}", color = V3Muted, fontSize = 13.sp)
                 V3SmallButton("揭签看吉凶", Modifier.fillMaxWidth(), selected = true) { controller.resolveCardDice() }
@@ -3701,7 +3789,12 @@ private fun V3MonthlyCardsPanel(state: V3GameState, controller: V3GameController
 
 @Composable
 private fun V3CardPanel(card: V3MonthlyCard, state: V3GameState, controller: V3GameController) {
-    Column(Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val lift = remember { Animatable(0f) }
+    LaunchedEffect(card.id) {
+        lift.snapTo(18f)
+        lift.animateTo(0f, animationSpec = keyframes { durationMillis = 280 })
+    }
+    Column(Modifier.fillMaxWidth().graphicsLayer { translationY = lift.value }.background(V3PaperDeep, V3SoftShape).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(card.title, color = V3Ink, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Text(card.tag.ifBlank { "家务" }, color = V3Gold, fontSize = 12.sp)
@@ -3725,7 +3818,8 @@ private fun V3CardPanel(card: V3MonthlyCard, state: V3GameState, controller: V3G
 @Composable
 private fun V3HexBattleDialog(battle: V3HexBattleState, controller: V3GameController) {
     V3Dialog(title = "守庄战 · 第${battle.turn}轮", onDismiss = {}) {
-        Text("枪阵克骑突，骑突克弓矢，弓矢克枪阵。", color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
+        Text("补给 ${battle.supply} · 敌方动量 ${battle.enemyMomentum}", color = if (battle.supply <= 20 || battle.enemyMomentum >= 75) V3Red else V3Muted, fontSize = 13.sp)
+        Text("枪阵克骑突，骑突克弓矢，弓矢克枪阵。补给耗尽或敌方动量到100，守庄战即告败。", color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
         battle.tiles.forEach { tile ->
             val key = "${tile.q},${tile.r}"
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

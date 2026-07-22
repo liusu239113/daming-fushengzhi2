@@ -36,13 +36,15 @@ object V3CardEngine {
     fun budget(state: V3GameState): Int =
         if (V3ProgressionEngine.currentChapter(state).number <= 2) EARLY_BUDGET else LATE_BUDGET
 
-    fun refreshMonth(state: V3GameState, cards: List<V3MonthlyCard> = V3Content.monthlyCards): V3GameState {
-        val available = cards.filter { card ->
+    fun refreshMonth(state: V3GameState, cards: List<V3MonthlyCard> = V3Content.allMonthlyCards): V3GameState {
+        val generationSeen = state.seenCardGenerations[state.patriarch.generation].orEmpty()
+        val visitorCards = visitorChainCards(state)
+        val available = (cards + visitorCards).distinctBy { it.id }.filter { card ->
             val chapter = V3ProgressionEngine.currentChapter(state).number
             chapter in card.minChapter..card.maxChapter &&
                 card.id !in state.activeCards.map { it.id } &&
                 (!card.once || card.id !in state.seenCardIds) &&
-                (!card.oncePerGeneration || card.id !in state.seenCardIds)
+                (!card.oncePerGeneration || card.id !in generationSeen)
         }
         val selected = selectPriorityCards(state, available, budget(state)).take(MAX_CARDS)
         return state.copy(
@@ -138,9 +140,15 @@ object V3CardEngine {
             choice.effects.plus(if (success) choice.successEffects else choice.failureEffects)
         }
         var next = applyDelta(state, delta)
-        val nextSeen = if (card.once || card.oncePerGeneration) {
+        val nextSeen = if (card.once) {
             (next.seenCardIds + card.id).distinct()
         } else next.seenCardIds
+        val nextGenerationSeen = if (card.oncePerGeneration) {
+            next.seenCardGenerations + (
+                next.patriarch.generation to
+                    (next.seenCardGenerations[next.patriarch.generation].orEmpty() + card.id).distinct()
+                )
+        } else next.seenCardGenerations
         val chainCard = choice.nextCardId?.let { id -> next.activeCards.firstOrNull { it.id == id } }
         val remainingCards = next.activeCards.filterNot { it.id == card.id }.let { cards ->
             if (chainCard != null && chainCard.id !in cards.map { it.id }) listOf(chainCard) + cards else cards
@@ -151,6 +159,8 @@ object V3CardEngine {
             activeCards = remainingCards,
             playedCardsThisMonth = next.playedCardsThisMonth + 1,
             seenCardIds = nextSeen,
+            seenCardGenerations = nextGenerationSeen,
+            seenVisitors = next.seenVisitors,
             pendingDice = null,
             pendingReports = listOf(log),
             biography = delta.biographicalNote?.let { (next.biography + it).take(80) } ?: next.biography,
@@ -241,6 +251,17 @@ object V3CardEngine {
             (require.minPatriarchStatValue == null || (stat != null && stat >= require.minPatriarchStatValue))
     }
 
+    fun applyInventoryEffects(state: V3GameState, detailLines: MutableList<String>? = null): V3GameState {
+        val recurring = state.inventory
+            .mapNotNull { id -> V3Content.items.firstOrNull { it.id == id } }
+            .filter { it.recurring }
+            .map { it.effects }
+            .fold(V3EffectDelta()) { total, item -> total.plus(item) }
+        if (recurring == V3EffectDelta()) return state
+        detailLines?.add("物品生效：${state.inventory.count { id -> V3Content.items.any { it.id == id && it.recurring } }}件家传物品为本月家业添了一笔助益。")
+        return applyDelta(state, recurring)
+    }
+
     private fun applyDelta(state: V3GameState, delta: V3EffectDelta): V3GameState {
         val relations = state.relations.copy(
             yamen = clamp(state.relations.yamen + delta.yamen),
@@ -263,6 +284,10 @@ object V3CardEngine {
         }.distinct()
         val plaques = delta.plaqueId?.let { (state.plaques + it).distinct() } ?: state.plaques
         val inventory = delta.itemId?.let { (state.inventory + it).distinct() } ?: state.inventory
+        val visitorProgress = delta.visitorId?.let { id ->
+            state.visitorProgress + (id to (delta.visitorProgress ?: ((state.visitorProgress[id] ?: 0) + 1)))
+        } ?: state.visitorProgress
+        val seenVisitors = delta.visitorId?.let { (state.seenVisitors + it).distinct() } ?: state.seenVisitors
         val routeScores = delta.routeDelta?.let {
             state.routeScores + (it.route to ((state.routeScores[it.route] ?: 0) + it.delta))
         } ?: state.routeScores
@@ -271,7 +296,7 @@ object V3CardEngine {
         } else {
             state.army.lose(-delta.militia)
         }
-        return state.copy(
+        val result = state.copy(
             silver = (state.silver + delta.silver).coerceAtLeast(-999),
             grain = (state.grain + delta.grain).coerceAtLeast(-999),
             influence = (state.influence + delta.influence).coerceIn(0, 100),
@@ -287,9 +312,66 @@ object V3CardEngine {
             completedStoryFlags = flags,
             plaques = plaques,
             inventory = inventory,
+            seenVisitors = seenVisitors,
+            visitorProgress = visitorProgress,
             routeScores = routeScores
         )
+        val acquiredEffects = delta.itemId
+            ?.let { id -> V3Content.items.firstOrNull { it.id == id && !it.recurring }?.effects }
+            ?.copy(itemId = null)
+        return if (acquiredEffects == null || acquiredEffects == V3EffectDelta()) {
+            result
+        } else {
+            applyDelta(result, acquiredEffects)
+        }
     }
+
+    private fun visitorChainCards(state: V3GameState): List<V3MonthlyCard> =
+        V3Content.visitors.flatMap { visitor ->
+            val progress = state.visitorProgress[visitor.id] ?: 0
+            if (progress == 0) return@flatMap emptyList()
+            val next = visitor.chapters.getOrNull(progress) ?: return@flatMap emptyList()
+            if (next.chapter > V3ProgressionEngine.currentChapter(state).number) return@flatMap emptyList()
+            listOf(
+                V3MonthlyCard(
+                    id = "visitor_chain_${visitor.id}_${progress + 1}",
+                    pool = V3CardPool.Visitor,
+                    title = "${visitor.name}：${next.title}",
+                    body = next.body,
+                    tag = "访客续章",
+                    weight = 24,
+                    once = false,
+                    minChapter = next.chapter,
+                    choices = listOf(
+                        V3CardChoice(
+                            id = "receive",
+                            label = "请入族中",
+                            desc = "把这段相逢写进家乘，也把远方的见识留下。",
+                            effects = next.effects.plus(
+                                V3EffectDelta(
+                                    itemId = next.giftItemId,
+                                    visitorId = visitor.id,
+                                    visitorProgress = progress + 1,
+                                    biographicalNote = "${visitor.name}第${progress + 1}次来访：${next.title}。"
+                                )
+                            )
+                        ),
+                        V3CardChoice(
+                            id = "farewell",
+                            label = "以礼相送",
+                            desc = "不强留远客，仍以一份薄礼结下善缘。",
+                            effects = V3EffectDelta(
+                                silver = -6,
+                                influence = 2,
+                                visitorId = visitor.id,
+                                visitorProgress = progress + 1,
+                                biographicalNote = "${visitor.name}第${progress + 1}次过庄，族人以礼相送。"
+                            )
+                        )
+                    )
+                )
+            )
+        }
 
     private fun V3EffectDelta.plus(other: V3EffectDelta?): V3EffectDelta {
         if (other == null) return this
@@ -304,6 +386,7 @@ object V3CardEngine {
             rebelHeat = rebelHeat + other.rebelHeat, storyFlag = other.storyFlag ?: storyFlag,
             removeFlag = other.removeFlag ?: removeFlag, plaqueId = other.plaqueId ?: plaqueId,
             itemId = other.itemId ?: itemId, biographicalNote = other.biographicalNote ?: biographicalNote,
+            visitorId = other.visitorId ?: visitorId, visitorProgress = other.visitorProgress ?: visitorProgress,
             routeDelta = other.routeDelta ?: routeDelta
         )
     }

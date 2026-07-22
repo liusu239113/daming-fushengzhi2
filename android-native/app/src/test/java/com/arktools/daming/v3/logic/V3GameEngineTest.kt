@@ -2,6 +2,7 @@ package com.arktools.daming.v3.logic
 
 import com.arktools.daming.v3.data.V3HexArms
 import com.arktools.daming.v3.data.V3HexBattleState
+import com.arktools.daming.v3.data.V3MonthlyCard
 import com.arktools.daming.v3.data.V3ArmyRoster
 import com.arktools.daming.v3.data.V3Content
 import com.arktools.daming.v3.data.V3EquipmentQuality
@@ -22,6 +23,77 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class V3GameEngineTest {
+    @Test
+    fun recurringItemsApplyOnlyDuringMonthlySettlement() {
+        val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+        val withItem = base.copy(inventory = listOf("new_farming_manual"))
+        val once = V3CardEngine.applyInventoryEffects(withItem)
+        assertEquals(withItem.grain + 5, once.grain)
+        val report = V3GameEngine.advanceMonth(withItem)
+        assertTrue(report.nextState.grain >= base.grain - 100)
+        assertEquals(1, report.nextState.inventory.count { it == "new_farming_manual" })
+    }
+
+    @Test
+    fun visitorChainAdvancesAndDeliversSecondChapterGift() {
+        val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
+            .copy(year = 1610, month = 1, clanRank = 4)
+        val first = V3Content.allMonthlyCards.first { it.id == "visitor_xu_xiake" }
+        val firstChoice = first.choices.first()
+        val afterFirst = V3CardEngine.resolve(base, first, firstChoice, null).state
+        assertEquals(1, afterFirst.visitorProgress["xu_xiake"])
+        val refreshed = V3CardEngine.refreshMonth(afterFirst, emptyList())
+        val chain = refreshed.activeCards.firstOrNull { it.id == "visitor_chain_xu_xiake_2" }
+        assertNotNull(chain)
+        val afterSecond = V3CardEngine.choose(refreshed, requireNotNull(chain).id, "receive")?.state
+        assertNotNull(afterSecond)
+        assertEquals(2, afterSecond?.visitorProgress?.get("xu_xiake"))
+        assertTrue(afterSecond?.inventory?.contains("mountain_route") == true)
+    }
+
+    @Test
+    fun oncePerGenerationCardCanReturnAfterSuccessionButNotWithinGeneration() {
+        val card = V3MonthlyCard(
+            id = "generation_test",
+            pool = com.arktools.daming.v3.data.V3CardPool.Annual,
+            title = "代际清账",
+            body = "账本翻到下一页。",
+            oncePerGeneration = true,
+            choices = listOf(com.arktools.daming.v3.data.V3CardChoice("ok", "清账"))
+        )
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val played = V3CardEngine.resolve(base, card, card.choices.first(), null).state
+        assertTrue("generation_test" in played.seenCardGenerations[1].orEmpty())
+        val sameGeneration = V3CardEngine.refreshMonth(played, listOf(card))
+        assertTrue(sameGeneration.activeCards.none { it.id == card.id })
+        val heir = V3Person(2, "李承业", 20, "主房", "族人", V3Trait.Honest, 30, 20, 30, 40, 80, generation = 2, merit = 20, ageMonths = 240, surname = "李")
+        val succeeded = V3GameEngine.succeedPatriarch(
+            played.copy(pendingSuccession = true, people = played.people + heir),
+            heir.id
+        )
+        val nextGeneration = V3CardEngine.refreshMonth(succeeded, listOf(card))
+        assertTrue(nextGeneration.activeCards.any { it.id == card.id })
+    }
+
+    @Test
+    fun automaticPlaqueAndFailureKindAreRecorded() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val state = base.copy(
+            patriarch = com.arktools.daming.v3.data.V3Patriarch(conduct = 90, stewardship = 90, prestige = 90, health = 80),
+            influence = 90,
+            cohesion = 90,
+            relations = com.arktools.daming.v3.data.V3Relations(villagers = 50),
+            clanRank = 3
+        )
+        val next = V3GameEngine.advanceMonth(state).nextState
+        assertTrue(next.plaques.contains("耕读之家"))
+        assertTrue(next.plaques.contains("义门"))
+        assertTrue(next.plaques.contains("望族"))
+
+        val failed = base.copy(grain = -300)
+        assertEquals("举族逃荒", V3GameEngine.failureKind(failed))
+        assertEquals("举族逃荒", V3GameEngine.finalizeEnding(failed).failureKind)
+    }
     @Test
     fun allStartCombinationsReachAutomaticEndingWithValidState() {
         var combinations = 0
