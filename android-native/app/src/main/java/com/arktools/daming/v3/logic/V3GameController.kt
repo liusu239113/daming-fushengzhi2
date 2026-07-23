@@ -747,7 +747,6 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             equipment = repairedEquipment
         )
         saveStore.save(state)
-        latestReport = null
         showInfo(description)
     }
 

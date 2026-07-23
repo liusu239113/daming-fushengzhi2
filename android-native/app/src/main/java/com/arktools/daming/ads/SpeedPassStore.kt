@@ -5,7 +5,7 @@ import android.content.Context
 class SpeedPassStore(context: Context) {
     private val preferences = context.getSharedPreferences("rewarded_speed_pass", Context.MODE_PRIVATE)
 
-    fun unlockForTwentyMinutes(now: Long = System.currentTimeMillis()): Long {
+    fun unlockForThirtyMinutes(now: Long = System.currentTimeMillis()): Long {
         val expiresAt = now + DURATION_MS
         preferences.edit().putLong(KEY_EXPIRES_AT, expiresAt).apply()
         return expiresAt
@@ -20,6 +20,6 @@ class SpeedPassStore(context: Context) {
 
     private companion object {
         const val KEY_EXPIRES_AT = "expires_at"
-        const val DURATION_MS = 20L * 60L * 1000L
+        const val DURATION_MS = 30L * 60L * 1000L
     }
 }

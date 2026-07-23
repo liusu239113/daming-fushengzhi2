@@ -2653,6 +2653,7 @@ private fun V3TopBar(
                 }
             }
             V3TimeControls(controller, guideTargets, tutorialStep)
+            V3DailyAidEntry(controller)
             val progression = V3ProgressionEngine.snapshot(state)
             Text(
                 "主线：${progression.mainQuest.title} · ${progression.mainQuest.completedCount}/${progression.mainQuest.totalCount}项",
@@ -2677,6 +2678,120 @@ private fun V3TopBar(
 }
 
 @Composable
+private fun V3DailyAidEntry(controller: V3GameController) {
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    val claimStore = remember { RewardClaimStore(context) }
+    val offers = remember {
+        listOf(
+            V3AdRewardOffer("silver", "行商周转", "完整观看后银两 +60", "行商周转到账：银两 +60。", silver = 60),
+            V3AdRewardOffer("grain", "粮仓补给", "完整观看后粮食 +100", "粮仓补给入库：粮食 +100。", grain = 100),
+            V3AdRewardOffer("clan", "宗祠援助", "完整观看后凝聚 +5、军械耐久 +8", "宗祠援助完成：凝聚 +5、全部军械耐久 +8。", cohesion = 5, repairDurability = 8)
+        )
+    }
+    var panelVisible by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var confirmOffer by remember { mutableStateOf<V3AdRewardOffer?>(null) }
+    var claimedKeys by remember {
+        mutableStateOf(offers.map { it to claimStore.dailyRewardKey(it.key) }.filter { claimStore.hasClaimed(it.second) }.map { it.second }.toSet())
+    }
+    var dailyRemaining by remember { mutableStateOf(claimStore.remainingDailyClaims()) }
+    val availableCount = offers.count { claimStore.dailyRewardKey(it.key) !in claimedKeys }
+
+    AdLoadingOverlay(visible = loading, label = "宗族援助筹备中…")
+    LaunchedEffect(loading) {
+        if (loading) {
+            delay(30_000L)
+            if (loading) {
+                loading = false
+                controller.showInfo("广告加载超时，请检查网络后重试。")
+            }
+        }
+    }
+
+    confirmOffer?.let { offer ->
+        val rewardKey = claimStore.dailyRewardKey(offer.key)
+        if (rewardKey !in claimedKeys) {
+            Dialog(onDismissRequest = { confirmOffer = null }) {
+                V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
+                    Text(offer.title, color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text(offer.subtitle, color = V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("每日每档限领一次，完整观看并通过奖励校验后发放。不观看不影响正常经营。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        V3SmallButton("暂不领取", Modifier.weight(1f)) { confirmOffer = null }
+                        V3SmallButton("观看并领取", Modifier.weight(1f), selected = true) {
+                            val act = activity
+                            confirmOffer = null
+                            if (act == null) {
+                                controller.showInfo("当前页面无法打开激励视频。")
+                                return@V3SmallButton
+                            }
+                            if (!claimStore.canClaimToday()) {
+                                dailyRemaining = 0
+                                controller.showInfo("今日激励奖励已达 ${RewardClaimStore.DAILY_REWARD_LIMIT} 次上限。")
+                                return@V3SmallButton
+                            }
+                            RewardedAdController.show(
+                                activity = act,
+                                onLoadingChanged = { loading = it },
+                                onRewarded = {
+                                    if (!claimStore.hasClaimed(rewardKey) && claimStore.canClaimToday()) {
+                                        claimStore.markClaimedAndRecordDaily(rewardKey)
+                                        claimedKeys = claimedKeys + rewardKey
+                                        dailyRemaining = claimStore.remainingDailyClaims()
+                                        controller.grantMonthlyReward(
+                                            description = offer.grantedMessage,
+                                            silver = offer.silver,
+                                            grain = offer.grain,
+                                            cohesion = offer.cohesion,
+                                            repairDurability = offer.repairDurability
+                                        )
+                                    }
+                                },
+                                onError = controller::showInfo,
+                                onClosed = {}
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (panelVisible) {
+        Dialog(onDismissRequest = { panelVisible = false }) {
+            V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 430.dp)) {
+                Text("每日宗族援助", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text("今日剩余 $dailyRemaining/${RewardClaimStore.DAILY_REWARD_LIMIT} 次 · 三档奖励每日各限领一次", color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                offers.forEach { offer ->
+                    val key = claimStore.dailyRewardKey(offer.key)
+                    val claimed = key in claimedKeys
+                    V3SmallButton(
+                        if (claimed) "已领取 · ${offer.title}" else "${offer.title} · ${offer.subtitle}",
+                        Modifier.fillMaxWidth(),
+                        selected = !claimed,
+                        enabled = !claimed && !loading && dailyRemaining > 0
+                    ) {
+                        panelVisible = false
+                        confirmOffer = offer
+                    }
+                }
+                V3SmallButton("关闭", Modifier.fillMaxWidth()) { panelVisible = false }
+            }
+        }
+    }
+
+    V3SmallButton(
+        if (availableCount > 0 && dailyRemaining > 0) "今日援助 $availableCount 档可领 · 剩 $dailyRemaining 次" else "今日援助已领取",
+        Modifier.fillMaxWidth(),
+        selected = availableCount > 0 && dailyRemaining > 0
+    ) {
+        dailyRemaining = claimStore.remainingDailyClaims()
+        panelVisible = true
+    }
+}
+
+@Composable
 private fun V3TimeControls(
     controller: V3GameController,
     guideTargets: MutableMap<V3GuideFocus, Rect>,
@@ -2685,6 +2800,7 @@ private fun V3TimeControls(
     val context = LocalContext.current
     val activity = context as? android.app.Activity
     val speedPassStore = remember { SpeedPassStore(context) }
+    val claimStore = remember { RewardClaimStore(context) }
     var remainingPassMillis by remember { mutableStateOf(speedPassStore.remainingMillis()) }
     var adLoading by remember { mutableStateOf(false) }
     // 点击带锁遮罩的 2–5 倍按钮时先弹确认窗，确认后再拉广告
@@ -2719,7 +2835,7 @@ private fun V3TimeControls(
         Dialog(onDismissRequest = { confirmSpeed = null }) {
             V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
                 Text("观看广告解锁倍速", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Text("观看后，2–5 倍时序全部解锁 20 分钟。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+                Text("完整观看后，2–5 倍时序全部解锁 30 分钟；今日激励奖励剩余 ${claimStore.remainingDailyClaims()} 次。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     V3SmallButton("关闭", Modifier.weight(1f)) { confirmSpeed = null }
                     V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
@@ -2729,14 +2845,19 @@ private fun V3TimeControls(
                             controller.showInfo("当前页面无法打开激励广告。")
                             return@V3SmallButton
                         }
+                        if (!claimStore.canClaimToday()) {
+                            controller.showInfo("今日激励奖励已达 ${RewardClaimStore.DAILY_REWARD_LIMIT} 次上限，明日可再次解锁倍速。")
+                            return@V3SmallButton
+                        }
                         RewardedAdController.show(
                             activity = act,
                             onLoadingChanged = { adLoading = it },
                             onRewarded = {
-                                val expiresAt = speedPassStore.unlockForTwentyMinutes()
+                                claimStore.recordDailyClaim()
+                                val expiresAt = speedPassStore.unlockForThirtyMinutes()
                                 remainingPassMillis = (expiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
                                 controller.updateTimeSpeed(speed)
-                                controller.showInfo("激励广告奖励已生效：2–5 倍速度全部解锁 20 分钟，当前切换为 ${speed} 倍。")
+                                controller.showInfo("倍速经营权益已生效：2–5 倍速度全部解锁 30 分钟，当前切换为 ${speed} 倍。")
                             },
                             onError = controller::showInfo,
                             onClosed = { /* AdLoadingOverlay 由 onLoadingChanged(false) 关闭 */ }
@@ -3300,45 +3421,55 @@ private data class V3AdRewardOffer(
     val repairDurability: Int = 0
 )
 
-private fun monthlyAdOffer(state: V3GameState): V3AdRewardOffer {
+private fun monthlyAdOffers(state: V3GameState): List<V3AdRewardOffer> {
     val keyPrefix = "month-${state.year}-${state.month}"
-    return when {
+    val rescueOffer = when {
         state.silver < 80 -> V3AdRewardOffer(
-            key = "$keyPrefix-silver",
-            title = "接受行商周转",
-            subtitle = "可选观看一段激励视频，商队送来 70 两应急银",
-            grantedMessage = "行商周转已到账：银两 +70。",
-            silver = 70
+            key = "$keyPrefix-rescue-silver",
+            title = "行商雪中送炭",
+            subtitle = "完整观看后获得 100 两应急银，立即缓解本月周转压力",
+            grantedMessage = "行商雪中送炭：银两 +100。",
+            silver = 100
         )
         state.grain < 120 -> V3AdRewardOffer(
-            key = "$keyPrefix-grain",
-            title = "开仓筹措赈粮",
-            subtitle = "可选观看一段激励视频，乡绅协助筹得 100 石粮",
-            grantedMessage = "赈粮已入仓：粮食 +100。",
-            grain = 100
+            key = "$keyPrefix-rescue-grain",
+            title = "乡绅开仓济族",
+            subtitle = "完整观看后获得 150 石粮，足以支撑下一阶段经营",
+            grantedMessage = "乡绅开仓济族：粮食 +150。",
+            grain = 150
         )
         state.equipment.any { it.durability < it.maxDurability } -> V3AdRewardOffer(
-            key = "$keyPrefix-repair",
-            title = "请军匠维护军械",
-            subtitle = "可选观看一段激励视频，全部军械恢复 12 点耐久",
-            grantedMessage = "军匠维护完成：全部军械耐久 +12。",
-            repairDurability = 12
+            key = "$keyPrefix-rescue-repair",
+            title = "军匠全面整备",
+            subtitle = "完整观看后全部军械恢复 20 点耐久，出征更有把握",
+            grantedMessage = "军匠全面整备完成：全部军械耐久 +20。",
+            repairDurability = 20
         )
-        state.cohesion < 55 -> V3AdRewardOffer(
-            key = "$keyPrefix-cohesion",
-            title = "设宴安抚族人",
-            subtitle = "可选观看一段激励视频，宗族凝聚 +6",
-            grantedMessage = "族宴结束：宗族凝聚 +6。",
-            cohesion = 6
+        state.cohesion < 65 -> V3AdRewardOffer(
+            key = "$keyPrefix-rescue-cohesion",
+            title = "宗祠赐宴聚心",
+            subtitle = "完整观看后宗族凝聚 +10，降低内耗并稳住族心",
+            grantedMessage = "宗祠赐宴结束：宗族凝聚 +10。",
+            cohesion = 10
         )
         else -> V3AdRewardOffer(
-            key = "$keyPrefix-trade",
-            title = "追加本月商路分红",
-            subtitle = "可选观看一段激励视频，获得 45 两商路分红",
-            grantedMessage = "商路分红已到账：银两 +45。",
-            silver = 45
+            key = "$keyPrefix-rescue-trade",
+            title = "商路红利加倍",
+            subtitle = "完整观看后立即获得 80 两额外商路分红",
+            grantedMessage = "商路红利到账：银两 +80。",
+            silver = 80
         )
     }
+    val prosperityOffer = V3AdRewardOffer(
+        key = "$keyPrefix-prosperity",
+        title = "领取本月家业福袋",
+        subtitle = "完整观看后获得 50 两、80 石粮与 4 点宗族凝聚",
+        grantedMessage = "家业福袋已入库：银两 +50、粮食 +80、宗族凝聚 +4。",
+        silver = 50,
+        grain = 80,
+        cohesion = 4
+    )
+    return listOf(rescueOffer, prosperityOffer)
 }
 
 @Composable
@@ -3346,12 +3477,16 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
     val context = LocalContext.current
     val activity = context as? android.app.Activity
     val claimStore = remember { RewardClaimStore(context) }
-    val offer = monthlyAdOffer(controller.state)
+    val offers = remember(report) { monthlyAdOffers(controller.state) }
     var loading by remember { mutableStateOf(false) }
-    var confirmOffer by remember { mutableStateOf(false) }
-    var claimed by remember(offer.key) { mutableStateOf(claimStore.hasClaimed(offer.key)) }
+    var confirmOffer by remember { mutableStateOf<V3AdRewardOffer?>(null) }
+    var claimedKeys by remember(offers) {
+        mutableStateOf(offers.filter { claimStore.hasClaimed(it.key) }.map { it.key }.toSet())
+    }
+    var dailyRemaining by remember { mutableStateOf(claimStore.remainingDailyClaims()) }
+    val claimedCount = offers.count { it.key in claimedKeys }
 
-    AdLoadingOverlay(visible = loading, label = "机缘加载中…")
+    AdLoadingOverlay(visible = loading, label = "福缘筹备中…")
     // 超时保护：若广告 SDK 30 秒内未回调 onLoadingChanged(false)，自动关闭遮罩避免卡死
     LaunchedEffect(loading) {
         if (loading) {
@@ -3363,40 +3498,48 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
         }
     }
 
-    if (confirmOffer && !claimed) {
-        Dialog(onDismissRequest = { confirmOffer = false }) {
-            V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
-                Text(offer.title, color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Text(offer.subtitle, color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
-                Text("完整观看并通过奖励校验后奖励即刻发放；不观看也可直接关闭月报继续游戏。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    V3SmallButton("关闭", Modifier.weight(1f)) { confirmOffer = false }
-                    V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
-                        val act = activity
-                        confirmOffer = false
-                        if (act == null) {
-                            controller.showInfo("当前页面无法打开激励视频。")
-                            return@V3SmallButton
+    confirmOffer?.let { offer ->
+        if (offer.key !in claimedKeys) {
+            Dialog(onDismissRequest = { confirmOffer = null }) {
+                V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
+                    Text(offer.title, color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text(offer.subtitle, color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+                    Text("完整观看并通过奖励校验后立即发放。本月最多领取 2 档，今日所有激励奖励最多 ${RewardClaimStore.DAILY_REWARD_LIMIT} 次。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        V3SmallButton("暂不领取", Modifier.weight(1f)) { confirmOffer = null }
+                        V3SmallButton("观看并领取", Modifier.weight(1f), selected = true) {
+                            val act = activity
+                            confirmOffer = null
+                            if (act == null) {
+                                controller.showInfo("当前页面无法打开激励视频。")
+                                return@V3SmallButton
+                            }
+                            if (!claimStore.canClaimToday()) {
+                                dailyRemaining = 0
+                                controller.showInfo("今日福缘奖励已达上限，明日再来领取。")
+                                return@V3SmallButton
+                            }
+                            RewardedAdController.show(
+                                activity = act,
+                                onLoadingChanged = { loading = it },
+                                onRewarded = {
+                                    if (!claimStore.hasClaimed(offer.key) && claimStore.canClaimToday()) {
+                                        claimStore.markClaimedAndRecordDaily(offer.key)
+                                        claimedKeys = claimedKeys + offer.key
+                                        dailyRemaining = claimStore.remainingDailyClaims()
+                                        controller.grantMonthlyReward(
+                                            description = offer.grantedMessage,
+                                            silver = offer.silver,
+                                            grain = offer.grain,
+                                            cohesion = offer.cohesion,
+                                            repairDurability = offer.repairDurability
+                                        )
+                                    }
+                                },
+                                onError = controller::showInfo,
+                                onClosed = {}
+                            )
                         }
-                        RewardedAdController.show(
-                            activity = act,
-                            onLoadingChanged = { loading = it },
-                            onRewarded = {
-                                if (!claimStore.hasClaimed(offer.key)) {
-                                    claimStore.markClaimed(offer.key)
-                                    claimed = true
-                                    controller.grantMonthlyReward(
-                                        description = offer.grantedMessage,
-                                        silver = offer.silver,
-                                        grain = offer.grain,
-                                        cohesion = offer.cohesion,
-                                        repairDurability = offer.repairDurability
-                                    )
-                                }
-                            },
-                            onError = controller::showInfo,
-                            onClosed = {}
-                        )
                     }
                 }
             }
@@ -3409,6 +3552,33 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
         tutorialState = controller.state,
         tutorialController = controller
     ) {
+        Column(
+            Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape).border(1.dp, V3Gold, V3SoftShape).padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("本月家业福缘", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("$claimedCount/${offers.size} · 今日剩 $dailyRemaining/${RewardClaimStore.DAILY_REWARD_LIMIT}", color = V3Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            Text("按当前家业缺口智能推荐，奖励明确可见；全部自愿，不观看不影响月报结算。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+            offers.forEach { offer ->
+                val alreadyClaimed = offer.key in claimedKeys
+                V3SmallButton(
+                    if (alreadyClaimed) "已领取 · ${offer.title}" else offer.title,
+                    Modifier.fillMaxWidth(),
+                    selected = !alreadyClaimed,
+                    enabled = !alreadyClaimed && !loading && dailyRemaining > 0
+                ) {
+                    confirmOffer = offer
+                }
+                if (!alreadyClaimed) {
+                    Text(offer.subtitle, color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp)
+                }
+            }
+            if (dailyRemaining <= 0 && claimedCount < offers.size) {
+                Text("今日奖励次数已用完，未领取的本月福缘会保留，可明日再领。", color = V3Red, fontSize = 11.sp)
+            }
+        }
         if (report.conclusion.isNotBlank()) {
             Text("本月结论", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text(report.conclusion, color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
@@ -3452,14 +3622,6 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
                 Text("· $line", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
             }
         }
-        if (!claimed) {
-            Text("本月可选机缘", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(offer.subtitle, color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-            V3SmallButton(offer.title, Modifier.fillMaxWidth(), enabled = !loading) {
-                if (!loading) confirmOffer = true
-            }
-            Text("这是额外奖励，不观看也可直接关闭月报继续游戏。", color = V3Muted, fontSize = 10.sp)
-        }
     }
 }
 
@@ -3489,7 +3651,7 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
         Dialog(onDismissRequest = { confirmBattleReward = false }) {
             V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
                 Text("请军匠战地维护", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Text("是否观看一段激励视频？完整观看并通过奖励校验后，全部军械恢复 18 点耐久。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+                Text("完整观看后，全部军械恢复 25 点耐久并获得 30 两战利银；今日激励奖励剩余 ${claimStore.remainingDailyClaims()} 次。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
                 Text("不观看也可直接收兵结算，不影响战斗结果。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     V3SmallButton("关闭", Modifier.weight(1f)) { confirmBattleReward = false }
@@ -3500,16 +3662,21 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                             controller.showInfo("当前页面无法打开激励视频。")
                             return@V3SmallButton
                         }
+                        if (!claimStore.canClaimToday()) {
+                            controller.showInfo("今日激励奖励已达 ${RewardClaimStore.DAILY_REWARD_LIMIT} 次上限，明日再请军匠援助。")
+                            return@V3SmallButton
+                        }
                         RewardedAdController.show(
                             activity = act,
                             onLoadingChanged = { adLoading = it },
                             onRewarded = {
-                                if (!claimStore.hasClaimed(battleRewardKey)) {
-                                    claimStore.markClaimed(battleRewardKey)
+                                if (!claimStore.hasClaimed(battleRewardKey) && claimStore.canClaimToday()) {
+                                    claimStore.markClaimedAndRecordDaily(battleRewardKey)
                                     battleRewardClaimed = true
                                     controller.grantMonthlyReward(
-                                        description = "战地军械维护完成：全部军械耐久 +18。",
-                                        repairDurability = 18
+                                        description = "战地军械维护完成：全部军械耐久 +25、战利银 +30。",
+                                        silver = 30,
+                                        repairDurability = 25
                                     )
                                 }
                             },
@@ -3573,7 +3740,7 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                     battle.roundLog.take(5).forEach { round -> Text("· ${round.text}", color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp) }
                 }
                 if (battle.finished && !battleRewardClaimed) {
-                    Text("战后可选军匠援助：观看一段激励视频，全部军械恢复 18 点耐久。不观看也可直接收兵。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                    Text("战后可选军匠援助：完整观看后全部军械耐久 +25、战利银 +30。不观看也可直接收兵。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
                     V3SmallButton("请军匠战地维护", Modifier.fillMaxWidth(), enabled = !adLoading) {
                         if (!adLoading) confirmBattleReward = true
                     }
