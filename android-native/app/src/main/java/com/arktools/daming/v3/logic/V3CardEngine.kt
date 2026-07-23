@@ -48,6 +48,7 @@ object V3CardEngine {
                 (card.pool != V3CardPool.Crisis || crisisCardApplies(card, state)) &&
                 (card.pool != V3CardPool.Annual || annualCardApplies(card, state)) &&
                 (!card.once || card.id !in state.seenCardIds) &&
+                (card.require == null || meets(card.require, state)) &&
                 (!card.oncePerGeneration || card.id !in generationSeen)
         }
         val selected = selectPriorityCards(state, available, budget(state)).take(MAX_CARDS)
@@ -254,6 +255,17 @@ object V3CardEngine {
             "health" -> patriarch.health
             else -> null
         }
+        // 人丁前提计算
+        val alivePeople = state.people.filter { it.alive }
+        val aliveAdults = alivePeople.count { it.age >= 16 }
+        val aliveChildren = alivePeople.count { it.age < 16 }
+        val patriarchPerson = alivePeople.firstOrNull { it.id == patriarch.personId }
+        val patriarchHasSpouse = patriarchPerson?.spouseId != null &&
+            alivePeople.any { it.id == patriarchPerson.spouseId }
+        val branchCount = state.branches.size
+        val hasBranch = require.requiredBranch == null ||
+            state.branches.any { it.id == require.requiredBranch }
+        val patriarchAge = patriarchPerson?.age ?: 0
         return (require.minSilver == null || state.silver >= require.minSilver) &&
             (require.minGrain == null || state.grain >= require.minGrain) &&
             (require.minInfluence == null || state.influence >= require.minInfluence) &&
@@ -270,7 +282,14 @@ object V3CardEngine {
             (require.minChapter == null || V3ProgressionEngine.currentChapter(state).number >= require.minChapter) &&
             (require.flagRequired == null || require.flagRequired in state.completedStoryFlags) &&
             (require.flagBlocked == null || require.flagBlocked !in state.completedStoryFlags) &&
-            (require.minPatriarchStatValue == null || (stat != null && stat >= require.minPatriarchStatValue))
+            (require.minPatriarchStatValue == null || (stat != null && stat >= require.minPatriarchStatValue)) &&
+            (require.hasSpouse == null || patriarchHasSpouse == require.hasSpouse) &&
+            (require.minChildren == null || aliveChildren >= require.minChildren) &&
+            (require.minAliveAdults == null || aliveAdults >= require.minAliveAdults) &&
+            (require.minAlivePeople == null || alivePeople.size >= require.minAlivePeople) &&
+            (require.minBranchCount == null || branchCount >= require.minBranchCount) &&
+            (require.requiredBranch == null || hasBranch) &&
+            (require.minPatriarchAge == null || patriarchAge >= require.minPatriarchAge)
     }
 
     fun applyInventoryEffects(state: V3GameState, detailLines: MutableList<String>? = null): V3GameState {

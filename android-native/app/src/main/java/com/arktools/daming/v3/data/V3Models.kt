@@ -625,7 +625,15 @@ data class V3CardRequire(
     val flagRequired: String? = null,
     val flagBlocked: String? = null,
     val minPatriarchStat: String? = null, // conduct/stewardship/prestige/health
-    val minPatriarchStatValue: Int? = null
+    val minPatriarchStatValue: Int? = null,
+    // 人丁前提：配偶/子女/支脉
+    val hasSpouse: Boolean? = null,        // 族长已娶
+    val minChildren: Int? = null,          // 族中未成年子女数（<16岁）
+    val minAliveAdults: Int? = null,       // 活着的成年族人（≥16岁）
+    val minAlivePeople: Int? = null,       // 活着的总人数
+    val requiredBranch: String? = null,    // 需已有此支脉（scholar/martial/merchant/sea/second）
+    val minBranchCount: Int? = null,       // 已有支脉数
+    val minPatriarchAge: Int? = null       // 族长最低年龄
 ) {
     fun label(): String? {
         val parts = mutableListOf<String>()
@@ -642,6 +650,12 @@ data class V3CardRequire(
         if (minRouteScore != null) parts += "${minRouteScore.route.label}≥${minRouteScore.score}"
         if (minClanRank != null) parts += "品第≥$minClanRank"
         if (minChapter != null) parts += "第${minChapter}章后"
+        if (hasSpouse == true) parts += "已娶妻室"
+        if (minChildren != null) parts += "子嗣≥${minChildren}"
+        if (minAliveAdults != null) parts += "成丁≥${minAliveAdults}"
+        if (requiredBranch != null) parts += "需立${requiredBranch}脉"
+        if (minBranchCount != null) parts += "支脉≥${minBranchCount}"
+        if (minPatriarchAge != null) parts += "家主≥${minPatriarchAge}岁"
         return if (parts.isEmpty()) null else parts.joinToString(" · ")
     }
 }
@@ -708,7 +722,8 @@ data class V3MonthlyCard(
     val choices: List<V3CardChoice>,
     val minChapter: Int = 1,
     val maxChapter: Int = 6,
-    val crisisLevel: Int = 0 // 1粮荒、2民怨、3庄乱；0表示普通卡
+    val crisisLevel: Int = 0, // 1粮荒、2民怨、3庄乱；0表示普通卡
+    val require: V3CardRequire? = null // 卡级前置条件：不满足则整卡不出现
 )
 
 @Serializable

@@ -1030,7 +1030,7 @@ object V3EventEngine {
 
     private fun eventMatchesState(event: V3ActiveEvent, state: V3GameState): Boolean {
         val personOk = event.choices.all { choice ->
-            choice.personId == null || state.people.any { it.id == choice.personId && it.alive && event.body.contains(it.name) }
+            choice.personId == null || state.people.any { it.id == choice.personId && it.alive }
         }
         val siteOk = event.choices.all { choice -> choice.siteId == null || state.sites.any { it.id == choice.siteId } }
         val branchIds = state.branches.map { it.id }.toSet()

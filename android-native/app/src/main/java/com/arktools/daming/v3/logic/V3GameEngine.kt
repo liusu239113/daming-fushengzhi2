@@ -2140,11 +2140,26 @@ object V3GameEngine {
                     else -> 1
                 } + crisisRisk - clinicLevel
                 if (nextIllnessMonths >= recoveryMonths && healthSeed % 4 != 0) {
-                    lines += "${person.name}经调养${if (clinicLevel > 0) "并由医馆诊治" else ""}，${person.illness}已经痊愈。"
+                    val recoverText = if (clinicLevel > 0) {
+                        "经医馆悉心诊治、汤药调理"
+                    } else {
+                        "在家延医煎药静养多日"
+                    }
+                    lines += "${person.name}$recoverText，${person.illness}已渐痊愈，精神稍复。"
                     person.copy(illness = null, illnessMonths = 0, fatigue = (person.fatigue - 12 - clinicLevel * 3).coerceAtLeast(0))
                 } else if (severeRisk > 0 && healthSeed < severeRisk && healthLivingCount > 1) {
                     healthLivingCount -= 1
-                    lines += "${person.name}因${person.illness}沉疴不治离世；${if (clinicLevel > 0) "医馆已尽力救治" else "族中尚无医馆可施救"}。"
+                    val deathVerb = when (person.illness) {
+                        "风寒" -> "寒热转剧，汤药无效"
+                        "暑疫" -> "疫毒入里，高热不退"
+                        else -> "病势日沉"
+                    }
+                    val rescueText = if (clinicLevel > 0) {
+                        "医馆郎中已尽力施救，奈何药石罔效"
+                    } else {
+                        "族中无良医，仓促间无从救治"
+                    }
+                    lines += "${person.name}${deathVerb}，$rescueText，竟于本月溘然长逝。"
                     person.copy(
                         alive = false,
                         spouseId = null,
@@ -2158,7 +2173,14 @@ object V3GameEngine {
                         deathCause = person.illness
                     )
                 } else {
-                    if (nextIllnessMonths == 2) lines += "${person.name}的${person.illness}仍未痊愈，疲劳增加；提升医馆可缩短病程并降低病亡风险。"
+                    if (nextIllnessMonths == 2) {
+                        val lingerText = if (clinicLevel > 0) {
+                            "医馆仍在诊治，尚需静养"
+                        } else {
+                            "家中延医服药，仍缠绵榻上"
+                        }
+                        lines += "${person.name}的${person.illness}仍未痊愈，$lingerText，神色倦怠。"
+                    }
                     person.copy(illnessMonths = nextIllnessMonths, fatigue = (person.fatigue + 4).coerceAtMost(100))
                 }
             } else {
@@ -2181,7 +2203,17 @@ object V3GameEngine {
                         1 -> "暑疫"
                         else -> "积劳成疾"
                     }
-                    lines += "${person.name}染上$illness。${if (clinicLevel > 0) "医馆已收治，预计病程会缩短。" else "县中医馆尚未建成，病情恶化风险较高。"}"
+                    val onsetDesc = when (illness) {
+                        "风寒" -> "偶感风寒，寒热交作，卧病在榻"
+                        "暑疫" -> "染时气暑疫，上吐下泻，高热不退"
+                        else -> "连日操劳，气血两亏，竟致一病不起"
+                    }
+                    val clinicHint = if (clinicLevel > 0) {
+                        "医馆闻讯已遣郎中前来诊视，汤药齐备。"
+                    } else {
+                        "族中暂无良医，只得自延乡野郎中，汤药亦不齐备。"
+                    }
+                    lines += "${person.name}$onsetDesc。$clinicHint"
                     person.copy(illness = illness, illnessMonths = 1, currentTask = null, assignedSiteId = null, trainingFocus = null)
                 } else {
                     person
@@ -2221,7 +2253,7 @@ object V3GameEngine {
                         deathCause = cause
                     )
                 } else if (person.fatigue >= 70) {
-                    lines += "${person.name}积劳过重，族老建议暂缓派遣。"
+                    lines += "${person.name}近日操劳过甚，面带倦容，族老劝其暂且歇息，不宜再派差事。"
                     person.copy(loyalty = (person.loyalty - 2).coerceAtLeast(0))
                 } else {
                     person

@@ -3017,7 +3017,11 @@ private fun V3GoalRow(state: V3GameState, goal: V3AnnualGoal, controller: V3Game
             if (!reached) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(card.blockers.firstOrNull().orEmpty(), color = V3Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    V3SmallButton(card.actionLabel, Modifier.widthIn(min = 86.dp)) { controller.switchScreen(card.destination) }
+                    val goalOnTarget = controller.screen == card.destination
+                    V3SmallButton(
+                        if (goalOnTarget) "就地办理" else card.actionLabel,
+                        Modifier.widthIn(min = 86.dp)
+                    ) { controller.switchScreen(card.destination) }
                 }
             }
         }
@@ -3380,8 +3384,13 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
             ) {
                 Text("下月首要行动 · ${report.nextActionTitle}", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Text(report.nextActionReason, color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
-                V3SmallButton(report.nextActionLabel.ifBlank { "前往处理" }, Modifier.fillMaxWidth(), selected = true) {
-                    controller.clearReportAndNavigate(report.nextActionDestination)
+                val onTargetScreen = controller.screen == report.nextActionDestination
+                V3SmallButton(
+                    if (onTargetScreen) "继续经营" else report.nextActionLabel.ifBlank { "前往处理" },
+                    Modifier.fillMaxWidth(), selected = true
+                ) {
+                    if (onTargetScreen) controller.clearReport()
+                    else controller.clearReportAndNavigate(report.nextActionDestination)
                 }
             }
         }
