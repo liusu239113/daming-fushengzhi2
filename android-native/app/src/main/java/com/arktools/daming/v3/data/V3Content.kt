@@ -213,11 +213,11 @@ object V3Content {
             V3VisitorChapter(6, "日知旧闻", "临别时，他把地方掌故写入札记，提醒族长家声必须落在实事上。", "dream_record")
         )),
         V3Visitor("wang_fuzhi", "王夫之", "衡岳遗民", "scholar", listOf(
-            V3VisitorChapter(4, "衡岳来客", "他在山馆谈兵事与家国，却先问族中是否还有可以安顿老幼的粮仓。", "agriculture_compendium"),
+            V3VisitorChapter(4, "衡岳来客", "他在山馆谈兵事与家国，却先问族中是否还有可以安顿老幼的粮仓。", "dream_record"),
             V3VisitorChapter(6, "船山遗稿", "一卷手稿留在族学，后辈从字里行间读到乱世仍须自立的骨气。", "family_chronicle")
         )),
         V3Visitor("huang_zongxi", "黄宗羲", "东浙学者", "scholar", listOf(
-            V3VisitorChapter(3, "学校议", "他谈地方学校，不把读书只看成一房一姓的门面。", "agriculture_compendium"),
+            V3VisitorChapter(3, "学校议", "他谈地方学校，不把读书只看成一房一姓的门面。", "family_chronicle"),
             V3VisitorChapter(5, "明夷待访", "他留下几页论学札记，族中从此把族学与乡里公议放在一起。", "dream_record")
         )),
         V3Visitor("fang_yizhi", "方以智", "博物学人", "scholar", listOf(
@@ -256,7 +256,7 @@ object V3Content {
             V3VisitorChapter(4, "边堡求粮", "边镇来使只带一张军需清单，族长必须在家底与大势间落笔。", "military_letter"),
             V3VisitorChapter(5, "城守札记", "他把守城与守庄的道理写在一张纸上，乡勇从此有了分班轮值的章法。", "mountain_route")
         )),
-        V3Visitor("sun_chuanting_scholar", "孙承宗", "督边老臣", "martial", listOf(
+        V3Visitor("sun_chuanting_scholar", "孙传庭", "儒将经略", "martial", listOf(
             V3VisitorChapter(3, "边墙论守", "他看过庄墙，指出真正的防线不只是一道土墙，还包括粮路与人心。", "mountain_route"),
             V3VisitorChapter(5, "堡寨成法", "一份边堡布置图留在族中，六门守庄从此有了旧例可依。", "military_letter")
         )),
@@ -314,7 +314,7 @@ object V3Content {
         )),
         V3Visitor("li_shi", "李时珍", "本草医家", "healer", listOf(
             V3VisitorChapter(2, "药圃问诊", "他教族人把荒地分出一角种药，灾年少一分求医的路。", "new_farming_manual"),
-            V3VisitorChapter(4, "本草留方", "一册验方留在医馆，乡民关系与族中身板都因此更稳。", "agriculture_compendium")
+            V3VisitorChapter(4, "本草留方", "一册验方留在医馆，乡民关系与族中身板都因此更稳。", "dream_record")
         ))
     )
 
@@ -1392,6 +1392,7 @@ object V3Content {
             "聚族自保" -> initialAnnualGoals.first { it.id == "safe_3" }
             "忠君报国" -> initialAnnualGoals.first { it.id == "control_4" }
             "开海远行" -> initialAnnualGoals.first { it.id == "silver_220" }
+            "明哲保身" -> initialAnnualGoals.first { it.id == "cohesion_72" }
             else -> initialAnnualGoals.first { it.id == "cohesion_72" }
         }
         val crisisGoal = when (crisis) {
@@ -1598,6 +1599,7 @@ object V3Content {
             "聚族自保" -> V3Route.Fortress
             "忠君报国" -> V3Route.Loyalist
             "开海远行" -> V3Route.Overseas
+            "明哲保身" -> V3Route.Hermit
             else -> V3Route.Hermit
         }
         routeBonuses += creedRoute to 12
@@ -1759,6 +1761,8 @@ object V3Content {
             people = initialPeople.map { if (it.id == 1) it.copy(name = founderName, ageMonths = it.age * 12, surname = surname) else it },
             branches = initialBranches.map { if (it.id == "main") it.copy(leaderName = founderName, desc = "一人开族，尚无旁支。先成家、置产、育子，再谈宗族兴旺。") else it },
             sites = initialSites.map { if (it.id == "shrine") it.copy(name = "${surname}氏宗祠") else it },
+            estateAssets = initialEstateAssets.map { it.copy() },
+            worldRegions = initialWorldRegions.map { it.copy() },
             annualGoals = profile.annualGoals,
             routeScores = profile.routeScores,
             patriarch = V3Patriarch(

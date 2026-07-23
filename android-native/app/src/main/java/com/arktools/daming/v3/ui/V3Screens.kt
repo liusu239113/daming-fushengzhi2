@@ -47,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -321,8 +322,10 @@ fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: ()
     }
 }
 
-private fun Modifier.horizontalMapDrag(onDrag: (Offset) -> Unit): Modifier =
-    pointerInput(onDrag) {
+@Composable
+private fun rememberHorizontalMapDragHandler(onDrag: (Offset) -> Unit): Modifier {
+    val latestOnDrag = rememberUpdatedState(onDrag)
+    return Modifier.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             var previous = down.position
@@ -340,16 +343,19 @@ private fun Modifier.horizontalMapDrag(onDrag: (Offset) -> Unit): Modifier =
                 }
                 if (draggingMap == true) {
                     change.consume()
-                    onDrag(delta)
+                    latestOnDrag.value(delta)
                 } else if (draggingMap == false) {
                     break
                 }
             }
         }
     }
+}
 
-private fun Modifier.freeMapDrag(onDrag: (Offset) -> Unit): Modifier =
-    pointerInput(onDrag) {
+@Composable
+private fun rememberFreeMapDragHandler(onDrag: (Offset) -> Unit): Modifier {
+    val latestOnDrag = rememberUpdatedState(onDrag)
+    return Modifier.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             var previous = down.position
@@ -365,11 +371,12 @@ private fun Modifier.freeMapDrag(onDrag: (Offset) -> Unit): Modifier =
                 if (!dragging && accumulated.getDistance() >= viewConfiguration.touchSlop) dragging = true
                 if (dragging) {
                     change.consume()
-                    onDrag(delta)
+                    latestOnDrag.value(delta)
                 }
             }
         }
     }
+}
 
 private fun Modifier.guideTarget(
     focus: V3GuideFocus,
@@ -1542,7 +1549,7 @@ private fun V3GenealogyTree(
                 .clip(V3SoftShape)
                 .background(V3Rice, V3SoftShape)
                 .onSizeChanged { viewportSize = it }
-                .freeMapDrag { dragAmount ->
+                .then(rememberFreeMapDragHandler { dragAmount ->
                     val viewportWidth = viewportSize.width.toFloat()
                     val viewportHeight = viewportSize.height.toFloat()
                     val centeredX = (viewportWidth - contentWidthPx) / 2f
@@ -1553,7 +1560,7 @@ private fun V3GenealogyTree(
                         (pan.x + dragAmount.x).coerceIn(minXPan, maxXPan),
                         (pan.y + dragAmount.y).coerceIn(minYPan, 0f)
                     )
-                }
+                })
         ) {
             val centeredX = (viewportSize.width.toFloat() - contentWidthPx) / 2f
             Box(
@@ -1668,6 +1675,7 @@ private fun v3AvatarFor(person: V3Person): String {
     }
     val variants = GameImages.v3AvatarVariants[stageKey]
         ?: GameImages.v3AvatarVariants.getValue("baby")
+    if (variants.isEmpty()) return GameImages.v3AvatarPortraits.getValue("male_elder")
     val stableIndex = Math.floorMod(person.id * 31 + stageKey.hashCode(), variants.size)
     return variants[stableIndex]
 }
@@ -2008,12 +2016,12 @@ private fun V3WorldVisualMap(
         val minPanX = frameWidthPx - mapWidthPx
         val minPanY = frameHeightPx - mapHeightPx
         val boundedPan = Offset(pan.x.coerceIn(minPanX, 0f), pan.y.coerceIn(minPanY, 0f))
-        Box(Modifier.fillMaxSize().horizontalMapDrag { dragAmount ->
+        Box(Modifier.fillMaxSize().then(rememberHorizontalMapDragHandler { dragAmount ->
             pan = Offset(
                 (pan.x + dragAmount.x).coerceIn(minPanX, 0f),
                 (pan.y + dragAmount.y).coerceIn(minPanY, 0f)
             )
-        }) {
+        })) {
             Box(
                 Modifier
                     .wrapContentSize(Alignment.TopStart, unbounded = true)
@@ -2154,12 +2162,12 @@ private fun V3CountyMapView(
             }
             val boundedPan = Offset(pan.x.coerceIn(minPanX, 0f), pan.y.coerceIn(minPanY, 0f))
             Box(
-                Modifier.fillMaxSize().freeMapDrag { dragAmount ->
+                Modifier.fillMaxSize().then(rememberFreeMapDragHandler { dragAmount ->
                     pan = Offset(
                         (pan.x + dragAmount.x).coerceIn(minPanX, 0f),
                         (pan.y + dragAmount.y).coerceIn(minPanY, 0f)
                     )
-                }
+                })
             ) {
                 Box(
                     Modifier
@@ -2695,6 +2703,16 @@ private fun V3TimeControls(
 
     // 全屏静态遮罩：只有 adLoading=true 时显示；由 onLoadingChanged(false) 可靠关闭
     AdLoadingOverlay(visible = adLoading, label = "倍速权益加载中…")
+    // 超时保护：若广告 SDK 30 秒内未回调 onLoadingChanged(false)，自动关闭遮罩避免卡死
+    LaunchedEffect(adLoading) {
+        if (adLoading) {
+            delay(30_000L)
+            if (adLoading) {
+                adLoading = false
+                controller.showInfo("广告加载超时，请检查网络后重试。")
+            }
+        }
+    }
 
     // 观看前确认弹窗
     confirmSpeed?.let { speed ->
@@ -3151,7 +3169,7 @@ private fun V3SmallButton(text: String, modifier: Modifier = Modifier, enabled: 
 private fun V3EventDialog(event: V3ActiveEvent, controller: V3GameController) {
     val eventTutorial = controller.state.tutorialStep == 18
     val localTargets = remember { mutableStateMapOf<V3GuideFocus, Rect>() }
-    Dialog(onDismissRequest = {}) {
+    Dialog(onDismissRequest = { controller.showInfo("请先做出选择") }) {
         Box {
             V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 500.dp)) {
                 Text(event.title, color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -3232,7 +3250,12 @@ private fun V3Dialog(
                                 Modifier.guideTarget(V3GuideFocus.MonthlyReportDismiss, localTargets)
                             } else Modifier
                         ),
-                    onClick = onDismiss
+                    onClick = {
+                        if (isReportTutorial) {
+                            tutorialController?.advanceTutorial(17)
+                        }
+                        onDismiss()
+                    }
                 )
             }
             if (isReportTutorial && tutorialState != null && tutorialController != null) {
@@ -3251,7 +3274,7 @@ private fun V3Dialog(
 private fun V3ExamDialog(session: com.arktools.daming.v3.data.V3ExamSession, controller: V3GameController) {
     val question = V3GameEngine.examQuestion(session)
     if (question != null) {
-        Dialog(onDismissRequest = {}) {
+        Dialog(onDismissRequest = { controller.showInfo("请先完成考题") }) {
             V3ImagePanel(GameImages.V3UiExamPaper, Modifier.widthIn(max = 500.dp)) {
                 Text("${session.stage.label}考题", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Text(question.question, color = V3Ink, fontSize = 16.sp, lineHeight = 24.sp)
@@ -3261,6 +3284,8 @@ private fun V3ExamDialog(session: com.arktools.daming.v3.data.V3ExamSession, con
                 Text("提示：学识和谋略越高，答错时也越可能靠底子补救。", color = V3Muted, fontSize = 12.sp)
             }
         }
+    } else {
+        LaunchedEffect(Unit) { controller.cancelExam("考题数据异常，科举已自动取消。") }
     }
 }
 
@@ -3327,6 +3352,16 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
     var claimed by remember(offer.key) { mutableStateOf(claimStore.hasClaimed(offer.key)) }
 
     AdLoadingOverlay(visible = loading, label = "机缘加载中…")
+    // 超时保护：若广告 SDK 30 秒内未回调 onLoadingChanged(false)，自动关闭遮罩避免卡死
+    LaunchedEffect(loading) {
+        if (loading) {
+            delay(30_000L)
+            if (loading) {
+                loading = false
+                controller.showInfo("广告加载超时，请检查网络后重试。")
+            }
+        }
+    }
 
     if (confirmOffer && !claimed) {
         Dialog(onDismissRequest = { confirmOffer = false }) {
@@ -3439,6 +3474,16 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
     var battleRewardClaimed by remember(battleRewardKey) { mutableStateOf(claimStore.hasClaimed(battleRewardKey)) }
 
     AdLoadingOverlay(visible = adLoading, label = "军匠联络中…")
+    // 超时保护：若广告 SDK 30 秒内未回调 onLoadingChanged(false)，自动关闭遮罩避免卡死
+    LaunchedEffect(adLoading) {
+        if (adLoading) {
+            delay(30_000L)
+            if (adLoading) {
+                adLoading = false
+                controller.showInfo("广告加载超时，请检查网络后重试。")
+            }
+        }
+    }
 
     if (confirmBattleReward && battle.finished && !battleRewardClaimed) {
         Dialog(onDismissRequest = { confirmBattleReward = false }) {
@@ -3477,7 +3522,10 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
         }
     }
 
-    Dialog(onDismissRequest = {}) {
+    Dialog(onDismissRequest = {
+        if (battle.phase == V3BattlePhase.Draft) controller.cancelBattle()
+        else controller.showInfo("战斗中无法后撤，请完成本轮结算")
+    }) {
         V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 540.dp)) {
             Text("军务出征 · ${battle.target}", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Text("敌势 ${battle.enemyPower} · 风险 ${battle.risk} · 第${battle.turn + 1}阵。${if (battle.turn % 2 == 0) "我方先手" else "敌方先手"}", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
@@ -3548,8 +3596,11 @@ private fun V3BattleGrid(fighters: List<V3Combatant>, state: V3GameState, enemy:
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             row.forEach { fighter ->
                 val person = fighter.personId?.let { id -> state.people.firstOrNull { it.id == id } }
-                val enemyIndex = ((fighter.name.hashCode() and Int.MAX_VALUE) % GameImages.v3EnemyPortraits.size)
-                val enemyAvatar = GameImages.v3EnemyPortraits.getOrNull(enemyIndex)
+                val enemyPortraits = GameImages.v3EnemyPortraits
+                val enemyAvatar = if (enemy && enemyPortraits.isNotEmpty()) {
+                    val enemyIndex = ((fighter.name.hashCode() and Int.MAX_VALUE) % enemyPortraits.size)
+                    enemyPortraits.getOrNull(enemyIndex)
+                } else null
                 V3CombatantCard(
                     fighter = fighter,
                     modifier = Modifier.weight(1f),
@@ -3659,7 +3710,7 @@ private fun V3CombatantCard(
 
 @Composable
 private fun V3ConquestDialog(target: String, enemyPower: Int, scale: String, controller: V3GameController) {
-    Dialog(onDismissRequest = {}) {
+    Dialog(onDismissRequest = controller::cancelConquest) {
         V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 460.dp)) {
             Text(scale, color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Text("目标：$target", color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -4048,7 +4099,7 @@ private fun V3VisitorDialog(
     state: V3GameState,
     controller: V3GameController
 ) {
-    Dialog(onDismissRequest = {}) {
+    Dialog(onDismissRequest = { controller.showInfo("请先做出选择") }) {
         V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 500.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -4139,7 +4190,7 @@ private fun V3CardPanel(card: V3MonthlyCard, state: V3GameState, controller: V3G
 
 @Composable
 private fun V3HexBattleDialog(battle: V3HexBattleState, controller: V3GameController) {
-    V3Dialog(title = "守庄战 · 第${battle.turn}轮", onDismiss = {}) {
+    V3Dialog(title = "守庄战 · 第${battle.turn}轮", onDismiss = { controller.showInfo("请先完成守庄战") }) {
         Text("补给 ${battle.supply} · 敌方动量 ${battle.enemyMomentum}", color = if (battle.supply <= 20 || battle.enemyMomentum >= 75) V3Red else V3Muted, fontSize = 13.sp)
         Text("枪阵克骑突，骑突克弓矢，弓矢克枪阵。补给耗尽或敌方动量到100，守庄战即告败。", color = V3Muted, fontSize = 13.sp, lineHeight = 19.sp)
         battle.tiles.forEach { tile ->

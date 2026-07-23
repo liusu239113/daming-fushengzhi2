@@ -187,7 +187,7 @@ object V3ProgressionEngine {
             grain = (state.grain + reward.grain).coerceAtMost(999_999),
             influence = (state.influence + reward.influence).coerceIn(0, 100),
             cohesion = (state.cohesion + reward.cohesion).coerceIn(0, 100),
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             claimedChapterRewards = state.claimedChapterRewards + chapter.name,
             pendingReports = listOf(message),

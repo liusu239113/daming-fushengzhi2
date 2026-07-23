@@ -218,7 +218,7 @@ object V3GameEngine {
         val normalizedHexBattleState = normalizedEncounterState.second
         val normalizedConquestState = normalizedEncounterState.third
         if (
-            migratedArmy.total() == state.militia &&
+            migratedArmy == state.army &&
             mergedRegions.size == state.worldRegions.size &&
             migratedPeople == state.people &&
             migratedStateSurname == state.surname &&
@@ -237,7 +237,7 @@ object V3GameEngine {
         return state.copy(
             surname = migratedStateSurname,
             founderName = migratedFounderName,
-            militia = migratedArmy.total(),
+            militia = migratedArmy.militia,
             army = migratedArmy,
             people = migratedPeople,
             worldRegions = mergedRegions,
@@ -535,7 +535,7 @@ object V3GameEngine {
             worldRegions = nextRegions,
             unificationProgress = nextProgress,
             conquestState = null,
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             silver = state.silver + (if (victory) conquest.rewardSilver else 0),
             grain = state.grain + (if (victory) conquest.rewardGrain else 0),
@@ -669,7 +669,7 @@ object V3GameEngine {
             grain = (state.grain - plan.costGrain + plan.grain).coerceAtLeast(-999),
             influence = (state.influence + plan.influence).coerceIn(0, 100),
             cohesion = (state.cohesion + plan.cohesion).coerceIn(0, 100),
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             relations = plan.relations(state.relations),
             routeScores = state.routeScores + (plan.route to ((state.routeScores[plan.route] ?: 0) + plan.routeGain)),
@@ -740,7 +740,7 @@ object V3GameEngine {
             spouseId = target.id,
             spouseSinceMonth = state.year * 12 + state.month,
             ageMonths = candidate.age * 12,
-            surname = candidate.surname,
+            surname = candidate.surname.ifBlank { candidate.name.take(1) },
             spouseCandidateId = candidate.id
         )
         val people = state.people.map { person ->
@@ -938,7 +938,7 @@ object V3GameEngine {
             grain = grain.coerceAtLeast(-999),
             influence = influence.coerceIn(0, 100),
             cohesion = cohesion.coerceIn(0, 100),
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             people = treatedPeople,
             relations = relations,
@@ -1246,7 +1246,7 @@ object V3GameEngine {
         return state.copy(
             silver = state.silver - silverCost,
             grain = state.grain - grainCost,
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             routeScores = state.routeScores + (V3Route.Fortress to ((state.routeScores[V3Route.Fortress] ?: 0) + if (type == V3TroopType.Militia) 1 else 2)),
             pendingReports = listOf("已募${type.label}${count}名，耗银$silverCost、粮$grainCost。当前兵册共${nextArmy.total()}人。"),
@@ -1375,8 +1375,22 @@ object V3GameEngine {
                 val crit = ((battle.turn + index + attacker.power) % 11) == 0
                 val damage = max(4, attacker.power + variance + (if (crit) 10 else 0) - defender.defense / 5)
                 val text = if (allyTurn) "${attacker.name}先手${attacker.role}击${defender.name}，${if (crit) "会心" else "伤"}$damage。" else "${attacker.name}反攻${defender.name}，${if (crit) "重创" else "伤"}$damage。"
-                if (allyTurn) nextEnemies = nextEnemies.map { if (it.name == defender.name) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
-                else nextAllies = nextAllies.map { if (it.name == defender.name) it.copy(hp = (it.hp - damage).coerceAtLeast(0)) else it }
+                if (allyTurn) {
+                    // 按对象身份命中对应敌人（避免同名敌人全部受伤）
+                    val defenderListIndex = nextEnemies.indexOfFirst { it === defender }
+                    if (defenderListIndex >= 0) {
+                        nextEnemies = nextEnemies.toMutableList().apply {
+                            this[defenderListIndex] = defender.copy(hp = (defender.hp - damage).coerceAtLeast(0))
+                        }
+                    }
+                } else {
+                    val defenderListIndex = nextAllies.indexOfFirst { it === defender }
+                    if (defenderListIndex >= 0) {
+                        nextAllies = nextAllies.toMutableList().apply {
+                            this[defenderListIndex] = defender.copy(hp = (defender.hp - damage).coerceAtLeast(0))
+                        }
+                    }
+                }
                 newLogs += V3BattleRound(attacker.name, defender.name, damage, text)
             }
         }
@@ -1387,7 +1401,11 @@ object V3GameEngine {
             roundLog = (newLogs.reversed() + battle.roundLog).take(10)
         )
         val ended = nextAllies.none { it.hp > 0 } || nextEnemies.none { it.hp > 0 } || nextBattle.turn >= 18
-        return if (ended) state.copy(battleState = nextBattle.copy(phase = V3BattlePhase.Finished, finished = true, victory = nextEnemies.none { it.hp > 0 } || nextAllies.sumOf { it.hp } >= nextEnemies.sumOf { it.hp })) else state.copy(battleState = nextBattle)
+        val alliesAllDead = nextAllies.none { it.hp > 0 }
+        val enemiesAllDead = nextEnemies.none { it.hp > 0 }
+        // 超时（18回合仍未全歼）按败绩处理：只有敌人全灭才判胜
+        val timeoutVictory = enemiesAllDead
+        return if (ended) state.copy(battleState = nextBattle.copy(phase = V3BattlePhase.Finished, finished = true, victory = timeoutVictory)) else state.copy(battleState = nextBattle)
     }
 
     fun resolveBattle(state: V3GameState): V3GameState {
@@ -1409,7 +1427,9 @@ object V3GameEngine {
     private fun finishBattle(state: V3GameState, battle: V3BattleState): V3GameState {
         val victory = battle.victory
         val loss = if (victory) max(3, battle.enemyPower / 22) else max(8, battle.enemyPower / 12)
-        val targetSite = state.sites.maxByOrNull { it.risk }
+        // 优先按战斗记录的 target 名称匹配；若旧存档无匹配则回退到风险最高地点
+        val targetSite = state.sites.firstOrNull { it.name == battle.target }
+            ?: state.sites.maxByOrNull { it.risk }
         val nextSites = state.sites.map { site ->
             if (site.id == targetSite?.id) {
                 val risk = (site.risk - (if (victory) 24 else 8)).coerceAtLeast(0)
@@ -1422,6 +1442,12 @@ object V3GameEngine {
             if (battle.selectedPersonIds.contains(it.id)) {
                 val alive = survivingIds.contains(it.id)
                 it.copy(
+                    alive = alive,
+                    deathYear = if (!alive) state.year else it.deathYear,
+                    deathMonth = if (!alive) state.month else it.deathMonth,
+                    deathCause = if (!alive) (if (victory) "战伤殉命" else "阵亡") else it.deathCause,
+                    currentTask = if (!alive) null else it.currentTask,
+                    assignedSiteId = if (!alive) null else it.assignedSiteId,
                     merit = (it.merit + (if (victory) 8 else 3)).coerceAtMost(999),
                     martial = (it.martial + (if (victory) 2 else 1)).coerceAtMost(100),
                     fatigue = (it.fatigue + if (alive) 18 else 35).coerceIn(0, 100),
@@ -1431,20 +1457,29 @@ object V3GameEngine {
         }
         val equippedIds = battle.selectedPersonIds.toSet()
         val durabilityLoss = if (victory) 4 else 9
+        val brokenNames = mutableListOf<String>()
         val nextEquipment = state.equipment.map { item ->
             if (item.ownerId in equippedIds && item.durability > 0) {
-                item.copy(durability = (item.durability - durabilityLoss).coerceAtLeast(0))
+                val nextDurability = (item.durability - durabilityLoss).coerceAtLeast(0)
+                if (nextDurability == 0) {
+                    brokenNames += item.name
+                    // 耐久耗尽：保留物品待修，但卸除持有者（避免占槽）
+                    item.copy(durability = 0, ownerId = null)
+                } else {
+                    item.copy(durability = nextDurability)
+                }
             } else {
                 item
             }
         }
         val nextArmy = state.army.lose(loss)
-        val message = if (victory) "讨伐【${battle.target}】得胜。参战族人立下军功，地点风险下降；参战军械耐久-$durabilityLoss。" else "讨伐【${battle.target}】失利。族人带伤归来，参战军械耐久-$durabilityLoss，建议募兵、修械、培养武艺后再战。"
+        val brokenNote = if (brokenNames.isNotEmpty()) "另有${brokenNames.joinToString("、")}耐久耗尽，已卸入武库待修。" else ""
+        val message = if (victory) "讨伐【${battle.target}】得胜。参战族人立下军功，地点风险下降；参战军械耐久-$durabilityLoss。$brokenNote" else "讨伐【${battle.target}】失利。族人带伤归来，参战军械耐久-$durabilityLoss，建议募兵、修械、培养武艺后再战。$brokenNote"
         return state.copy(
             sites = nextSites,
             people = nextPeople,
             equipment = nextEquipment,
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             silver = state.silver + (if (victory) battle.rewardSilver else 0),
             influence = (state.influence + (if (victory) battle.rewardInfluence else 1)).coerceIn(0, 100),
@@ -1479,7 +1514,7 @@ object V3GameEngine {
     }
 
     private fun battleCombatant(person: V3Person, troopType: V3TroopType = V3TroopType.Militia, troopCount: Int = 0, state: V3GameState): V3Combatant {
-        val owned = troopCount.coerceAtLeast(1)
+        val owned = troopCount.coerceAtLeast(0)
         val equipment = state.equipment.filter { it.ownerId == person.id && it.durability > 0 }
         val equipmentAttack = equipment.sumOf { it.attack }
         val equipmentDefense = equipment.sumOf { it.defense }
@@ -1758,7 +1793,6 @@ object V3GameEngine {
 
         val nextRoutes = state.routeScores.mapValues { (route, value) -> value + (routeDelta[route] ?: 0) }
         val grownPeople = processLifeCycle(growPeople(state.people, assignmentResults, detailLines, state.month == 12), state, detailLines, state.month == 12)
-        val nextBranches = updateBranches(state.branches, grownPeople, assignmentResults, silverDelta, grainDelta, detailLines)
         val nextSites = sites.map { it.copy(assignedPersonId = null) }
         val nextArmy = if (militiaDelta >= 0) state.army.add(V3TroopType.Militia, militiaDelta) else state.army.lose(-militiaDelta)
         var settledState = state.copy(
@@ -1768,11 +1802,11 @@ object V3GameEngine {
             grain = (state.grain + grainDelta).coerceAtLeast(-999),
             influence = (state.influence + influenceDelta).coerceIn(0, 100),
             cohesion = (state.cohesion + cohesionDelta).coerceIn(0, 100),
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             sites = nextSites,
             people = grownPeople,
-            branches = nextBranches,
+            branches = state.branches,
             relations = relations,
             routeScores = nextRoutes,
             pendingReports = emptyList()
@@ -1783,6 +1817,12 @@ object V3GameEngine {
         settledState = advancePatriarch(settledState, detailLines)
         settledState = unlockAutomaticPlaques(settledState, detailLines)
         settledState = V3CardEngine.refreshMonth(settledState)
+        // 房支结算放在级联效果之后：使用最终银/粮变化与最终人口，避免房支看到危机/库存/添丁前的旧数值
+        val finalSilverDelta = settledState.silver - state.silver
+        val finalGrainDelta = settledState.grain - state.grain
+        settledState = settledState.copy(
+            branches = updateBranches(state.branches, settledState.people, assignmentResults, finalSilverDelta, finalGrainDelta, detailLines)
+        )
 
         val summary = mutableListOf<String>()
         if (state.month == 12) {
@@ -1947,6 +1987,18 @@ object V3GameEngine {
         val next = current.copy(health = nextHealth, term = current.term + 1)
         if (nextHealth > 0 && holder != null) return state.copy(patriarch = next)
         val candidates = patriarchCandidates(state)
+        if (candidates.isEmpty()) {
+            // 无成年继任者：若尚有未成年族人在世，强制族长续命数月（等孩童成年），避免"族长病逝"死锁
+            val hasMinors = alivePeople(state).any { it.age < CHILD_ADULT_AGE }
+            return if (hasMinors) {
+                lines += "族长${current.name}身板虚弱，但族中尚无成年子弟堪当大任，只得勉力撑持，等待幼辈长成。"
+                state.copy(patriarch = current.copy(health = 15, term = current.term + 1))
+            } else {
+                // 真无活人：进入终局
+                lines += "族长${current.name}故去，族中再无后人。"
+                state.copy(patriarch = next, pendingSuccession = true)
+            }
+        }
         lines += if (holder == null) {
             "族长${current.name}已不在，族中需要推举继任者。"
         } else {
@@ -2416,6 +2468,8 @@ object V3GameEngine {
         V3Route.Fortress to person.martial,
         V3Route.Merchant to person.commerce,
         V3Route.Loyalist to person.diplomacy,
+        V3Route.Warlord to (person.martial * 2 / 3 + person.merit / 3),
+        V3Route.Overseas to (person.commerce * 2 / 3 + person.diplomacy / 3),
         V3Route.Hermit to person.loyalty
     ).maxByOrNull { it.second }?.first ?: V3Route.Hermit
 
@@ -2515,7 +2569,8 @@ object V3GameEngine {
                 lines += line
                 goalLines += line
             }
-            val activeGoals = unfinished.takeLast(2).toMutableList()
+            // 保留未完成列表中"未被计入失败通报"的后续目标继续滚动（drop(2) 与上面 take(2) 严格不重叠）
+            val activeGoals = unfinished.drop(2).toMutableList()
             val replacement = nextAnnualGoal(state, activeGoals)
             if (replacement != null && activeGoals.none { it.id == replacement.id }) {
                 activeGoals += replacement.copy(completed = false)

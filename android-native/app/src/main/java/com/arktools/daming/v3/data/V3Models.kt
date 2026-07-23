@@ -145,6 +145,12 @@ data class V3ArmyRoster(
         return copy(militia = nextMilitia, spear = nextSpear, archer = nextArcher, shield = nextShield, cavalry = nextCavalry)
     }
 
+    /** Deduct troops from the militia pool only; never touches professional troops. */
+    fun loseMilitia(amount: Int): V3ArmyRoster {
+        val loss = amount.coerceAtLeast(0).coerceAtMost(militia)
+        return copy(militia = militia - loss)
+    }
+
     fun battlePower(): Int = militia * V3TroopType.Militia.power + spear * V3TroopType.Spear.power + archer * V3TroopType.Archer.power + shield * V3TroopType.Shield.power + cavalry * V3TroopType.Cavalry.power
 }
 
@@ -331,8 +337,8 @@ data class V3SpouseCandidate(
     val gender: V3Gender = V3Gender.Female,
     val age: Int = 19,
     val avatarKey: String = "female_youth",
-    val surname: String = name.take(1),
-    val prototypeId: String = id
+    val surname: String = "",
+    val prototypeId: String = ""
 )
 
 @Serializable
@@ -342,6 +348,7 @@ data class V3UpgradeCost(
     val desc: String
 )
 
+@Serializable
 data class V3RankCost(
     val silver: Int,
     val grain: Int,
@@ -351,6 +358,7 @@ data class V3RankCost(
     val title: String
 )
 
+@Serializable
 data class V3SiteYield(
     val silver: Int = 0,
     val grain: Int = 0,
@@ -360,6 +368,7 @@ data class V3SiteYield(
     val desc: String = ""
 )
 
+@Serializable
 data class V3MonthlyForecast(
     val silverIncome: Int = 0,
     val grainIncome: Int = 0,
@@ -495,14 +504,29 @@ data class V3EventChoice(
     val personFatigueDelta: Int = 0,
     val personMeritDelta: Int = 0,
     val personLoyaltyDelta: Int = 0,
-    val route: V3Route,
-    val routeDelta: Int = 4,
+    val route: V3Route? = null,
+    val routeDelta: Int = 0,
     val branchImpacts: List<V3BranchImpact> = emptyList(),
     val storyFlag: String? = null,
+    val removeFlag: String? = null,
     val createBranch: V3Branch? = null,
     val regionId: String? = null,
     val regionControlDelta: Int = 0,
-    val regionStatus: V3RegionStatus? = null
+    val regionStatus: V3RegionStatus? = null,
+    val refugeesDelta: Int = 0,
+    val garrisonMoraleDelta: Int = 0,
+    val unrestDelta: Int = 0,
+    val rebelHeatDelta: Int = 0,
+    val patriarchConductDelta: Int = 0,
+    val patriarchStewardshipDelta: Int = 0,
+    val patriarchPrestigeDelta: Int = 0,
+    val patriarchHealthDelta: Int = 0,
+    val plaqueId: String? = null,
+    val itemId: String? = null,
+    val biographicalNote: String? = null,
+    val visitorId: String? = null,
+    val visitorProgressDelta: Int? = null,
+    val followUpEventId: String? = null
 )
 
 @Serializable
@@ -586,7 +610,7 @@ data class V3FinalEnding(
 @Serializable
 data class V3Patriarch(
     val personId: Int = 1,
-    val name: String = "李慎行",
+    val name: String = "",                        // LOW #19: 由 newGame() 填充 founderName，避免硬编码
     val generation: Int = 1,
     val conduct: Int = 30,   // 处世 — 应对官绅乡邻的手腕
     val stewardship: Int = 28, // 经营 — 田庄银粮调度
@@ -653,9 +677,13 @@ data class V3CardRequire(
         if (hasSpouse == true) parts += "已娶妻室"
         if (minChildren != null) parts += "子嗣≥${minChildren}"
         if (minAliveAdults != null) parts += "成丁≥${minAliveAdults}"
+        if (minAlivePeople != null) parts += "族人≥${minAlivePeople}"
         if (requiredBranch != null) parts += "需立${requiredBranch}脉"
         if (minBranchCount != null) parts += "支脉≥${minBranchCount}"
         if (minPatriarchAge != null) parts += "家主≥${minPatriarchAge}岁"
+        if (flagRequired != null) parts += "需$flagRequired"
+        if (flagBlocked != null) parts += "未$flagBlocked"
+        if (minPatriarchStat != null && minPatriarchStatValue != null) parts += "${minPatriarchStat}≥$minPatriarchStatValue"
         return if (parts.isEmpty()) null else parts.joinToString(" · ")
     }
 }
@@ -815,7 +843,7 @@ data class V3HexBattleState(
                         r = r,
                         name = n,
                         garrison = 18,
-                        enemyWave = 22 + index * 4
+                        enemyWave = 14 + index * 2   // MED #14: 原 22/26/30/34/38/42 对 18 驻守严重失衡，改为 14/16/18/20/22/24 渐增
                     )
                 },
                 supply = 80,
@@ -845,25 +873,25 @@ data class V3GameState(
     val grain: Int = 260,
     val influence: Int = 35,
     val cohesion: Int = 60,
-    val militia: Int = 20,
-    val army: V3ArmyRoster = V3ArmyRoster(militia = 20),
+    val militia: Int = 0,                            // HIGH #4: 派生自 army.militia，默认 0 由 newGame()/反序列化填充
+    val army: V3ArmyRoster = V3ArmyRoster(),
     val equipment: List<V3EquipmentItem> = emptyList(),
-    val people: List<V3Person> = V3Content.initialPeople,
-    val branches: List<V3Branch> = V3Content.initialBranches,
-    val sites: List<V3CountySite> = V3Content.initialSites,
-    val estateAssets: List<V3EstateAsset> = V3Content.initialEstateAssets,
-    val worldRegions: List<V3WorldRegion> = V3Content.initialWorldRegions,
+    val people: List<V3Person> = emptyList(),        // HIGH #1: 不再引用 V3Content 单例
+    val branches: List<V3Branch> = emptyList(),
+    val sites: List<V3CountySite> = emptyList(),
+    val estateAssets: List<V3EstateAsset> = emptyList(),
+    val worldRegions: List<V3WorldRegion> = emptyList(),
     val conquestState: V3ConquestState? = null,
     val unificationProgress: Int = 20,
     val relations: V3Relations = V3Relations(),
-    val routeScores: Map<V3Route, Int> = V3Content.initialRouteScores,
-    val annualGoals: List<V3AnnualGoal> = V3Content.initialAnnualGoals,
+    val routeScores: Map<V3Route, Int> = emptyMap(),
+    val annualGoals: List<V3AnnualGoal> = emptyList(),
     val examSession: V3ExamSession? = null,
     val battleState: V3BattleState? = null,
     val rebelHeat: Int = 0,
     val finalEnding: V3FinalEnding? = null,
     val activeEvent: V3ActiveEvent? = null,
-    val tutorialVersion: Int = 1,
+    val tutorialVersion: Int = V3_TUTORIAL_VERSION,
     val tutorialStep: Int = 0,
     val tutorialCompleted: Boolean = false,
     val claimedChapterRewards: List<String> = emptyList(),

@@ -318,6 +318,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun cancelExam(reason: String = "科举已取消。") {
+        state = state.copy(examSession = null)
+        message = reason
+        saveStore.save(state)
+        resumeAfterModalIfClear()
+    }
+
     fun recruitTroops(type: V3TroopType, amount: Int = 5) {
         audio.playSfx(SfxKey.V3Build)
         state = V3GameEngine.recruitTroops(state, type, amount)
@@ -751,7 +758,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     private fun resumeAfterModalIfClear() {
         val blocked = latestReport != null || message != null || settingsVisible || state.activeEvent != null ||
-            state.examSession != null || state.battleState != null || state.hexBattleState != null || state.conquestState != null || state.finalEnding != null
+            state.examSession != null || state.battleState != null || state.hexBattleState != null || state.conquestState != null ||
+            state.pendingSuccession || state.activeCards.isNotEmpty() || state.pendingDice != null || state.finalEnding != null
         if (blocked) return
         resumeSpeedAfterModal?.let { speed ->
             timeSpeed = speed
@@ -761,7 +769,6 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     private fun shouldGenerateEventThisMonth(nextState: V3GameState): Boolean {
-        if (nextState.month !in listOf(2, 5, 8, 11)) return false
         if (nextState.eventLog.take(2).any { it.contains("事件【") || it.contains("抉择") }) return false
         return true
     }

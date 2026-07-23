@@ -225,9 +225,10 @@ object V3CardEngine {
             stage = "unrest"
         }
         if (next.garrisonMorale < CRISIS_MUTINY_THRESHOLD && next.unrestLevel >= CRISIS_UNREST_THRESHOLD) {
+            val postMutinyArmy = next.army.loseMilitia(4)
             next = next.copy(
-                militia = (next.militia - 4).coerceAtLeast(0),
-                army = next.army.lose(4),
+                militia = postMutinyArmy.militia,
+                army = postMutinyArmy,
                 cohesion = (next.cohesion - 4).coerceIn(0, 100),
                 currentCrisisStage = "mutiny"
             )
@@ -372,14 +373,14 @@ object V3CardEngine {
         val nextArmy = if (delta.militia >= 0) {
             state.army.add(com.arktools.daming.v3.data.V3TroopType.Militia, delta.militia)
         } else {
-            state.army.lose(-delta.militia)
+            state.army.loseMilitia(-delta.militia)
         }
         val result = state.copy(
             silver = (state.silver + delta.silver).coerceAtLeast(-999),
             grain = (state.grain + delta.grain).coerceAtLeast(-999),
             influence = (state.influence + delta.influence).coerceIn(0, 100),
             cohesion = (state.cohesion + delta.cohesion).coerceIn(0, 100),
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             refugees = (state.refugees + delta.refugees).coerceAtLeast(0),
             garrisonMorale = (state.garrisonMorale + delta.garrisonMorale).coerceIn(0, 100),

@@ -50,7 +50,11 @@ object V3EventEngine {
             totalRisk > 420 -> banditShadowEvent()
             else -> null
         }
-        if (criticalEvent != null) return criticalEvent
+        if (criticalEvent != null) {
+            val recentLogs = state.eventLog.take(8)
+            val alreadyTriggered = recentLogs.any { it.contains("事件【${criticalEvent.title}】") }
+            if (!alreadyTriggered) return criticalEvent
+        }
         relationAttitudeEvent(state)?.let { return it }
         chapterMilestoneEvent(state)?.let { return it }
         regionAccordEvent(state)?.let { return it }
@@ -80,7 +84,7 @@ object V3EventEngine {
     }
 
     fun choose(state: V3GameState, choice: V3EventChoice): V3GameState {
-        val routeScore = (state.routeScores[choice.route] ?: 0) + choice.routeDelta
+        val routeScore = choice.route?.let { r -> (state.routeScores[r] ?: 0) + choice.routeDelta }
         val nextRelations = state.relations.copy(
             yamen = clamp(state.relations.yamen + choice.yamenDelta),
             gentry = clamp(state.relations.gentry + choice.gentryDelta),
@@ -88,6 +92,12 @@ object V3EventEngine {
             bandits = clamp(state.relations.bandits + choice.banditsDelta),
             merchants = clamp(state.relations.merchants + choice.merchantsDelta),
             garrison = clamp(state.relations.garrison + choice.garrisonDelta)
+        )
+        val nextPatriarch = state.patriarch.copy(
+            conduct = (state.patriarch.conduct + choice.patriarchConductDelta).coerceIn(0, 100),
+            stewardship = (state.patriarch.stewardship + choice.patriarchStewardshipDelta).coerceIn(0, 100),
+            prestige = (state.patriarch.prestige + choice.patriarchPrestigeDelta).coerceIn(0, 100),
+            health = (state.patriarch.health + choice.patriarchHealthDelta).coerceIn(0, 100)
         )
         val nextBranches = applyBranchImpacts(state, choice.branchImpacts)
         val nextSites = state.sites.map { site ->
@@ -147,8 +157,20 @@ object V3EventEngine {
         val completedStoryFlags = buildList {
             addAll(state.completedStoryFlags)
             choice.storyFlag?.let { add(it) }
+            choice.removeFlag?.let { remove(it) }
             if (eventTitle == "甲申前夜") add("final_decision_${choice.label}")
         }.distinct()
+        val nextPlaques = choice.plaqueId?.let { (state.plaques + it).distinct() } ?: state.plaques
+        val nextInventory = choice.itemId?.let { (state.inventory + it).distinct() } ?: state.inventory
+        val nextSeenVisitors = choice.visitorId?.let { (state.seenVisitors + it).distinct() } ?: state.seenVisitors
+        val nextVisitorProgress = choice.visitorId?.let { id ->
+            val increment = choice.visitorProgressDelta ?: 1
+            state.visitorProgress + (id to ((state.visitorProgress[id] ?: 0) + increment))
+        } ?: state.visitorProgress
+        val nextBiography = choice.biographicalNote?.let { (state.biography + it).take(200) } ?: state.biography
+        val followUpEvent = choice.followUpEventId?.let { id ->
+            V3EventContent.allEvents.firstOrNull { it.title == id }
+        }
         val impactLines = eventChoiceImpactLines(state, choice)
         val report = (listOf(
             "【抉择结算】",
@@ -160,15 +182,25 @@ object V3EventEngine {
         val nextArmy = if (choice.militiaDelta >= 0) {
             state.army.add(com.arktools.daming.v3.data.V3TroopType.Militia, choice.militiaDelta)
         } else {
-            state.army.lose(-choice.militiaDelta)
+            state.army.loseMilitia(-choice.militiaDelta)
+        }
+        val nextRouteScores = if (choice.route != null && routeScore != null) {
+            state.routeScores + (choice.route to routeScore)
+        } else {
+            state.routeScores
         }
         return state.copy(
             silver = (state.silver + choice.silverDelta).coerceAtLeast(-999),
             grain = (state.grain + choice.grainDelta).coerceAtLeast(-999),
-            militia = nextArmy.total(),
+            militia = nextArmy.militia,
             army = nextArmy,
             cohesion = (state.cohesion + choice.cohesionDelta).coerceIn(0, 100),
             influence = (state.influence + choice.influenceDelta).coerceIn(0, 100),
+            refugees = (state.refugees + choice.refugeesDelta).coerceAtLeast(0),
+            garrisonMorale = (state.garrisonMorale + choice.garrisonMoraleDelta).coerceIn(0, 100),
+            unrestLevel = (state.unrestLevel + choice.unrestDelta).coerceIn(0, 100),
+            rebelHeat = (state.rebelHeat + choice.rebelHeatDelta).coerceAtLeast(0),
+            patriarch = nextPatriarch,
             sites = nextSites,
             people = nextPeople,
             worldRegions = nextRegions,
@@ -179,9 +211,14 @@ object V3EventEngine {
             },
             relations = nextRelations,
             branches = nextBranchList,
-            routeScores = state.routeScores + (choice.route to routeScore),
-            activeEvent = null,
+            routeScores = nextRouteScores,
+            activeEvent = followUpEvent,
             completedStoryFlags = completedStoryFlags,
+            plaques = nextPlaques,
+            inventory = nextInventory,
+            seenVisitors = nextSeenVisitors,
+            visitorProgress = nextVisitorProgress,
+            biography = nextBiography,
             seenChapterMilestones = if (completedMilestoneId == null) {
                 state.seenChapterMilestones
             } else {
@@ -233,7 +270,9 @@ object V3EventEngine {
             choice.regionStatus?.let { parts += "$regionName 转为【${it.label}】" }
         }
         choice.createBranch?.let { parts += "新立【${it.name}】" }
-        if (choice.routeDelta != 0) parts += "路线【${choice.route.label}】${signed(choice.routeDelta)}"
+        choice.route?.let { r ->
+            if (choice.routeDelta != 0) parts += "路线【${r.label}】${signed(choice.routeDelta)}"
+        }
         return if (parts.isEmpty()) listOf("结算：局势小幅变化，已记入近事。") else listOf("结算：${parts.joinToString("；")}")
     }
 
@@ -500,11 +539,14 @@ object V3EventEngine {
     }
 
     private fun followUpEvent(state: V3GameState): V3ActiveEvent? {
-        val pendingChoice = state.eventLog.take(40).firstOrNull { log ->
+        val recentChoiceLogs = state.eventLog.take(40).filter { log ->
             log.contains("事件【") && log.contains("选择：")
-        } ?: return null
-        val recent = pendingChoice
-        if ((recent.contains("开仓") || recent.contains("赈") || recent.contains("义诊")) && !recent.contains("赈济余波")) {
+        }.take(6)
+        if (recentChoiceLogs.isEmpty()) return null
+        val alreadyTriggered = { title: String -> state.eventLog.take(40).any { it.contains("事件【$title】") } }
+
+        val hasRelief = recentChoiceLogs.any { (it.contains("开仓") || it.contains("赈") || it.contains("义诊")) && !it.contains("赈济余波") }
+        if (hasRelief && !alreadyTriggered("赈济余波")) {
             return V3ActiveEvent(
                 "赈济余波",
                 "前番赈济之后，乡民口碑传开，也有外乡饥民闻讯而来。族老提醒：善名能聚人，也会继续消耗粮仓。",
@@ -515,7 +557,8 @@ object V3EventEngine {
                 )
             )
         }
-        if ((recent.contains("商") || recent.contains("牙行") || recent.contains("海货") || recent.contains("码头")) && !recent.contains("商路回响")) {
+        val hasCommerce = recentChoiceLogs.any { (it.contains("商") || it.contains("牙行") || it.contains("海货") || it.contains("码头")) && !it.contains("商路回响") }
+        if (hasCommerce && !alreadyTriggered("商路回响")) {
             return V3ActiveEvent(
                 "商路回响",
                 "前番商路动作让西河商帮重新估量李氏。有人愿意入股，也有人担心官府追查。",
@@ -526,7 +569,8 @@ object V3EventEngine {
                 )
             )
         }
-        if ((recent.contains("讨伐") || recent.contains("乡勇") || recent.contains("寨堡") || recent.contains("山道")) && !recent.contains("军务余震")) {
+        val hasMilitary = recentChoiceLogs.any { (it.contains("讨伐") || it.contains("乡勇") || it.contains("寨堡") || it.contains("山道")) && !it.contains("军务余震") }
+        if (hasMilitary && !alreadyTriggered("军务余震")) {
             return V3ActiveEvent(
                 "军务余震",
                 "乡勇操练和山道冲突之后，县中豪族都开始打听李氏兵力。若处理不好，官府疑心和流寇仇怨都会加深。",
@@ -537,7 +581,8 @@ object V3EventEngine {
                 )
             )
         }
-        if ((recent.contains("书院") || recent.contains("科举") || recent.contains("讲会") || recent.contains("士绅")) && !recent.contains("士林回函")) {
+        val hasScholar = recentChoiceLogs.any { (it.contains("书院") || it.contains("科举") || it.contains("讲会") || it.contains("士绅")) && !it.contains("士林回函") }
+        if (hasScholar && !alreadyTriggered("士林回函")) {
             return V3ActiveEvent(
                 "士林回函",
                 "书院讲会与科举消息传开，邻县士子送来名帖。接还是不接，都会决定李氏是否真正走进士林。",
