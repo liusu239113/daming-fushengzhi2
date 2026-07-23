@@ -66,6 +66,20 @@ class V3GameEngineTest {
     }
 
     @Test
+    fun xuGuangqiEncounterStartsHisContinuingVisitorStory() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(influence = 40)
+        val card = V3Content.allMonthlyCards.first { it.id == "visitor_xu_guangqi" }
+
+        card.choices.forEach { choice ->
+            val resolved = V3CardEngine.resolve(base, card, choice, null).state
+            assertEquals(1, resolved.visitorProgress["xu_guangqi"])
+            assertTrue("xu_guangqi" in resolved.seenVisitors)
+            assertTrue(resolved.biography.isNotEmpty())
+        }
+    }
+
+    @Test
     fun tutorialSeparatesExplanationsFromRequiredGameplayActions() {
         val state = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
 

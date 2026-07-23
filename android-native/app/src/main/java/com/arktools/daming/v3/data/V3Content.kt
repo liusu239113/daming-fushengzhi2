@@ -98,8 +98,8 @@ object V3Content {
             body = "一位远道来的学者在驿路歇脚。他谈测量、农具，也谈天下并非只有旧书里写过的模样。",
             tag = "访客",
             choices = listOf(
-                V3CardChoice("host", "请入书房", "以一席清谈换一份见识。", require = V3CardRequire(minInfluence = 30), effects = V3EffectDelta(influence = 4, patriarchPrestige = 4, itemId = "western_clock", biographicalNote = "书房接待远客，第一次听见西洋钟声。")),
-                V3CardChoice("observe", "请看农具", "不问大道，先问怎样让田里多收一成。", effects = V3EffectDelta(grain = 25, patriarchStewardship = 4, itemId = "new_farming_manual"))
+                V3CardChoice("host", "请入书房", "以一席清谈换一份见识。", require = V3CardRequire(minInfluence = 30), effects = V3EffectDelta(influence = 4, patriarchPrestige = 4, itemId = "western_clock", visitorId = "xu_guangqi", visitorProgress = 1, biographicalNote = "书房接待远客，第一次听见西洋钟声。")),
+                V3CardChoice("observe", "请看农具", "不问大道，先问怎样让田里多收一成。", effects = V3EffectDelta(grain = 25, patriarchStewardship = 4, itemId = "new_farming_manual", visitorId = "xu_guangqi", visitorProgress = 1, biographicalNote = "徐光启查看田庄农具，留下改良水利与耕作的办法。"))
             )
         ),
         V3MonthlyCard(

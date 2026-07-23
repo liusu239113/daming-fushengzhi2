@@ -116,20 +116,24 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         timeSpeed = 0
     }
 
+    fun timeBlockReason(): String? = when {
+        latestReport != null -> "请先阅读月报"
+        message != null -> "请先关闭提示"
+        settingsVisible -> "设置界面已打开"
+        state.finalEnding != null -> "本局已经结束"
+        state.activeEvent != null -> "请先处理月度事件"
+        state.examSession != null -> "请先完成科举"
+        state.battleState != null -> "请先完成地点讨伐"
+        state.hexBattleState != null -> "请先完成守庄战"
+        state.pendingSuccession -> "请先推举继任族长"
+        state.activeCards.isNotEmpty() -> "请先处理月事或访客"
+        state.pendingDice != null -> "请先完成当前判定"
+        state.conquestState != null -> "请先完成地域征伐"
+        else -> null
+    }
+
     fun shouldAutoTick(): Boolean =
-        timeSpeed > 0 &&
-            latestReport == null &&
-            message == null &&
-            !settingsVisible &&
-            state.finalEnding == null &&
-            state.activeEvent == null &&
-            state.examSession == null &&
-            state.battleState == null &&
-            state.hexBattleState == null &&
-            state.pendingSuccession == false &&
-            state.activeCards.isEmpty() &&
-            state.pendingDice == null &&
-            state.conquestState == null
+        timeSpeed > 0 && timeBlockReason() == null
 
     fun autoAdvanceTime() {
         if (shouldAutoTick()) advanceMonth(showReport = false)

@@ -2449,9 +2449,16 @@ private fun V3PersonCard(
             V3Metric("绩", person.merit, V3Gold, Modifier.weight(1f))
             V3Metric("劳", person.fatigue, if (person.fatigue >= 60) V3Red else V3Muted, Modifier.weight(1f))
         }
-        Text("个人五维", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text("个人五维（学 / 武 / 商 / 谋 / 忠）", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text("五维直接取自上方五项属性：学识、武勇、经商、谋略与忠诚；越接近外圈代表数值越高。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
         V3AttributeRadar(
-            values = listOf(person.study, person.martial, person.commerce, person.diplomacy, person.loyalty),
+            values = listOf(
+                "学" to person.study,
+                "武" to person.martial,
+                "商" to person.commerce,
+                "谋" to person.diplomacy,
+                "忠" to person.loyalty
+            ),
             accent = V3Blue
         )
         Text(
@@ -2704,9 +2711,18 @@ private fun V3TimeControls(
                     }
                 }
             }
+            val timeBlockReason = controller.timeBlockReason()
             Text(
-                if (controller.shouldAutoTick()) "时序推进中" else "时序暂停",
-                color = if (controller.shouldAutoTick()) V3Green else V3Muted,
+                when {
+                    controller.timeSpeed == 0 -> "时序已暂停"
+                    timeBlockReason != null -> "${controller.timeSpeed}倍已启用 · $timeBlockReason"
+                    else -> "时序推进中 · ${controller.timeSpeed}倍"
+                },
+                color = when {
+                    controller.timeSpeed == 0 -> V3Muted
+                    timeBlockReason != null -> V3Gold
+                    else -> V3Green
+                },
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -3860,79 +3876,101 @@ private fun V3ArchivePanel(state: V3GameState, controller: V3GameController) {
 }
 
 @Composable
-private fun V3AttributeRadar(values: List<Int>, accent: Color) {
-    Canvas(Modifier.fillMaxWidth().height(150.dp).padding(horizontal = 34.dp, vertical = 6.dp)) {
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val radius = minOf(size.width, size.height) * 0.34f
-        val count = values.size.coerceAtLeast(3)
-        val angles = values.indices.map { index -> -Math.PI / 2.0 + index * Math.PI * 2.0 / count }
-        val points = values.mapIndexed { index, value ->
-            Offset(
-                center.x + kotlin.math.cos(angles[index]).toFloat() * radius * value.coerceIn(0, 100) / 100f,
-                center.y + kotlin.math.sin(angles[index]).toFloat() * radius * value.coerceIn(0, 100) / 100f
-            )
+private fun V3AttributeRadar(values: List<Pair<String, Int>>, accent: Color) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Canvas(Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = minOf(size.width, size.height) * 0.38f
+            val count = values.size.coerceAtLeast(3)
+            val angles = values.indices.map { index -> -Math.PI / 2.0 + index * Math.PI * 2.0 / count }
+            val outerPoints = angles.map { angle ->
+                Offset(
+                    center.x + kotlin.math.cos(angle).toFloat() * radius,
+                    center.y + kotlin.math.sin(angle).toFloat() * radius
+                )
+            }
+            listOf(0.25f, 0.5f, 0.75f, 1f).forEach { scale ->
+                val grid = Path().apply {
+                    outerPoints.forEachIndexed { index, point ->
+                        val scaled = Offset(
+                            center.x + (point.x - center.x) * scale,
+                            center.y + (point.y - center.y) * scale
+                        )
+                        if (index == 0) moveTo(scaled.x, scaled.y) else lineTo(scaled.x, scaled.y)
+                    }
+                    close()
+                }
+                drawPath(grid, V3Muted.copy(alpha = 0.32f), style = Stroke(width = 1f))
+            }
+            angles.forEachIndexed { index, _ ->
+                drawLine(V3Muted.copy(alpha = 0.45f), center, outerPoints[index], strokeWidth = 1f)
+            }
+            val points = values.mapIndexed { index, (_, value) ->
+                val scale = value.coerceIn(0, 100) / 100f
+                Offset(
+                    center.x + (outerPoints[index].x - center.x) * scale,
+                    center.y + (outerPoints[index].y - center.y) * scale
+                )
+            }
+            val outline = Path().apply {
+                points.forEachIndexed { index, point ->
+                    if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y)
+                }
+                close()
+            }
+            drawPath(outline, accent.copy(alpha = 0.30f))
+            drawPath(outline, accent.copy(alpha = 0.95f), style = Stroke(width = 3f))
+            points.forEach { point -> drawCircle(accent, radius = 4f, center = point) }
         }
-        val outline = Path().apply {
-            points.forEachIndexed { index, point -> if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y) }
-            close()
-        }
-        drawPath(outline, accent.copy(alpha = 0.28f))
-        drawPath(outline, accent.copy(alpha = 0.9f), style = Stroke(width = 2f))
-        angles.forEach { angle ->
-            drawLine(
-                V3Muted.copy(alpha = 0.45f),
-                center,
-                Offset(center.x + kotlin.math.cos(angle).toFloat() * radius, center.y + kotlin.math.sin(angle).toFloat() * radius),
-                strokeWidth = 1f
-            )
-        }
-    }
-}
-
-@Composable
-private fun V3PatriarchRadar(state: V3GameState) {
-    val values = listOf(
-        state.patriarch.conduct,
-        state.patriarch.stewardship,
-        state.patriarch.prestige,
-        state.patriarch.health
-    )
-    Canvas(Modifier.fillMaxWidth().height(150.dp).padding(8.dp)) {
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val radius = minOf(size.width, size.height) * 0.34f
-        val points = values.mapIndexed { index, value ->
-            val angle = (-Math.PI / 2.0 + index * Math.PI / 2.0)
-            Offset(
-                center.x + kotlin.math.cos(angle).toFloat() * radius * value / 100f,
-                center.y + kotlin.math.sin(angle).toFloat() * radius * value / 100f
-            )
-        }
-        val outline = Path().apply {
-            points.forEachIndexed { index, point -> if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y) }
-            close()
-        }
-        drawPath(outline, V3Gold.copy(alpha = 0.28f), style = Stroke(width = 2f))
-        drawPath(outline, V3Gold.copy(alpha = 0.22f))
-        values.indices.forEach { index ->
-            val angle = (-Math.PI / 2.0 + index * Math.PI / 2.0)
-            val edge = Offset(
-                center.x + kotlin.math.cos(angle).toFloat() * radius,
-                center.y + kotlin.math.sin(angle).toFloat() * radius
-            )
-            drawLine(V3Muted.copy(alpha = 0.45f), center, edge, strokeWidth = 1f)
+        values.chunked(3).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { (label, value) ->
+                    V3Metric(label, value, accent, Modifier.weight(1f))
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
 
 @Composable
 private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
+    val patriarchPerson = state.people.firstOrNull { it.id == state.patriarch.personId }
     V3Panel {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("族长 · ${state.patriarch.name}", color = V3Gold, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Text("第${state.patriarch.generation}代 · 任期${state.patriarch.term}月", color = V3Muted, fontSize = 12.sp)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                Modifier
+                    .size(82.dp)
+                    .clip(CircleShape)
+                    .background(V3Rice)
+                    .border(3.dp, V3Gold, CircleShape)
+                    .padding(5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                AssetImage(
+                    patriarchPerson?.let(::v3AvatarFor)
+                        ?: GameImages.v3AvatarPortraits.getValue("male_elder"),
+                    state.patriarch.name,
+                    Modifier.matchParentSize().clip(CircleShape),
+                    ContentScale.Fit
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("族长 · ${state.patriarch.name}", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("第${state.patriarch.generation}代 · 任期${state.patriarch.term}月", color = V3Muted, fontSize = 12.sp)
+                Text("族长四项是执掌宗族的专属能力，不是族人的学武商谋忠五维。", color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp)
+            }
         }
-        Text("处世 ${state.patriarch.conduct} · 经营 ${state.patriarch.stewardship} · 威望 ${state.patriarch.prestige} · 身板 ${state.patriarch.health}", color = V3Ink, fontSize = 13.sp)
-        V3PatriarchRadar(state)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            V3Metric("处世", state.patriarch.conduct, V3Blue, Modifier.weight(1f))
+            V3Metric("经营", state.patriarch.stewardship, V3Gold, Modifier.weight(1f))
+            V3Metric("威望", state.patriarch.prestige, V3Red, Modifier.weight(1f))
+            V3Metric("身板", state.patriarch.health, V3Green, Modifier.weight(1f))
+        }
         if (state.originTraits.isNotEmpty()) {
             Text("出身特性", color = V3Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             state.originTraits.forEach { trait -> Text("· $trait", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp) }
