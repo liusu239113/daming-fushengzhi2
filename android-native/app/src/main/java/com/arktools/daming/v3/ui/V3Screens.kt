@@ -3182,7 +3182,7 @@ private fun V3EventDialog(event: V3ActiveEvent, controller: V3GameController) {
                                 Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text(choice.label, color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                        Text(choice.route.label, color = V3Red, fontSize = 12.sp)
+                                        Text(choice.route?.label.orEmpty(), color = V3Red, fontSize = 12.sp)
                                     }
                                     Text(choice.desc, color = V3Muted, fontSize = 12.sp)
                                     Text(choiceImpactSummary(choice), color = V3Ink, fontSize = 12.sp)
@@ -3878,7 +3878,7 @@ private fun choiceImpactSummary(choice: V3EventChoice): String {
     add("功", choice.personMeritDelta)
     add("劳", choice.personFatigueDelta)
     add("忠", choice.personLoyaltyDelta)
-    if (choice.routeDelta != 0) parts += "${choice.route.label}+${choice.routeDelta}"
+    if (choice.routeDelta != 0) parts += "${choice.route?.label.orEmpty()}+${choice.routeDelta}"
     return if (parts.isEmpty()) "后果：局势小幅变化" else "后果：${parts.joinToString(" · ")}"
 }
 
