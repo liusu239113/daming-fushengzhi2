@@ -1188,7 +1188,8 @@ private fun V3GuideInputBlockers(targetBounds: Rect?) {
     val screenWidth = configuration.screenWidthDp.dp
     val screenHeight = configuration.screenHeightDp.dp
     val padding = 8.dp
-    fun Modifier.blockGuideInput(): Modifier = pointerInput(Unit) {
+    // key 指针输入句柄在 targetBounds 变化时重启，避免事件订阅卡在过期布局上
+    fun Modifier.blockGuideInput(): Modifier = pointerInput(targetBounds) {
         awaitPointerEventScope {
             while (true) {
                 awaitPointerEvent().changes.forEach { it.consume() }
@@ -1196,25 +1197,35 @@ private fun V3GuideInputBlockers(targetBounds: Rect?) {
         }
     }
     if (targetBounds == null) {
-        Box(Modifier.fillMaxSize().blockGuideInput())
+        // 尚未定位目标：不做任何阻挡，让用户正常操作（高亮未显示时不应锁死输入）
         return
     }
     val left = with(density) { targetBounds.left.toDp() } - padding
     val top = with(density) { targetBounds.top.toDp() } - padding
     val right = with(density) { targetBounds.right.toDp() } + padding
     val bottom = with(density) { targetBounds.bottom.toDp() } + padding
+    // 目标在屏幕可视区域之外（未滚动到位等）：不要退化成全屏阻挡，直接放行
+    if (right <= 0.dp || left >= screenWidth || bottom <= 0.dp || top >= screenHeight) {
+        return
+    }
     val safeLeft = left.coerceIn(0.dp, screenWidth)
     val safeTop = top.coerceIn(0.dp, screenHeight)
     val safeRight = right.coerceIn(0.dp, screenWidth)
     val safeBottom = bottom.coerceIn(0.dp, screenHeight)
+    val holeWidth = (safeRight - safeLeft).coerceAtLeast(0.dp)
+    val holeHeight = (safeBottom - safeTop).coerceAtLeast(0.dp)
+    if (holeWidth <= 0.dp || holeHeight <= 0.dp) {
+        // 钳位后洞尺寸为零（目标在边缘外），同样放行，避免全屏遮挡
+        return
+    }
     Box(Modifier.fillMaxWidth().height(safeTop).blockGuideInput())
     Box(Modifier.offset(y = safeBottom).fillMaxWidth().height((screenHeight - safeBottom).coerceAtLeast(0.dp)).blockGuideInput())
-    Box(Modifier.offset(y = safeTop).width(safeLeft).height((safeBottom - safeTop).coerceAtLeast(0.dp)).blockGuideInput())
+    Box(Modifier.offset(y = safeTop).width(safeLeft).height(holeHeight).blockGuideInput())
     Box(
         Modifier
             .offset(x = safeRight, y = safeTop)
             .width((screenWidth - safeRight).coerceAtLeast(0.dp))
-            .height((safeBottom - safeTop).coerceAtLeast(0.dp))
+            .height(holeHeight)
             .blockGuideInput()
     )
 }
@@ -1677,6 +1688,7 @@ private fun V3PersonDetailDialog(
         else -> null
     }
     val localScroll = rememberScrollState()
+    // 在一帧后滚动到指定位置，等待布局完成后让 guideTarget 重新上报准确坐标
     LaunchedEffect(tutorialStep, localScroll.maxValue) {
         val fraction = when (tutorialStep) {
             12 -> 0f
@@ -1685,7 +1697,10 @@ private fun V3PersonDetailDialog(
             else -> return@LaunchedEffect
         }
         if (localScroll.maxValue == 0) return@LaunchedEffect
-        delay(250)
+        delay(60)
+        localScroll.scrollTo((localScroll.maxValue * fraction).toInt())
+        // 再等一帧让 onGloballyPositioned 反馈新坐标
+        delay(60)
         localScroll.scrollTo((localScroll.maxValue * fraction).toInt())
     }
     Dialog(onDismissRequest = { if (focus == null) onDismiss() }) {
@@ -1713,11 +1728,13 @@ private fun V3PersonDetailDialog(
             }
             focus?.let { currentFocus ->
                 val bounds = localTargets[currentFocus]
+                val density = LocalDensity.current
+                val halfScreenPx = with(density) { (LocalConfiguration.current.screenHeightDp.dp / 2).toPx() }
                 V3LocalGuideOverlay(
                     state = state,
                     controller = controller,
                     targetBounds = bounds,
-                    cardAtTop = (bounds?.center?.y ?: 0f) > 360f
+                    cardAtTop = (bounds?.center?.y ?: 0f) > halfScreenPx
                 )
             }
         }
