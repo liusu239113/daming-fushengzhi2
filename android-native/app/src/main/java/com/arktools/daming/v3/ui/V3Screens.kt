@@ -409,8 +409,16 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
     val tutorialUsesLocalOverlay = tutorialStep in localTutorialSteps
     var tutorialCardAtTop by remember(tutorialStep) { mutableStateOf(false) }
     var tutorialTargetBounds by remember(tutorialStep) { mutableStateOf<Rect?>(null) }
-    val measuredTutorialTarget = guideTargets[tutorialFocus]
-    val cardAtTop = tutorialCardAtTop
+    var tutorialLocated by remember(tutorialStep) { mutableStateOf(false) }
+    // 定位完成后直接读取实时测量坐标，使高亮框随可拖动/滚动目标移动；不经过 effect 同步，避免无限重启闪屏
+    val liveTutorialTarget = guideTargets[tutorialFocus]
+    val effectiveTutorialTargetBounds = if (tutorialLocated && liveTutorialTarget != null && liveTutorialTarget.bottom > 0f) {
+        liveTutorialTarget
+    } else {
+        tutorialTargetBounds
+    }
+    // 卡片位置一旦定位完成就保持稳定，避免拖动目标时卡片在顶/底反复跳动（同样会被感知为闪屏）
+    val effectiveTutorialCardAtTop = tutorialCardAtTop
     LaunchedEffect(elderGuideVisible, tutorialStep) {
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
         val step = elderGuideSteps(state)[tutorialStep]
@@ -434,11 +442,10 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         tutorialStep,
         controller.screen,
         guideStrategyPage,
-        contentScroll.maxValue,
-        countyHomePage,
-        measuredTutorialTarget
+        countyHomePage
     ) {
         tutorialTargetBounds = null
+        tutorialLocated = false
         if (!elderGuideVisible || state.tutorialCompleted) return@LaunchedEffect
         val step = elderGuideSteps(state)[tutorialStep]
         // 教程只负责把步骤目标带到正确页面，不再在玩家手动切页后强制拉回。
@@ -448,13 +455,14 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         val presetFraction = when (tutorialFocus) {
             V3GuideFocus.TopBar,
             V3GuideFocus.Resources,
-            V3GuideFocus.MonthlyLedger,
             V3GuideFocus.TimeControls -> 0f
 
-            V3GuideFocus.MonthlyForecast,
-            V3GuideFocus.AutoArrange -> 0.16f
+            V3GuideFocus.MonthlyLedger -> 0.28f
 
-            V3GuideFocus.AnnualGoals -> 0.34f
+            V3GuideFocus.MonthlyForecast,
+            V3GuideFocus.AutoArrange -> 0.48f
+
+            V3GuideFocus.AnnualGoals -> 0.68f
             V3GuideFocus.CountyMap,
             V3GuideFocus.FarmlandPin -> 0.58f
 
@@ -475,31 +483,50 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
 
             else -> 0f
         }
-        delay(100)
+        delay(120)
         contentScroll.scrollTo((contentScroll.maxValue * presetFraction).toInt())
-        repeat(6) {
-            delay(100)
-            val bounds = guideTargets[tutorialFocus] ?: return@repeat
-            val shouldPlaceCardTop = bounds.center.y > screenHeightPx * 0.55f
-            val safeTop = if (shouldPlaceCardTop) with(screenDensity) { 300.dp.toPx() } else with(screenDensity) { 120.dp.toPx() }
-            val safeBottom = if (shouldPlaceCardTop) screenHeightPx - with(screenDensity) { 72.dp.toPx() } else screenHeightPx - with(screenDensity) { 300.dp.toPx() }
-            val adjustment = when {
-                bounds.top < safeTop -> bounds.top - safeTop
-                bounds.bottom > safeBottom -> bounds.bottom - safeBottom
-                else -> 0f
-            }.toInt()
-            if (adjustment != 0) {
-                contentScroll.scrollTo((contentScroll.value + adjustment).coerceIn(0, contentScroll.maxValue))
-            } else {
-                tutorialTargetBounds = bounds
-                tutorialCardAtTop = shouldPlaceCardTop
-                return@LaunchedEffect
+        // 轮询等待目标出现并精确定位，不把 bounds 变化放入 key 以避免无限重启闪屏
+        var located = false
+        repeat(20) {
+            delay(80)
+            val bounds = guideTargets[tutorialFocus]
+            if (bounds != null && bounds.bottom > 0f && bounds.top < screenHeightPx) {
+                val shouldPlaceCardTop = bounds.center.y > screenHeightPx * 0.55f
+                val safeTop = if (shouldPlaceCardTop) with(screenDensity) { 300.dp.toPx() } else with(screenDensity) { 120.dp.toPx() }
+                val safeBottom = if (shouldPlaceCardTop) screenHeightPx - with(screenDensity) { 72.dp.toPx() } else screenHeightPx - with(screenDensity) { 300.dp.toPx() }
+                val adjustment = when {
+                    bounds.top < safeTop -> bounds.top - safeTop
+                    bounds.bottom > safeBottom -> bounds.bottom - safeBottom
+                    else -> 0f
+                }.toInt()
+                if (adjustment != 0) {
+                    contentScroll.scrollTo((contentScroll.value + adjustment).coerceIn(0, contentScroll.maxValue))
+                    delay(80)
+                    val adjusted = guideTargets[tutorialFocus]
+                    if (adjusted != null) {
+                        tutorialTargetBounds = adjusted
+                        tutorialCardAtTop = adjusted.center.y > screenHeightPx * 0.55f
+                        tutorialLocated = true
+                        located = true
+                        return@LaunchedEffect
+                    }
+                } else {
+                    tutorialTargetBounds = bounds
+                    tutorialCardAtTop = shouldPlaceCardTop
+                    tutorialLocated = true
+                    located = true
+                    return@LaunchedEffect
+                }
             }
         }
-        val finalBounds = guideTargets[tutorialFocus]
-        if (finalBounds != null && finalBounds.bottom > 0f && finalBounds.top < screenHeightPx) {
-            tutorialTargetBounds = finalBounds
-            tutorialCardAtTop = finalBounds.center.y > screenHeightPx * 0.55f
+        // 超时兜底：即使定位失败也显示已有的 bounds，不再无限卡在"正在定位目标"
+        if (!located) {
+            val fallback = guideTargets[tutorialFocus]
+            if (fallback != null && fallback.bottom > 0f) {
+                tutorialTargetBounds = fallback
+                tutorialCardAtTop = fallback.center.y > screenHeightPx * 0.55f
+                tutorialLocated = true
+            }
         }
     }
     V3Background(controller.screen.backgroundAsset()) {
@@ -559,8 +586,8 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                 V3ElderGuideOverlay(
                     state = state,
                     controller = controller,
-                    targetBounds = tutorialTargetBounds,
-                    cardAtTop = cardAtTop,
+                    targetBounds = effectiveTutorialTargetBounds,
+                    cardAtTop = effectiveTutorialCardAtTop,
                     onStrategyPageChange = { guideStrategyPage = it },
                     onDismiss = {
                         guideStrategyPage = null
@@ -1657,7 +1684,8 @@ private fun V3PersonDetailDialog(
             14 -> 1f
             else -> return@LaunchedEffect
         }
-        delay(100)
+        if (localScroll.maxValue == 0) return@LaunchedEffect
+        delay(250)
         localScroll.scrollTo((localScroll.maxValue * fraction).toInt())
     }
     Dialog(onDismissRequest = { if (focus == null) onDismiss() }) {
@@ -2234,7 +2262,8 @@ private fun V3SiteManageDialog(
             8 -> 1f
             else -> return@LaunchedEffect
         }
-        delay(100)
+        if (localScroll.maxValue == 0) return@LaunchedEffect
+        delay(250)
         localScroll.scrollTo((localScroll.maxValue * fraction).toInt())
     }
     Dialog(onDismissRequest = { if (focus == null) onDismiss() }) {
@@ -2476,7 +2505,9 @@ private fun V3PersonCard(
         if (person.age < 12) {
             Text("尚年幼，不能外出办事，但可以每月培养。儿童培养成长更快。", color = V3Ink, fontSize = 13.sp)
         } else {
-            Text("建议：${recommendedTask(person).label} · ${taskDescription(recommendedTask(person))}", color = V3Ink, fontSize = 13.sp)
+            val suggestedTask = recommendedAvailableTask(state, person)
+            val suggestedType = suggestedTask?.first ?: recommendedTask(person)
+            Text("建议：${suggestedType.label} · ${taskDescription(suggestedType)}", color = V3Ink, fontSize = 13.sp)
             V3TaskButtons(
                 person,
                 state,
@@ -2517,7 +2548,8 @@ private fun V3TaskButtons(
     onTaskAssigned: () -> Unit = {}
 ) {
     val tasks = V3TaskType.entries
-    val recommended = recommendedTask(person)
+    val recommendedAvailable = recommendedAvailableTask(state, person)
+    val recommendedTaskType = recommendedAvailable?.first ?: recommendedTask(person)
     tasks.chunked(3).forEach { row ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             row.forEach { task ->
@@ -2525,7 +2557,7 @@ private fun V3TaskButtons(
                 val targetModifier = if (
                     guideTargets != null &&
                     tutorialStep == 14 &&
-                    task == recommended &&
+                    task == recommendedTaskType &&
                     site != null
                 ) {
                     Modifier.guideTarget(V3GuideFocus.PersonTask, guideTargets)

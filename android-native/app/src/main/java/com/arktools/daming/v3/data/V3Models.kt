@@ -3,7 +3,7 @@ package com.arktools.daming.v3.data
 import kotlinx.serialization.Serializable
 
 const val V3_SAVE_VERSION = 2
-const val V3_TUTORIAL_VERSION = 2
+const val V3_TUTORIAL_VERSION = 3
 
 @Serializable
 enum class V3Screen { County, Clan, People, Strategy }
