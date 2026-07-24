@@ -954,7 +954,7 @@ private fun elderGuideSteps(state: V3GameState): List<V3ElderGuideStep> {
     V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "第三章 · 人才经营", "产业不会自己运转。族谱展示亲子关系和每个人当前状态；真正的培养、派差和科举都从族人详情开始。", "点击高亮族人卡片，打开详情", V3GuideFocus.Genealogy, requiresAction = true),
     V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "读懂一个族人", "学、武、商、谋决定适合的差事；忠影响宗族稳定；绩记录功劳；劳过高会降低办事效果。先看清人，再安排。", "在族人详情中查看高亮信息，读完点击下一步", V3GuideFocus.PersonOverview),
     V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "培养决定长期成长", "读书、习武、学算、礼法分别提高学、武、商、谋。培养会占用本月行动，所以不能同时派差；儿童不能外出，但培养成长更快。", "查看高亮培养区域，读完点击下一步", V3GuideFocus.PersonTraining),
-    V3ElderGuideStep(V3Screen.People, "周管事", "male_middle", "亲手派一次差事", "系统会给出推荐差事。请点击高亮的可用差事，让这名族人本月真正去经营对应地点；月结时才会兑现结果。", "点击高亮差事按钮", V3GuideFocus.PersonTask, requiresAction = true),
+    V3ElderGuideStep(V3Screen.People, "周管事", "male_middle", "亲手派一次差事", "系统会根据族人所长和地点情况给出推荐差事。这里高亮的是「治理」——派去能压风险、稳凝聚。请点击高亮的「治理」按钮，让这名族人本月去治理对应地点；月结时才会兑现差事结果。", "点击高亮的「治理」按钮", V3GuideFocus.PersonTask, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "自动安排其余人手", "手动派差适合精细经营；人多以后可用一键安排，让系统根据缺粮、缺银、地点风险和族人所长处理其余待命者。", "点击一键安排本月派遣与培养", V3GuideFocus.AutoArrange, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "第四章 · 完成一个经营月", "安排只是计划，必须推进月结才会获得产出、成长、婚育进度与事件结果。点击继续，真实推进一个月。", "点击继续，推进一个月", V3GuideFocus.TimeControls, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "阅读月报", "月报会列出银粮变化、地点经营、族人成长和目标进度。不要只看库存数字，要从月报判断下个月该补什么。", "阅读月报后点击知道了", V3GuideFocus.MonthlyReportDismiss, requiresAction = true),
@@ -991,6 +991,30 @@ private fun V3LocalGuideOverlay(
     val steps = elderGuideSteps(state)
     val safeIndex = state.tutorialStep.coerceIn(0, steps.lastIndex)
     val step = steps[safeIndex]
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val screenHeightDp = configuration.screenHeightDp.dp
+    val gapPx = with(density) { 12.dp.toPx() }
+    // 记录卡片自测量尺寸，用于精确避开高亮洞（避免引导卡片自身 disabled 按钮盖住目标）
+    var cardSizePx by remember { mutableStateOf(IntSize.Zero) }
+    // 计算卡片的垂直位置：永远贴在洞的对侧，与洞留 12dp 间隙
+    val cardOffsetYPx = remember(targetBounds, cardSizePx, cardAtTop, screenHeightDp) {
+        val t = targetBounds
+        if (t == null || cardSizePx == IntSize.Zero) {
+            // 尚未定位或未测量：先放安全位置（卡片会在下一帧重定位），避免全屏遮挡
+            if (cardAtTop) with(density) { 10.dp.toPx() } else with(density) { 10.dp.toPx() }
+        } else {
+            val cardH = cardSizePx.height.toFloat()
+            val screenH = with(density) { screenHeightDp.toPx() }
+            if (cardAtTop) {
+                // 目标在下方：卡片底边 = 洞顶 - gap
+                (t.top - gapPx - cardH).coerceAtLeast(0f)
+            } else {
+                // 目标在上方：卡片顶边 = 洞底 + gap
+                (t.bottom + gapPx).coerceAtMost(screenH - cardH).coerceAtLeast(0f)
+            }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         V3GuideFocusFrame(
             targetBounds = targetBounds,
@@ -998,9 +1022,11 @@ private fun V3LocalGuideOverlay(
         )
         Column(
             Modifier
-                .align(if (cardAtTop) Alignment.TopCenter else Alignment.BottomCenter)
-                .padding(10.dp)
+                .align(Alignment.TopStart)
+                .offset { IntOffset(0, cardOffsetYPx.toInt()) }
+                .padding(horizontal = 10.dp)
                 .fillMaxWidth()
+                .onSizeChanged { cardSizePx = it }
                 .background(V3Rice, V3PanelShape)
                 .border(2.dp, V3Gold, V3PanelShape)
                 .padding(10.dp),
