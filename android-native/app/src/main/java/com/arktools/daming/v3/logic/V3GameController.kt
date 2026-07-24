@@ -18,6 +18,7 @@ import com.arktools.daming.v3.data.V3Person
 import com.arktools.daming.v3.data.V3EventChoice
 import com.arktools.daming.v3.data.V3EstateType
 import com.arktools.daming.v3.data.V3TroopType
+import com.arktools.daming.v3.data.V3CrisisAd
 
 class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
     var state by mutableStateOf(V3GameEngine.normalizeState(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")))
@@ -36,6 +37,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         private set
 
     var message by mutableStateOf<String?>(null)
+        private set
+
+    var pendingCrisisAd by mutableStateOf<V3CrisisAd?>(null)
         private set
 
     var settingsVisible by mutableStateOf(false)
@@ -64,6 +68,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         latestReport = null
         settingsVisible = false
         message = null
+        pendingCrisisAd = null
     }
 
     fun hasSave(): Boolean = saveStore.hasSave()
@@ -79,6 +84,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         latestReport = null
         settingsVisible = false
         message = "案卷已启封，旧日县域局势重归案前。"
+        pendingCrisisAd = null
     }
 
     companion object {
@@ -119,6 +125,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun timeBlockReason(): String? = when {
         latestReport != null -> "请先阅读月报"
         message != null -> "请先关闭提示"
+        pendingCrisisAd != null -> "请先处理临危援手"
         settingsVisible -> "设置界面已打开"
         state.finalEnding != null -> "本局已经结束"
         state.activeEvent != null -> "请先处理月度事件"
@@ -316,6 +323,20 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(if (result.contains("通过")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+        // 科举落第时弹出"族中长辈点拨学业"援手
+        if (result.contains("落第") && pendingCrisisAd == null && state.finalEnding == null) {
+            val y = state.year
+            val m = state.month
+            pendingCrisisAd = V3CrisisAd(
+                key = "crisis-exam-$y-$m",
+                title = "长辈点拨",
+                subtitle = "科场失意，族中致仕长辈愿开小灶指点学问。",
+                grantedMessage = "长辈倾囊相授，赠银八十两、米六十石以资助下次赴考。",
+                silver = 80,
+                grain = 60
+            )
+            pauseForModal()
+        }
     }
 
     fun cancelExam(reason: String = "科举已取消。") {
@@ -394,6 +415,20 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+        // 战败时弹出"乡勇战后整补"援手
+        if (result.contains("失利") && pendingCrisisAd == null && state.finalEnding == null) {
+            val y = state.year
+            val m = state.month
+            pendingCrisisAd = V3CrisisAd(
+                key = "crisis-battle-$y-$m",
+                title = "乡勇整补",
+                subtitle = "出师不利，武库损毁、乡勇带伤。城中铁匠与乡绅愿助一臂之力。",
+                grantedMessage = "铁匠连夜修械，乡绅捐银劳军，武库耐久与银两皆得补充。",
+                silver = 50,
+                repairDurability = 35
+            )
+            pauseForModal()
+        }
         resumeAfterModalIfClear()
     }
 
@@ -619,6 +654,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         }
         state = withEnding
         saveStore.save(state)
+        // 每月结算后检测族人患病等月报未覆盖的危机，主动弹出援手
+        maybeTriggerMonthlyCrisisAd()
         val reportRequested =
             showReport ||
                 report.nextState.month == 1 ||
@@ -750,13 +787,77 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         showInfo(description)
     }
 
+    /** 关闭危机弹窗（点击"暂不需要"）。 */
+    fun dismissCrisisAd() {
+        audio.click()
+        pendingCrisisAd = null
+        resumeAfterModalIfClear()
+    }
+
+    /** 观看广告后发放危机援手奖励，随后关闭弹窗。 */
+    fun grantCrisisAd() {
+        val ad = pendingCrisisAd ?: return
+        val repairedEquipment = if (ad.repairDurability > 0) {
+            state.equipment.map { item ->
+                item.copy(durability = (item.durability + ad.repairDurability).coerceAtMost(item.maxDurability))
+            }
+        } else {
+            state.equipment
+        }
+        val curedPeople = if (ad.cureIllness) {
+            val sick = state.people.firstOrNull { it.alive && it.illness != null }
+            if (sick != null) {
+                state.people.map {
+                    if (it.id == sick.id) it.copy(illness = null, illnessMonths = 0, fatigue = (it.fatigue - 15).coerceAtLeast(0))
+                    else it
+                }
+            } else {
+                state.people
+            }
+        } else {
+            state.people
+        }
+        state = state.copy(
+            silver = (state.silver + ad.silver).coerceIn(-999, 999_999),
+            grain = (state.grain + ad.grain).coerceIn(-999, 999_999),
+            cohesion = (state.cohesion + ad.cohesion).coerceIn(0, 100),
+            equipment = repairedEquipment,
+            people = curedPeople
+        )
+        saveStore.save(state)
+        pendingCrisisAd = null
+        showInfo(ad.grantedMessage)
+    }
+
+    /**
+     * 在每月结算节点检测族人患病等月报未覆盖的危机，命中则主动弹出"临危援手"广告。
+     * 银两/粮草/凝聚/军械的短缺已由月报内的"接济礼包"覆盖，此处只处理月报未包含的治病场景。
+     */
+    private fun maybeTriggerMonthlyCrisisAd() {
+        if (pendingCrisisAd != null) return
+        if (state.finalEnding != null) return
+        val sick = state.people.any { it.alive && it.illness != null }
+        if (!sick) return
+        val y = state.year
+        val m = state.month
+        pendingCrisisAd = V3CrisisAd(
+            key = "crisis-ill-$y-$m",
+            title = "医者上门",
+            subtitle = "族中有人缠绵病榻，乡间游医愿施针赠药。",
+            grantedMessage = "医者施治，族人病情已愈，另赠口粮百斤以养元气。",
+            grain = 100,
+            cureIllness = true
+        )
+        pauseForModal()
+    }
+
     private fun pauseForModal() {
         if (timeSpeed > 0 && resumeSpeedAfterModal == null) resumeSpeedAfterModal = timeSpeed
         timeSpeed = 0
     }
 
     private fun resumeAfterModalIfClear() {
-        val blocked = latestReport != null || message != null || settingsVisible || state.activeEvent != null ||
+        val blocked = latestReport != null || message != null || pendingCrisisAd != null || settingsVisible || state.activeEvent != null ||
             state.examSession != null || state.battleState != null || state.hexBattleState != null || state.conquestState != null ||
             state.pendingSuccession || state.activeCards.isNotEmpty() || state.pendingDice != null || state.finalEnding != null
         if (blocked) return

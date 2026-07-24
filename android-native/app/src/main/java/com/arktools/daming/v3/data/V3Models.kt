@@ -482,6 +482,19 @@ data class V3ActiveEvent(
     val choices: List<V3EventChoice>
 )
 
+// 压力点触发的即时激励广告（非存档字段，运行时弹窗用）
+data class V3CrisisAd(
+    val key: String,            // 唯一 key，用于 RewardClaimStore 防重复领取
+    val title: String,          // 弹窗标题
+    val subtitle: String,       // 副标题 / 奖励说明
+    val grantedMessage: String, // 发放奖励后的提示文字
+    val silver: Int = 0,
+    val grain: Int = 0,
+    val cohesion: Int = 0,
+    val repairDurability: Int = 0,
+    val cureIllness: Boolean = false   // true 时自动治愈一名患病族人
+)
+
 @Serializable
 data class V3EventChoice(
     val label: String,
