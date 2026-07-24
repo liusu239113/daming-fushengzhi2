@@ -3529,7 +3529,7 @@ private fun V3CrisisAdDialog(ad: V3CrisisAd, controller: V3GameController) {
             Spacer(Modifier.height(4.dp))
             Text(ad.subtitle, color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
             Spacer(Modifier.height(2.dp))
-            Text("完整观看广告即可获得援助，不观看可点"暂不需要"继续游戏。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+            Text("完整观看广告即可获得援助，不观看可点「暂不需要」继续游戏。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 V3SmallButton("暂不需要", Modifier.weight(1f)) {
