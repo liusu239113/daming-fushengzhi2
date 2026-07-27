@@ -135,8 +135,9 @@ local function CreateTopBar()
         backgroundImage = Theme.IMG.BG_TOP_BAR, backgroundFit = "fill",
         borderBottomWidth = 1,
         borderBottomColor = Theme.BORDER_GOLD,
-        padding = { 8, 50, 6, 12 },  -- 右侧留 50px 避开 TapTap 悬浮窗
+        padding = { 8, 12, 6, 12 },
         gap = 4,
+        flexShrink = 0,
         overflow = "hidden",
         children = {
             -- 第一行：宗族信息 + 年份
@@ -145,6 +146,7 @@ local function CreateTopBar()
                 children = {
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 6,
+                        flexShrink = 1, minWidth = 0, overflow = "hidden",
                         backgroundColor = { 255, 252, 240, 160 },
                         borderRadius = 6, paddingHorizontal = 6, paddingVertical = 2,
                         children = {
@@ -161,6 +163,7 @@ local function CreateTopBar()
                     },
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 5,
+                        flexShrink = 0,
                         backgroundColor = { 255, 252, 240, 160 },
                         borderRadius = 6, paddingHorizontal = 5, paddingVertical = 2,
                         children = {
@@ -898,7 +901,7 @@ local function CreateBottomNav()
     end
     return UI.Panel {
         id = "bottomNav",
-        width = "100%", height = 88,
+        width = "100%", height = 88, flexShrink = 0,
         flexDirection = "row", justifyContent = "center",
         backgroundColor = { 248, 243, 228, 255 },
         backgroundImage = Theme.IMG.BG_BOTTOM_NAV, backgroundFit = "fill",
@@ -1927,7 +1930,7 @@ function GameScreen.Create(callbacks)
             CreateTopBar(),
             UI.Panel {
                 id = "middleContainer",
-                width = "100%", flexGrow = 1, flexBasis = 0,
+                width = "100%", flexGrow = 1, flexBasis = 0, flexShrink = 1, minHeight = 0,
                 position = "relative",
                 overflow = "hidden",
                 children = {

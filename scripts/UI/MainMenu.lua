@@ -34,7 +34,7 @@ function MainMenu.Create(callbacks)
 
             -- 左下角版本号
             UI.Label {
-                text = "v1.0.34",
+                text = "v1.1.1",
                 fontSize = 13,
                 fontColor = { 120, 100, 80, 150 },
                 position = "absolute",
