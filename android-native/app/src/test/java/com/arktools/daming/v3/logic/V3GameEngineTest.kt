@@ -7,6 +7,8 @@ import com.arktools.daming.v3.data.V3ArmyRoster
 import com.arktools.daming.v3.data.V3Content
 import com.arktools.daming.v3.data.V3EquipmentQuality
 import com.arktools.daming.v3.data.V3EquipmentSlot
+import com.arktools.daming.v3.data.V3EstateAsset
+import com.arktools.daming.v3.data.V3EstateType
 import com.arktools.daming.v3.data.V3GameState
 import com.arktools.daming.v3.data.V3Gender
 import com.arktools.daming.v3.data.V3Person
@@ -364,7 +366,14 @@ class V3GameEngineTest {
     @Test
     fun foundingQuestUsesExactPromotionThresholds() {
         val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
-            .copy(year = 1601, month = 9, silver = 179, grain = 260, influence = 45)
+            .copy(
+                year = 1602,
+                month = 7,
+                silver = 179,
+                grain = 260,
+                influence = 45,
+                estateAssets = listOf(V3EstateAsset("tenantland", V3EstateType.TenantLand, 2))
+            )
         val child = V3Person(
             id = 2,
             name = "李承业",
@@ -439,14 +448,15 @@ class V3GameEngineTest {
         val base = V3Content.newGame("边地军户", "西北边堡", "聚族自保", "流寇逼近")
             .copy(clanRank = 3, year = 1606)
         assertEquals(V3Chapter.Expansion, V3ProgressionEngine.currentChapter(base))
-        assertTrue(V3ProgressionEngine.snapshot(base).mainQuest.conditions.first { it.label == "控制县外地域" }.satisfied.not())
+        assertTrue(V3ProgressionEngine.snapshot(base).mainQuest.conditions.first { it.label == "县外地域" }.satisfied.not())
 
+        val externalIds = base.worldRegions.filter { it.id != "home_county" }.take(2).map { it.id }.toSet()
         val withExternal = base.copy(
             worldRegions = base.worldRegions.map { region ->
-                if (region.id == "neighbor_county") region.copy(status = V3RegionStatus.Controlled, control = 85) else region
+                if (region.id in externalIds) region.copy(status = V3RegionStatus.Controlled, control = 85) else region
             }
         )
-        assertTrue(V3ProgressionEngine.snapshot(withExternal).mainQuest.conditions.first { it.label == "控制县外地域" }.satisfied)
+        assertTrue(V3ProgressionEngine.snapshot(withExternal).mainQuest.conditions.first { it.label == "县外地域" }.satisfied)
     }
 
     @Test
@@ -557,15 +567,25 @@ class V3GameEngineTest {
         assertEquals(V3Chapter.ChoosingPath, V3ProgressionEngine.currentChapter(base))
 
         val warlord = base.copy(
-            militia = 240,
-            army = V3ArmyRoster(militia = 240),
-            routeScores = V3Content.initialRouteScores + (V3Route.Warlord to 90),
+            year = 1626,
+            people = base.people + List(19) { index ->
+                base.people.first().copy(
+                    id = index + 10,
+                    name = "李氏族人${index + 1}",
+                    generation = 2,
+                    spouseId = null,
+                    childrenIds = emptyList()
+                )
+            },
+            militia = 320,
+            army = V3ArmyRoster(militia = 320),
+            routeScores = V3Content.initialRouteScores + (V3Route.Warlord to 110),
             worldRegions = base.worldRegions.mapIndexed { index, region ->
-                if (index < 6) region.copy(status = V3RegionStatus.Controlled, control = 90) else region
+                if (index < 8) region.copy(status = V3RegionStatus.Controlled, control = 90) else region
             }
         )
-        assertTrue(V3ProgressionEngine.snapshot(warlord.copy(unificationProgress = 60)).mainQuest.completed)
-        assertEquals(V3Chapter.FinalLegacy, V3ProgressionEngine.currentChapter(warlord))
+        assertTrue(V3ProgressionEngine.snapshot(warlord.copy(unificationProgress = 75)).mainQuest.completed)
+        assertEquals(V3Chapter.FinalLegacy, V3ProgressionEngine.currentChapter(warlord.copy(unificationProgress = 90)))
     }
 
     @Test

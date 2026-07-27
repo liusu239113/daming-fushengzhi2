@@ -245,7 +245,9 @@ data class V3WorldRegion(
     val enemyPower: Int,
     val wealth: Int,
     val desc: String,
-    val accordRoute: V3Route? = null
+    val accordRoute: V3Route? = null,
+    val tradePostLevel: Int = 0,
+    val garrisonLevel: Int = 0
 )
 
 @Serializable
@@ -411,6 +413,9 @@ data class V3Person(
     val gender: V3Gender = V3Gender.Male,
     val generation: Int = 1,
     val spouseId: Int? = null,
+    val concubineIds: List<Int> = emptyList(),
+    val marriageRole: String = "none",
+    val careerRank: String? = null,
     val parentId: Int? = null,
     val motherId: Int? = null,
     val childrenIds: List<Int> = emptyList(),

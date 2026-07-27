@@ -278,6 +278,15 @@ object V3GameEngine {
 
     fun estateLevelTotal(state: V3GameState): Int = state.estateAssets.sumOf { it.level }
 
+    fun tradeNetworkLevel(state: V3GameState): Int =
+        state.estateAssets.filter { it.type == V3EstateType.Shop || it.type == V3EstateType.Caravan }
+            .sumOf { it.level } + state.worldRegions.sumOf { it.tradePostLevel }
+
+    fun militaryOrganizationLevel(state: V3GameState): Int =
+        (state.estateAssets.firstOrNull { it.type == V3EstateType.Barracks }?.level ?: 0) +
+            state.worldRegions.sumOf { it.garrisonLevel } +
+            V3TroopType.entries.count { state.army.count(it) > 0 }
+
     fun controlledRegionCount(state: V3GameState): Int = state.worldRegions.count { it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified }
 
     fun externalControlledRegionCount(state: V3GameState): Int = state.worldRegions.count {
@@ -455,11 +464,12 @@ object V3GameEngine {
     fun influenceRegion(state: V3GameState, regionId: String): V3GameState {
         val region = state.worldRegions.firstOrNull { it.id == regionId } ?: return state
         if (region.status == V3RegionStatus.Unknown) return contactRegion(state, regionId)
-        if (region.status == V3RegionStatus.Pacified) return state.copy(pendingReports = listOf("${region.name}已经归附，无需再经营。"))
+        if (region.status == V3RegionStatus.Pacified) return state.copy(pendingReports = listOf("${region.name}已经归附，可继续建设商栈或驻防营。"))
         val costSilver = 18 + region.tier * 16
         val costGrain = 10 + region.tier * 12
         if (state.silver < costSilver || state.grain < costGrain) return state.copy(pendingReports = listOf("经营${region.name}需要银$costSilver、粮$costGrain。"))
-        val gain = 12 + state.influence / 10 + estateLevelTotal(state) / 3
+        val tradeSupport = tradeNetworkLevel(state) * 2
+        val gain = 12 + state.influence / 10 + estateLevelTotal(state) / 3 + tradeSupport
         val nextControl = (region.control + gain).coerceAtMost(100)
         val nextStatus = when {
             nextControl >= 80 -> V3RegionStatus.Pacified
@@ -467,7 +477,7 @@ object V3GameEngine {
             else -> V3RegionStatus.Contacted
         }
         val regions = state.worldRegions.map { if (it.id == regionId) it.copy(control = nextControl, status = nextStatus) else it }
-        val message = "经营【${region.name}】：控制+$gain，当前$nextControl。通过商路、婚盟、士绅和族产渗入地方。"
+        val message = "经营【${region.name}】：商路支持+$tradeSupport，控制+$gain，当前$nextControl。通过商路、婚盟、士绅和族产渗入地方。"
         return state.copy(
             silver = state.silver - costSilver,
             grain = state.grain - costGrain,
@@ -475,6 +485,60 @@ object V3GameEngine {
             influence = (state.influence + (if (nextStatus == V3RegionStatus.Pacified) 4 else 1)).coerceIn(0, 100),
             unificationProgress = calculateUnification(regions),
             routeScores = state.routeScores + (V3Route.Merchant to ((state.routeScores[V3Route.Merchant] ?: 0) + 4)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    fun upgradeRegionalTradePost(state: V3GameState, regionId: String): V3GameState {
+        val region = state.worldRegions.firstOrNull { it.id == regionId }
+            ?: return state.copy(pendingReports = listOf("未找到该地域。"))
+        if (region.status == V3RegionStatus.Unknown) return state.copy(pendingReports = listOf("须先结交${region.name}，才能在当地购置商铺、设立商栈。"))
+        if (region.tradePostLevel >= 3) return state.copy(pendingReports = listOf("${region.name}商栈已达最高等级。"))
+        val nextLevel = region.tradePostLevel + 1
+        val caravanLevel = state.estateAssets.firstOrNull { it.type == V3EstateType.Caravan }?.level ?: 0
+        if (nextLevel >= 2 && caravanLevel <= 0) return state.copy(pendingReports = listOf("二级商栈需要先在家产中建立商队。"))
+        val silverCost = (50 + region.tier * 20) * nextLevel
+        val grainCost = (12 + region.tier * 5) * nextLevel
+        if (state.silver < silverCost || state.grain < grainCost) return state.copy(pendingReports = listOf("扩建${region.name}商栈Lv.${nextLevel}需要银$silverCost、粮$grainCost。"))
+        val regions = state.worldRegions.map {
+            if (it.id == regionId) it.copy(tradePostLevel = nextLevel, control = (it.control + 8).coerceAtMost(100)) else it
+        }
+        val message = "在【${region.name}】建成商栈Lv.$nextLevel：每月按当地财富与等级分红，并强化后续经营控制。"
+        return state.copy(
+            silver = state.silver - silverCost,
+            grain = state.grain - grainCost,
+            worldRegions = regions,
+            relations = state.relations.copy(merchants = clamp(state.relations.merchants + 3)),
+            routeScores = state.routeScores + (V3Route.Merchant to ((state.routeScores[V3Route.Merchant] ?: 0) + 6)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    fun upgradeRegionalGarrison(state: V3GameState, regionId: String): V3GameState {
+        val region = state.worldRegions.firstOrNull { it.id == regionId }
+            ?: return state.copy(pendingReports = listOf("未找到该地域。"))
+        if (region.status != V3RegionStatus.Controlled && region.status != V3RegionStatus.Pacified) {
+            return state.copy(pendingReports = listOf("须先控制或归附${region.name}，才能建立驻防营。"))
+        }
+        if (region.garrisonLevel >= 3) return state.copy(pendingReports = listOf("${region.name}驻防营已达最高等级。"))
+        val nextLevel = region.garrisonLevel + 1
+        val barracksLevel = state.estateAssets.firstOrNull { it.type == V3EstateType.Barracks }?.level ?: 0
+        if (barracksLevel <= 0) return state.copy(pendingReports = listOf("建立驻防营前，须先在家产中建成团练营。"))
+        val silverCost = (55 + region.tier * 18) * nextLevel
+        val grainCost = (35 + region.tier * 14) * nextLevel
+        if (state.silver < silverCost || state.grain < grainCost) return state.copy(pendingReports = listOf("扩建${region.name}驻防营Lv.${nextLevel}需要银$silverCost、粮$grainCost。"))
+        val regions = state.worldRegions.map {
+            if (it.id == regionId) it.copy(garrisonLevel = nextLevel, enemyPower = (it.enemyPower - 12).coerceAtLeast(20), control = (it.control + 6).coerceAtMost(100)) else it
+        }
+        val message = "在【${region.name}】建成驻防营Lv.$nextLevel：降低当地敌势，组织度与军镇关系持续增长。"
+        return state.copy(
+            silver = state.silver - silverCost,
+            grain = state.grain - grainCost,
+            worldRegions = regions,
+            relations = state.relations.copy(garrison = clamp(state.relations.garrison + 3)),
+            routeScores = state.routeScores + (V3Route.Fortress to ((state.routeScores[V3Route.Fortress] ?: 0) + 5)),
             pendingReports = listOf(message),
             eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
         )
@@ -571,10 +635,10 @@ object V3GameEngine {
         val cost = nextRankCost(state) ?: return false
         val elapsedMonths = (state.year - 1601) * 12 + state.month - 1
         val stageReady = when (state.clanRank) {
-            1 -> elapsedMonths >= 8 && state.people.any { it.alive && it.generation >= 2 }
-            2 -> elapsedMonths >= 42 && state.people.count { it.alive && it.generation >= 2 } >= 2
-            3 -> externalControlledRegionCount(state) >= 1
-            4 -> controlledRegionCount(state) >= 4
+            1 -> elapsedMonths >= 18 && state.people.any { it.alive && it.generation >= 2 } && estateLevelTotal(state) >= 2
+            2 -> elapsedMonths >= 60 && state.people.count { it.alive && it.generation >= 2 } >= 3 && estateLevelTotal(state) >= 6
+            3 -> elapsedMonths >= 120 && externalControlledRegionCount(state) >= 2 && tradeNetworkLevel(state) + militaryOrganizationLevel(state) >= 4
+            4 -> elapsedMonths >= 240 && controlledRegionCount(state) >= 6 && (state.routeScores.values.maxOrNull() ?: 0) >= 80
             else -> true
         }
         return stageReady &&
@@ -590,17 +654,29 @@ object V3GameEngine {
         val elapsedMonths = (state.year - 1601) * 12 + state.month - 1
         val stageHint = when (state.clanRank) {
             1 -> when {
-                elapsedMonths < 8 -> "还需经营至少${8 - elapsedMonths}个月"
+                elapsedMonths < 18 -> "还需经营至少${18 - elapsedMonths}个月"
                 state.people.none { it.alive && it.generation >= 2 } -> "还需迎来首位第二代子嗣"
-                else -> "成家传代条件已满足"
+                estateLevelTotal(state) < 2 -> "还需将家产总级提升至2"
+                else -> "成家传代与产业条件已满足"
             }
             2 -> when {
-                elapsedMonths < 42 -> "还需经营至少${42 - elapsedMonths}个月"
-                state.people.count { it.alive && it.generation >= 2 } < 2 -> "还需至少两名第二代子嗣延续家业"
+                elapsedMonths < 60 -> "还需经营至少${60 - elapsedMonths}个月"
+                state.people.count { it.alive && it.generation >= 2 } < 3 -> "还需至少三名第二代子嗣延续家业"
+                estateLevelTotal(state) < 6 -> "还需将家产总级提升至6"
                 else -> "代际经营条件已满足"
             }
-            3 -> if (externalControlledRegionCount(state) < 1) "还需控制至少一个县外地域" else "地域条件已满足"
-            4 -> if (controlledRegionCount(state) < 4) "还需再控制${4 - controlledRegionCount(state)}个地域" else "天下经营条件已满足"
+            3 -> when {
+                elapsedMonths < 120 -> "还需经营至少${120 - elapsedMonths}个月"
+                externalControlledRegionCount(state) < 2 -> "还需控制至少两个县外地域"
+                tradeNetworkLevel(state) + militaryOrganizationLevel(state) < 4 -> "商路与军伍组织合计还需达到4"
+                else -> "跨域经营条件已满足"
+            }
+            4 -> when {
+                elapsedMonths < 240 -> "还需经营至少${240 - elapsedMonths}个月"
+                controlledRegionCount(state) < 6 -> "还需再控制${6 - controlledRegionCount(state)}个地域"
+                (state.routeScores.values.maxOrNull() ?: 0) < 80 -> "主路线倾向还需达到80"
+                else -> "天下经营与路线条件已满足"
+            }
             else -> "阶段条件已满足"
         }
         val silverMissing = (cost.silver - state.silver).coerceAtLeast(0)
@@ -738,6 +814,7 @@ object V3GameEngine {
             gender = candidate.gender,
             generation = target.generation,
             spouseId = target.id,
+            marriageRole = "wife",
             spouseSinceMonth = state.year * 12 + state.month,
             ageMonths = candidate.age * 12,
             surname = candidate.surname.ifBlank { candidate.name.take(1) },
@@ -754,6 +831,91 @@ object V3GameEngine {
             nextPersonId = spouseId + 1,
             cohesion = (state.cohesion + 5).coerceAtMost(100),
             routeScores = state.routeScores + (candidate.route to ((state.routeScores[candidate.route] ?: 0) + 5)),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
+    }
+
+    // ==================== 纳妾系统 ====================
+
+    private const val MAX_CONCUBINES = 3
+
+    fun concubineCandidatesFor(person: V3Person, state: V3GameState): List<V3SpouseCandidate> {
+        if (person.spouseId == null) return emptyList()
+        if (person.gender != V3Gender.Male) return emptyList()
+        if (person.concubineIds.size >= MAX_CONCUBINES) return emptyList()
+        val claimedIds = claimedSpouseCandidateIds(state)
+        return V3Content.spouseCandidates.mapIndexed { index, prototype ->
+            proposalCandidate(prototype, person, index + 100 + person.concubineIds.size * 20, state)
+        }.filter {
+            it.id !in claimedIds &&
+                it.gender == V3Gender.Female &&
+                kotlin.math.abs(it.age - person.age) <= 20 &&
+                state.influence >= (it.influenceReq / 2)
+        }
+    }
+
+    fun canTakeConcubine(state: V3GameState, personId: Int, candidateId: String): Boolean {
+        val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return false
+        if (person.spouseId == null || person.gender != V3Gender.Male) return false
+        if (person.concubineIds.size >= MAX_CONCUBINES) return false
+        val candidate = concubineCandidatesFor(person, state).firstOrNull { it.id == candidateId } ?: return false
+        val silverCost = candidate.silverCost * 60 / 100
+        val grainCost = candidate.grainCost * 60 / 100
+        return state.silver >= silverCost && state.grain >= grainCost
+    }
+
+    fun takeConcubine(state: V3GameState, personId: Int, candidateId: String): V3GameState {
+        val person = state.people.firstOrNull { it.id == personId && it.alive }
+            ?: return state.copy(pendingReports = listOf("未找到该族人。"))
+        if (person.spouseId == null) return state.copy(pendingReports = listOf("须先娶正妻方可纳妾。"))
+        if (person.gender != V3Gender.Male) return state.copy(pendingReports = listOf("仅男性族人可纳妾。"))
+        if (person.concubineIds.size >= MAX_CONCUBINES) return state.copy(pendingReports = listOf("妾室已达上限${MAX_CONCUBINES}人。"))
+        val candidate = concubineCandidatesFor(person, state).firstOrNull { it.id == candidateId }
+            ?: return state.copy(pendingReports = listOf("该纳妾候选已失效。"))
+        val silverCost = candidate.silverCost * 60 / 100
+        val grainCost = candidate.grainCost * 60 / 100
+        if (state.silver < silverCost || state.grain < grainCost) {
+            return state.copy(pendingReports = listOf("纳妾资源不足：需银${silverCost}、粮${grainCost}。"))
+        }
+        val concubineId = state.nextPersonId
+        val concubine = V3Person(
+            id = concubineId,
+            name = candidate.name,
+            age = candidate.age,
+            branch = person.branch,
+            identity = "妾室",
+            trait = when (candidate.route) {
+                V3Route.Merchant -> V3Trait.Cunning
+                V3Route.Scholar -> V3Trait.Studious
+                V3Route.Fortress -> V3Trait.Martial
+                else -> V3Trait.Honest
+            },
+            study = 15 + candidate.studyBonus,
+            martial = 8 + candidate.martialBonus,
+            commerce = 15 + candidate.commerceBonus,
+            diplomacy = 15 + candidate.diplomacyBonus,
+            loyalty = 80,
+            gender = V3Gender.Female,
+            generation = person.generation,
+            spouseId = person.id,
+            concubineIds = emptyList(),
+            marriageRole = "concubine",
+            spouseSinceMonth = state.year * 12 + state.month,
+            ageMonths = candidate.age * 12,
+            surname = candidate.surname.ifBlank { candidate.name.take(1) },
+            spouseCandidateId = candidate.id
+        )
+        val people = state.people.map { p ->
+            if (p.id == person.id) p.copy(concubineIds = p.concubineIds + concubineId) else p
+        } + concubine
+        val message = "纳妾已成：${person.name}纳${candidate.name}为妾室（${person.concubineIds.size + 1}/${MAX_CONCUBINES}）。妾室同样可生育子嗣，子女属性按生母计算。"
+        return state.copy(
+            silver = state.silver - silverCost,
+            grain = state.grain - grainCost,
+            people = people,
+            nextPersonId = concubineId + 1,
+            cohesion = (state.cohesion + 2).coerceAtMost(100),
             pendingReports = listOf(message),
             eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
         )
@@ -1651,6 +1813,14 @@ object V3GameEngine {
             silverIncome += region.wealth / 12
             grainIncome += region.wealth / 18
             influenceIncome += region.tier
+            if (region.tradePostLevel > 0) {
+                silverIncome += (region.wealth / 20 + region.tier * 2) * region.tradePostLevel
+                influenceIncome += region.tradePostLevel
+            }
+            if (region.garrisonLevel > 0) {
+                militiaIncome += region.garrisonLevel * 3
+                grainIncome -= region.garrisonLevel * 2
+            }
             region.accordRoute?.let { route ->
                 val benefit = accordBenefit(route, region.tier)
                 silverIncome += benefit.silver
@@ -1719,11 +1889,15 @@ object V3GameEngine {
             incomeParts += "${asset.type.label}${yieldText(yield)}"
         }
         state.worldRegions.filter { it.status == V3RegionStatus.Controlled || it.status == V3RegionStatus.Pacified }.forEach { region ->
-            val silver = region.wealth / 12
-            val grain = region.wealth / 18
-            silverDelta += silver
-            grainDelta += grain
-            influenceDelta += region.tier
+            val baseSilver = region.wealth / 12
+            val baseGrain = region.wealth / 18
+            val tradeSilver = if (region.tradePostLevel > 0) (region.wealth / 20 + region.tier * 2) * region.tradePostLevel else 0
+            val garrisonMilitia = region.garrisonLevel * 3
+            val garrisonGrain = region.garrisonLevel * 2
+            silverDelta += baseSilver + tradeSilver
+            grainDelta += baseGrain - garrisonGrain
+            influenceDelta += region.tier + region.tradePostLevel
+            militiaDelta += garrisonMilitia
             val accordText = region.accordRoute?.let { route ->
                 val benefit = accordBenefit(route, region.tier)
                 silverDelta += benefit.silver
@@ -1734,7 +1908,7 @@ object V3GameEngine {
                 relations = applyRelationsBenefit(relations, benefit)
                 "/条约【${route.label}】${accordBenefitText(route, region.tier)}"
             }.orEmpty()
-            incomeParts += "${region.name}银+$silver/粮+$grain/望+${region.tier}$accordText"
+            incomeParts += "${region.name}银+${baseSilver + tradeSilver}/粮${signed(baseGrain - garrisonGrain)}/望+${region.tier + region.tradePostLevel}/勇+$garrisonMilitia$accordText"
         }
         val supportingBranches = state.branches.filter { it.id != "main" }
         supportingBranches.forEach { branch ->
@@ -1748,6 +1922,43 @@ object V3GameEngine {
         }
         if (supportingBranches.isNotEmpty()) {
             detailLines += "房支协力：${supportingBranches.joinToString("、") { it.name }}按各自家业为本月提供持续助益。"
+        }
+
+        // ===== 出身持续加成 =====
+        when (state.root) {
+            "江南商族" -> {
+                val tradeBonus = 3 + ((state.routeScores[V3Route.Merchant] ?: 0) / 20) + tradeNetworkLevel(state)
+                silverDelta += tradeBonus
+                detailLines += "【商族传承】账房传家，本月商路额外入银${tradeBonus}两。"
+            }
+            "边地军户" -> {
+                val militiaBonus = 2 + militaryOrganizationLevel(state) / 3
+                militiaDelta += militiaBonus
+                cohesionDelta += 1
+                detailLines += "【军户传承】边堡军籍，本月军伍增补${militiaBonus}人，凝聚+1。"
+            }
+            "寒门佃户" -> {
+                val farmLevel = state.estateAssets.firstOrNull { it.type == V3EstateType.TenantLand }?.level ?: 0
+                val grainBonus = 4 + farmLevel * 2
+                grainDelta += grainBonus
+                detailLines += "【农户传承】同乡相护，本月田庄额外产粮${grainBonus}石。"
+            }
+            "没落士族" -> {
+                influenceDelta += 2
+                detailLines += "【士族传承】旧谱余荫，本月族望自然回升+2。"
+            }
+            "山中堡寨" -> {
+                val defenseBonus = 1
+                militiaDelta += defenseBonus
+                cohesionDelta += 1
+                detailLines += "【堡寨传承】山寨旧盟，本月守备增补${defenseBonus}人，凝聚+1。"
+            }
+            "海商遗族" -> {
+                val seaBonus = 2
+                silverDelta += seaBonus
+                grainDelta += 1
+                detailLines += "【海商传承】海路遗契，本月海外贸易入银${seaBonus}两、入粮1石。"
+            }
         }
 
         val sites = state.sites.map { site ->
@@ -2123,6 +2334,35 @@ object V3GameEngine {
         failureKind(state)?.let { add("终局：$it。") }
         add(genealogyPreface(state).lineSequence().first())
     }
+    fun careerTitle(person: V3Person): String {
+        val meritRank = when {
+            person.merit >= 240 -> "家业总管"
+            person.merit >= 120 -> "执事"
+            person.merit >= 50 -> "管事"
+            person.merit >= 18 -> "学徒"
+            else -> "待选"
+        }
+        return person.careerRank ?: meritRank
+    }
+
+    private fun careerForTask(task: V3TaskType): String = when (task) {
+        V3TaskType.Farm -> "田庄管事"
+        V3TaskType.Trade -> "商号掌柜"
+        V3TaskType.Study -> "塾师"
+        V3TaskType.Diplomacy, V3TaskType.Govern -> "宗族幕宾"
+        V3TaskType.Relief -> "义仓执事"
+        V3TaskType.Fortify, V3TaskType.Recruit -> "团练教头"
+        V3TaskType.Scout -> "巡检"
+    }
+
+    private fun promotedCareer(person: V3Person, task: V3TaskType, nextMerit: Int): String? = when {
+        nextMerit >= 240 -> "${careerForTask(task)}·总管"
+        nextMerit >= 120 -> "${careerForTask(task)}·执事"
+        nextMerit >= 50 -> careerForTask(task)
+        nextMerit >= 18 -> "${careerForTask(task)}·学徒"
+        else -> person.careerRank
+    }
+
     private fun growPeople(people: List<V3Person>, assignments: Map<Int, V3TaskType>, lines: MutableList<String>, yearEnded: Boolean): List<V3Person> {
         return people.map { person ->
             val nextAgeMonths = (person.ageMonths.coerceAtLeast(person.age * 12) + 1)
@@ -2155,6 +2395,8 @@ object V3GameEngine {
                 }
             } else {
                 val grow = growthFor(task)
+                val nextMerit = (person.merit + grow.merit).coerceAtMost(999)
+                val nextCareer = promotedCareer(person, task, nextMerit)
                 val next = person.copy(
                     age = baseAge,
                     ageMonths = nextAgeMonths,
@@ -2163,12 +2405,14 @@ object V3GameEngine {
                     commerce = (person.commerce + grow.commerce).coerceAtMost(100),
                     diplomacy = (person.diplomacy + grow.diplomacy).coerceAtMost(100),
                     loyalty = (person.loyalty + grow.loyalty).coerceIn(0, 100),
-                    merit = (person.merit + grow.merit).coerceAtMost(999),
+                    merit = nextMerit,
+                    careerRank = nextCareer,
                     fatigue = (person.fatigue + grow.fatigue).coerceIn(0, 100),
                     trainingFocus = null,
                     currentTask = null,
                     assignedSiteId = null
                 )
+                if (nextCareer != person.careerRank) lines += "${person.name}在${careerForTask(task)}一途晋升为【$nextCareer】。"
                 if (grow.merit > 0) lines += "${person.name}历练有进，功绩+${grow.merit}，疲劳${next.fatigue}。"
                 next
             }
@@ -2318,11 +2562,19 @@ object V3GameEngine {
         val peopleById = ageProcessed.associateBy { it.id }
         return ageProcessed.map { person ->
             val departedSpouse = person.spouseId?.let(peopleById::get)?.takeIf { !it.alive }
-            if (person.alive && departedSpouse != null) {
-                lines += "${person.name}与${departedSpouse.name}阴阳两隔，今后可另议婚配。"
-                person.copy(spouseId = null, spouseSinceMonth = null, pregnancyDueMonth = null)
-            } else {
-                person
+            val livingConcubineIds = person.concubineIds.filter { peopleById[it]?.alive == true }
+            when {
+                person.alive && departedSpouse != null -> {
+                    lines += "${person.name}与${departedSpouse.name}阴阳两隔，今后可另议婚配。"
+                    person.copy(
+                        spouseId = null,
+                        concubineIds = livingConcubineIds,
+                        spouseSinceMonth = null,
+                        pregnancyDueMonth = null
+                    )
+                }
+                livingConcubineIds != person.concubineIds -> person.copy(concubineIds = livingConcubineIds)
+                else -> person
             }
         }
     }
@@ -2384,11 +2636,15 @@ object V3GameEngine {
         var reservedPopulation = alivePeople(next).size + pregnantCount
         val eligibleCouples = next.people
             .filter { it.alive && it.gender == V3Gender.Male && it.spouseId != null && it.age in 18..55 }
-            .mapNotNull { husband ->
-                val wife = next.people.firstOrNull {
-                    it.id == husband.spouseId && it.alive && it.gender == V3Gender.Female && it.age in 18..45 && it.pregnancyDueMonth == null
-                } ?: return@mapNotNull null
-                husband to wife
+            .flatMap { husband ->
+                // 正妻 + 妾室都纳入生育候选
+                val wifeIds = listOfNotNull(husband.spouseId) + husband.concubineIds
+                wifeIds.mapNotNull { wifeId ->
+                    val wife = next.people.firstOrNull {
+                        it.id == wifeId && it.alive && it.gender == V3Gender.Female && it.age in 18..45 && it.pregnancyDueMonth == null
+                    } ?: return@mapNotNull null
+                    husband to wife
+                }
             }
             .sortedBy { it.first.lastBirthMonth ?: it.first.spouseSinceMonth ?: 0 }
 

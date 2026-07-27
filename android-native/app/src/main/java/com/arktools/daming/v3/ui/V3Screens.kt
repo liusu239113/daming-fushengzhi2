@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -1432,6 +1433,64 @@ private fun V3ClanPage(
             }
         }
     }
+    // ===== 纳妾面板 =====
+    val concubineEligible = state.people.filter { it.alive && it.gender == V3Gender.Male && it.spouseId != null && it.concubineIds.size < 3 && it.age in 18..55 }
+    if (concubineEligible.isNotEmpty()) {
+        var selectedConcubinePersonId by remember { mutableStateOf<Int?>(null) }
+        val concTarget = concubineEligible.firstOrNull { it.id == selectedConcubinePersonId } ?: concubineEligible.firstOrNull()
+        V3Panel {
+            Text("纳妾", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp))
+            Text("已婚男性族人可纳妾（上限3人）。纳妾费用为迎娶的60%，妾室同样可生育子嗣，加快人丁繁衍。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
+            Text("可纳妾族人（${concubineEligible.size}人）", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            concubineEligible.chunked(2).forEach { rowPeople ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowPeople.forEach { person ->
+                        val concCount = person.concubineIds.size
+                        V3SmallButton("${person.name} · 妾${concCount}/3", Modifier.weight(1f), selected = concTarget?.id == person.id) {
+                            selectedConcubinePersonId = person.id
+                        }
+                    }
+                    repeat(2 - rowPeople.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            concTarget?.let { person ->
+                val concCandidates = V3GameEngine.concubineCandidatesFor(person, state)
+                Text("正在为 ${person.name} 选妾（已有${person.concubineIds.size}/3）", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                if (concCandidates.isEmpty()) {
+                    Text("当前无可选妾室。提升族望或等待新媒人。", color = V3Muted, fontSize = 13.sp)
+                }
+                concCandidates.forEach { option ->
+                    val silverCost = option.silverCost * 60 / 100
+                    val grainCost = option.grainCost * 60 / 100
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = V3PaperDeep),
+                        border = BorderStroke(1.dp, V3Gold.copy(alpha = 0.6f)),
+                        shape = V3SoftShape
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(48.dp).clip(CircleShape).background(V3Rice).border(1.dp, V3Gold, CircleShape).padding(4.dp), contentAlignment = Alignment.Center) {
+                                AssetImage(
+                                    GameImages.v3SpousePortraits[option.prototypeId] ?: GameImages.v3AvatarPortraits[option.avatarKey] ?: GameImages.v3AvatarPortraits.getValue("female_youth"),
+                                    option.name, Modifier.matchParentSize().clip(CircleShape), ContentScale.Fit
+                                )
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(option.name, color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                    Text("${option.age}岁", color = V3Gold, fontSize = 12.sp)
+                                }
+                                Text("纳妾费：银${silverCost} / 粮${grainCost}", color = V3Gold, fontSize = 12.sp)
+                                Text(option.desc, color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                                V3SmallButton("纳${option.name}为妾", Modifier.fillMaxWidth(), enabled = state.silver >= silverCost && state.grain >= grainCost) {
+                                    controller.takeConcubine(person.id, option.id)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     V3Panel {
         Text(
             "宗族晋升",
@@ -1877,6 +1936,13 @@ private fun V3StrategyPage(
             val bannerUnlocked = V3GameEngine.isUnlocked(state, "RaiseBanner")
             Text("兵册 ${state.army.total()} · 乡勇 ${state.army.militia} · 枪${state.army.spear} 弓${state.army.archer} 盾${state.army.shield} 骑${state.army.cavalry}。", color = V3Ink, fontSize = 13.sp, lineHeight = 19.sp)
             Text("解锁：募兵 ${if (recruitUnlocked) "已开" else "小族/寨堡"} · 精兵 ${if (advancedUnlocked) "已开" else "望族+团练营"} · 征伐 ${if (conquestUnlocked) "已开" else "望族"} · 举旗 ${if (bannerUnlocked) "已开" else "县中大姓+兵80"}", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+            Text("军伍组织 ${V3GameEngine.militaryOrganizationLevel(state)} · 团练营、专业兵种与地域驻防共同提升长期军力。", color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (state.clanRank >= 4) {
+                V3SmallButton("自立举旗", Modifier.fillMaxWidth(), enabled = bannerUnlocked, selected = bannerUnlocked) {
+                    controller.raiseBanner()
+                }
+                Text("继续经营官府与军镇关系可走从龙勤王；选择举旗则进入割据自立路线，并显著提高官军压力。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+            }
             V3TroopType.entries.chunked(2).forEach { row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { type ->
@@ -2001,7 +2067,8 @@ private fun V3RegionManageDialog(region: V3WorldRegion, state: V3GameState, cont
         V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 470.dp)) {
         Text("${region.name} · ${region.status.label}", color = V3Gold, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Text("控制 ${region.control}/100 · 敌势 ${region.enemyPower} · 财富 ${region.wealth}", color = V3Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text("控制值越高，县外经营收益越稳定；敌势越高，征伐风险越大。财富决定该地域每月提供的银粮潜力。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("商栈 Lv.${region.tradePostLevel}/3 · 驻防营 Lv.${region.garrisonLevel}/3 · 商路总级 ${V3GameEngine.tradeNetworkLevel(state)} · 军伍组织 ${V3GameEngine.militaryOrganizationLevel(state)}", color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold, lineHeight = 18.sp)
+            Text("控制值越高，县外经营收益越稳定；商栈按当地财富持续分红并强化经营，驻防营降低敌势并补充军伍。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
             region.accordRoute?.let { route ->
                 Text(
                     "归附条约：${route.label} · 每月${V3GameEngine.accordBenefitText(route, region.tier)}",
@@ -2014,8 +2081,16 @@ private fun V3RegionManageDialog(region: V3WorldRegion, state: V3GameState, cont
             Text(region.desc, color = V3Muted, fontSize = 13.sp, lineHeight = 20.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V3SmallButton("结交", Modifier.weight(1f), enabled = region.status == V3RegionStatus.Unknown) { controller.contactRegion(region.id) }
-                V3SmallButton("经营", Modifier.weight(1f)) { controller.influenceRegion(region.id) }
+                V3SmallButton("经营", Modifier.weight(1f), enabled = region.status != V3RegionStatus.Pacified) { controller.influenceRegion(region.id) }
                 V3SmallButton("征伐", Modifier.weight(1f), enabled = state.conquestState == null && V3GameEngine.isUnlocked(state, "Conquest")) { controller.startConquest(region.id) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                V3SmallButton("扩建商栈", Modifier.weight(1f), enabled = region.status != V3RegionStatus.Unknown && region.tradePostLevel < 3) {
+                    controller.upgradeRegionalTradePost(region.id)
+                }
+                V3SmallButton("扩建驻防", Modifier.weight(1f), enabled = region.status in setOf(V3RegionStatus.Controlled, V3RegionStatus.Pacified) && region.garrisonLevel < 3) {
+                    controller.upgradeRegionalGarrison(region.id)
+                }
             }
             V3SmallButton("关闭", Modifier.fillMaxWidth(), selected = true, onClick = onDismiss)
         }
@@ -2503,7 +2578,7 @@ private fun V3PersonCard(
                             )
                         }
                         val assignedSite = person.assignedSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
-                        val titleBits = listOfNotNull(person.officeRank, person.militaryRank).joinToString(" · ")
+                        val titleBits = listOfNotNull(person.officeRank, person.militaryRank, person.careerRank).joinToString(" · ")
                         Text(
                             if (person.currentTask == null && person.trainingFocus == null) "待命${if (titleBits.isBlank()) "" else " · $titleBits"}" else "${person.currentTask?.label ?: person.trainingFocus?.label} · ${assignedSite?.name ?: "家中"}",
                             color = if (person.currentTask == null && person.trainingFocus == null) V3Muted else V3Green,
@@ -2672,12 +2747,33 @@ private fun V3TopBar(
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    Text(state.clanName, color = V3Gold, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                    Text("${mingEraLabel(state.year)}${state.month}月 · ${V3GameEngine.clanRankName(state)} · ${state.crisis}", color = V3Muted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(end = 7.dp)
+                ) {
+                    Text(
+                        state.clanName,
+                        color = V3Gold,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        "${mingEraLabel(state.year)}${state.month}月 · ${V3GameEngine.clanRankName(state)} · ${state.crisis}",
+                        color = V3Muted,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(
+                    Modifier.width(139.dp),
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
                     V3SmallButton("设置", Modifier.width(66.dp)) { controller.openSettings() }
                     V3SmallButton("菜单", Modifier.width(66.dp)) { onRequestBackToMenu() }
                 }
@@ -2685,11 +2781,13 @@ private fun V3TopBar(
             V3TimeControls(controller, guideTargets, tutorialStep)
             val progression = V3ProgressionEngine.snapshot(state)
             Text(
-                "主线：${progression.mainQuest.title} · ${progression.mainQuest.completedCount}/${progression.mainQuest.totalCount}项",
+                "主线：${progression.mainQuest.title} · ${progression.progressLabel}",
                 color = V3Red,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                lineHeight = 17.sp
+                lineHeight = 17.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
             Row(
                 Modifier
@@ -3015,6 +3113,14 @@ private fun V3SelectorChips(title: String, values: List<Pair<String, String>>, s
     }
 }
 
+/** 紧凑数字格式：>=10000→x.x万 >=1000→x.x千 否则原数 */
+private fun fmtCompact(v: Int): String = when {
+    v < 0 -> "-${fmtCompact(-v)}"
+    v >= 10000 -> "${"%.1f".format(v / 10000f)}万"
+    v >= 1000 -> "${"%.1f".format(v / 1000f)}千"
+    else -> v.toString()
+}
+
 @Composable
 private fun V3Metric(label: String, value: Int, color: Color, modifier: Modifier = Modifier) {
     Column(
@@ -3025,7 +3131,7 @@ private fun V3Metric(label: String, value: Int, color: Color, modifier: Modifier
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(label, color = V3Muted, fontSize = 11.sp)
-        Text(value.toString(), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(fmtCompact(value), color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -3046,7 +3152,7 @@ private fun V3ResourceMetric(
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             AssetImage(iconPath, null, Modifier.size(21.dp), ContentScale.Fit)
-            Text(value.toString(), color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(fmtCompact(value), color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
@@ -3849,6 +3955,8 @@ private fun V3ConquestDialog(target: String, enemyPower: Int, scale: String, con
 
 @Composable
 private fun V3SettingsDialog(controller: V3GameController, fontPreference: FontPreference, onRequestBackToMenu: () -> Unit) {
+    val activity = LocalContext.current as? android.app.Activity
+    var confirmExit by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = controller::closeSettings) {
         V3ImagePanel(GameImages.V3UiSettingsScroll, Modifier.widthIn(max = 460.dp)) {
             Text("游戏设置", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -3872,7 +3980,20 @@ private fun V3SettingsDialog(controller: V3GameController, fontPreference: FontP
                 V3SmallButton("返回主菜单", Modifier.weight(1f)) {
                     onRequestBackToMenu()
                 }
-                V3SmallButton("关闭", Modifier.weight(1f), selected = true) { controller.closeSettings() }
+                V3SmallButton("退出游戏", Modifier.weight(1f)) { confirmExit = true }
+            }
+            V3SmallButton("关闭设置", Modifier.fillMaxWidth(), selected = true) { controller.closeSettings() }
+        }
+    }
+    if (confirmExit) {
+        Dialog(onDismissRequest = { confirmExit = false }) {
+            V3ImagePanel(GameImages.V3UiSettingsScroll, Modifier.widthIn(max = 420.dp)) {
+                Text("退出游戏？", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text("当前进度已自动存档。确认后将关闭游戏。", color = V3Ink, fontSize = 14.sp, lineHeight = 21.sp)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton("取消", Modifier.weight(1f), selected = true) { confirmExit = false }
+                    V3SmallButton("确认退出", Modifier.weight(1f)) { activity?.finishAffinity() }
+                }
             }
         }
     }

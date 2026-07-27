@@ -106,6 +106,9 @@ data class V3ProgressionSnapshot(
 ) {
     val primaryAction: V3RecommendedAction
         get() = recommendedActions.first()
+
+    val progressLabel: String
+        get() = "第${chapter.number}/6章 · 本章${mainQuest.completedCount}/${mainQuest.totalCount}项 · 后续仍有${(6 - chapter.number).coerceAtLeast(0)}章"
 }
 
 object V3ProgressionEngine {
@@ -139,7 +142,7 @@ object V3ProgressionEngine {
                 state.year >= 1642 ||
                 (
                     dominantRoute == V3Route.Warlord &&
-                        state.unificationProgress >= 70 &&
+                        state.unificationProgress >= 90 &&
                         routeQuest(state).completed
                     ) ->
                 V3Chapter.FinalLegacy
@@ -263,20 +266,33 @@ object V3ProgressionEngine {
         val elapsedMonths = elapsedMonths(state)
         val secondGeneration = state.people.count { it.alive && it.generation >= 2 }
         val externalRegions = externalControlledRegions(state)
-        val stageCondition = when (state.clanRank) {
-            1 -> V3QuestCondition("经营满8个月", elapsedMonths, 8)
-            2 -> V3QuestCondition("经营满42个月", elapsedMonths, 42)
-            3 -> V3QuestCondition("控制县外地域", externalRegions, 1)
-            4 -> V3QuestCondition("控制战略地域", V3GameEngine.controlledRegionCount(state), 4)
-            else -> V3QuestCondition("阶段历练", 1, 1)
+        val stageConditions = when (state.clanRank) {
+            1 -> listOf(
+                V3QuestCondition("经营月数", elapsedMonths, 18),
+                V3QuestCondition("家产总级", V3GameEngine.estateLevelTotal(state), 2)
+            )
+            2 -> listOf(
+                V3QuestCondition("经营月数", elapsedMonths, 60),
+                V3QuestCondition("家产总级", V3GameEngine.estateLevelTotal(state), 6)
+            )
+            3 -> listOf(
+                V3QuestCondition("经营月数", elapsedMonths, 120),
+                V3QuestCondition("县外地域", externalRegions, 2),
+                V3QuestCondition("商军组织", V3GameEngine.tradeNetworkLevel(state) + V3GameEngine.militaryOrganizationLevel(state), 4)
+            )
+            4 -> listOf(
+                V3QuestCondition("经营月数", elapsedMonths, 240),
+                V3QuestCondition("战略地域", V3GameEngine.controlledRegionCount(state), 6),
+                V3QuestCondition("主路线", state.routeScores.values.maxOrNull() ?: 0, 80)
+            )
+            else -> listOf(V3QuestCondition("阶段历练", 1, 1))
         }
         val generationCondition = when (state.clanRank) {
             1 -> V3QuestCondition("第二代子嗣", secondGeneration, 1)
-            2 -> V3QuestCondition("第二代子嗣", secondGeneration, 2)
+            2 -> V3QuestCondition("第二代子嗣", secondGeneration, 3)
             else -> null
         }
-        val conditions = listOfNotNull(
-            stageCondition,
+        val conditions = stageConditions + listOfNotNull(
             generationCondition,
             V3QuestCondition("银两", state.silver, cost.silver),
             V3QuestCondition("粮食", state.grain, cost.grain),
@@ -300,7 +316,7 @@ object V3ProgressionEngine {
     private fun routeQuest(state: V3GameState): V3QuestCard {
         val route = V3GameEngine.dominantRoute(state)
         val routeScore = state.routeScores[route] ?: 0
-        val conditions = when (route) {
+        val routeConditions = when (route) {
             V3Route.Scholar -> listOf(
                 V3QuestCondition("耕读路线", routeScore, 80),
                 V3QuestCondition("高学识族人", state.people.count { it.alive && it.study >= 70 }, 2),
@@ -309,17 +325,17 @@ object V3ProgressionEngine {
             )
 
             V3Route.Merchant -> listOf(
-                V3QuestCondition("富商路线", routeScore, 80),
-                V3QuestCondition("银两", state.silver, 1800),
-                V3QuestCondition("商帮关系", state.relations.merchants, 60),
-                V3QuestCondition("家产等级", V3GameEngine.estateLevelTotal(state), 12)
+                V3QuestCondition("富商路线", routeScore, 100),
+                V3QuestCondition("银两", state.silver, 3000),
+                V3QuestCondition("商帮关系", state.relations.merchants, 75),
+                V3QuestCondition("商路总级", V3GameEngine.tradeNetworkLevel(state), 12)
             )
 
             V3Route.Fortress -> listOf(
-                V3QuestCondition("自保路线", routeScore, 80),
-                V3QuestCondition("乡勇", state.militia, 160),
-                V3QuestCondition("安定地点", state.sites.count { it.risk < 30 }, 6),
-                V3QuestCondition("粮食", state.grain, 1200)
+                V3QuestCondition("自保路线", routeScore, 100),
+                V3QuestCondition("兵册", state.army.total(), 240),
+                V3QuestCondition("军伍组织", V3GameEngine.militaryOrganizationLevel(state), 10),
+                V3QuestCondition("粮食", state.grain, 2000)
             )
 
             V3Route.Loyalist -> listOf(
@@ -330,10 +346,10 @@ object V3ProgressionEngine {
             )
 
             V3Route.Warlord -> listOf(
-                V3QuestCondition("割据路线", routeScore, 80),
-                V3QuestCondition("控制地域", V3GameEngine.controlledRegionCount(state), 6),
-                V3QuestCondition("乡勇", state.militia, 220),
-                V3QuestCondition("统一进度", state.unificationProgress, 60)
+                V3QuestCondition("割据路线", routeScore, 110),
+                V3QuestCondition("控制地域", V3GameEngine.controlledRegionCount(state), 8),
+                V3QuestCondition("兵册", state.army.total(), 320),
+                V3QuestCondition("统一进度", state.unificationProgress, 75)
             )
 
             V3Route.Overseas -> listOf(
@@ -350,6 +366,10 @@ object V3ProgressionEngine {
                 V3QuestCondition("安定地点", state.sites.count { it.risk < 30 }, 6)
             )
         }
+        val conditions = listOf(
+            V3QuestCondition("家业历程（月）", elapsedMonths(state), 300),
+            V3QuestCondition("家族人口", V3GameEngine.alivePeople(state).size, 20)
+        ) + routeConditions
         return V3QuestCard(
             id = "route_${route.name.lowercase()}",
             category = V3QuestCategory.Main,

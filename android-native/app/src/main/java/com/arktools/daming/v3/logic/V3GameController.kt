@@ -179,6 +179,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun takeConcubine(personId: Int, candidateId: String) {
+        audio.playSfx(SfxKey.V3Edict)
+        state = V3GameEngine.takeConcubine(state, personId, candidateId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
     fun rankUp() {
         audio.playSfx(SfxKey.V3Build)
         state = V3GameEngine.rankUp(state)
@@ -266,6 +273,20 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     fun influenceRegion(regionId: String) {
         audio.select()
         state = V3GameEngine.influenceRegion(state, regionId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun upgradeRegionalTradePost(regionId: String) {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.upgradeRegionalTradePost(state, regionId)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+    }
+
+    fun upgradeRegionalGarrison(regionId: String) {
+        audio.playSfx(SfxKey.V3Build)
+        state = V3GameEngine.upgradeRegionalGarrison(state, regionId)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
     }
