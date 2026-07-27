@@ -138,11 +138,14 @@ local function CreateTopBar()
         padding = { 8, 12, 6, 12 },
         gap = 4,
         flexShrink = 0,
+        position = "relative",
         overflow = "hidden",
         children = {
-            -- 第一行：宗族信息 + 年份 + 设置（设置按钮独立，永不被裁）
+            -- 第一行：宗族信息 + 年份（右侧让位给绝对定位的设置按钮；溢出裁自身文本）
             UI.Panel {
                 flexDirection = "row", alignItems = "center", gap = 4,
+                marginRight = 66,
+                overflow = "hidden",
                 children = {
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 6,
@@ -190,27 +193,27 @@ local function CreateTopBar()
                             },
                         },
                     },
-                    -- 设置按钮：独立项，flexShrink=0 永不收缩，永远可见
+                },
+            },
+            -- 设置按钮：绝对定位钉死右上角，与横排内容无关，永不被裁
+            UI.Panel {
+                position = "absolute", top = 6, right = 8,
+                flexDirection = "row", alignItems = "center", gap = 3,
+                paddingHorizontal = 6, paddingVertical = 3,
+                borderRadius = 5,
+                backgroundColor = { 245, 240, 225, 230 },
+                borderWidth = 1, borderColor = { 180, 160, 120, 160 },
+                onClick = function(self)
+                    AudioManager.Click()
+                    if ShowPauseMenu then ShowPauseMenu() end
+                end,
+                children = {
                     UI.Panel {
-                        flexDirection = "row", alignItems = "center", gap = 3,
-                        flexShrink = 0,
-                        paddingHorizontal = 6, paddingVertical = 3,
-                        borderRadius = 5,
-                        backgroundColor = { 245, 240, 225, 200 },
-                        borderWidth = 1, borderColor = { 180, 160, 120, 120 },
-                        onClick = function(self)
-                            AudioManager.Click()
-                            if ShowPauseMenu then ShowPauseMenu() end
-                        end,
-                        children = {
-                            UI.Panel {
-                                width = 16, height = 16,
-                                backgroundImage = "image/icon_gear_black_20260512150437.png",
-                                backgroundFit = "contain",
-                            },
-                            UI.Label { text = "设置", fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-                        },
+                        width = 16, height = 16,
+                        backgroundImage = "image/icon_gear_black_20260512150437.png",
+                        backgroundFit = "contain",
                     },
+                    UI.Label { text = "设置", fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
                 },
             },
             -- 第二行：资源 + 人口（金色徽章图标 + 格式化数字）
