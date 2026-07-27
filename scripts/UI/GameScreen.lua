@@ -140,9 +140,9 @@ local function CreateTopBar()
         flexShrink = 0,
         overflow = "hidden",
         children = {
-            -- 第一行：宗族信息 + 年份
+            -- 第一行：宗族信息 + 年份 + 设置（设置按钮独立，永不被裁）
             UI.Panel {
-                flexDirection = "row", justifyContent = "space-between", alignItems = "center",
+                flexDirection = "row", alignItems = "center", gap = 4,
                 children = {
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 6,
@@ -163,7 +163,7 @@ local function CreateTopBar()
                     },
                     UI.Panel {
                         flexDirection = "row", alignItems = "center", gap = 5,
-                        flexShrink = 0,
+                        flexShrink = 1, minWidth = 0, overflow = "hidden",
                         backgroundColor = { 255, 252, 240, 160 },
                         borderRadius = 6, paddingHorizontal = 5, paddingVertical = 2,
                         children = {
@@ -188,26 +188,27 @@ local function CreateTopBar()
                                     return items
                                 end)(),
                             },
-                            -- 暂停菜单按钮
+                        },
+                    },
+                    -- 设置按钮：独立项，flexShrink=0 永不收缩，永远可见
+                    UI.Panel {
+                        flexDirection = "row", alignItems = "center", gap = 3,
+                        flexShrink = 0,
+                        paddingHorizontal = 6, paddingVertical = 3,
+                        borderRadius = 5,
+                        backgroundColor = { 245, 240, 225, 200 },
+                        borderWidth = 1, borderColor = { 180, 160, 120, 120 },
+                        onClick = function(self)
+                            AudioManager.Click()
+                            if ShowPauseMenu then ShowPauseMenu() end
+                        end,
+                        children = {
                             UI.Panel {
-                                flexDirection = "row", alignItems = "center", gap = 3,
-                                paddingHorizontal = 6, paddingVertical = 3,
-                                borderRadius = 5,
-                                backgroundColor = { 245, 240, 225, 200 },
-                                borderWidth = 1, borderColor = { 180, 160, 120, 120 },
-                                onClick = function(self)
-                                    AudioManager.Click()
-                                    if ShowPauseMenu then ShowPauseMenu() end
-                                end,
-                                children = {
-                                    UI.Panel {
-                                        width = 16, height = 16,
-                                        backgroundImage = "image/icon_gear_black_20260512150437.png",
-                                        backgroundFit = "contain",
-                                    },
-                                    UI.Label { text = "设置", fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
-                                },
+                                width = 16, height = 16,
+                                backgroundImage = "image/icon_gear_black_20260512150437.png",
+                                backgroundFit = "contain",
                             },
+                            UI.Label { text = "设置", fontSize = 12, fontColor = Theme.TEXT_PRIMARY },
                         },
                     },
                 },
