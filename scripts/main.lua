@@ -263,12 +263,12 @@ function ShowSaveManageModal()
 end
 
 -- ============================================================================
--- 设置弹窗（音量控制 + 关于信息）
+-- 设置弹窗（音量控制 + 游戏操作 + 关于信息）
 -- ============================================================================
 
 function ShowSettingsModal()
     local modal = UI.Modal {
-        title = "音量设置",
+        title = "设置",
         size = "md",
         showCloseButton = true,
         closeOnOverlay = true,
@@ -300,6 +300,88 @@ function ShowSettingsModal()
         }
     end
 
+    local function ActionButton(text, color, textColor, onClick)
+        return UI.Panel {
+            width = "100%", height = 42,
+            borderRadius = 8,
+            backgroundColor = color,
+            borderWidth = 1,
+            borderColor = Theme.BORDER,
+            justifyContent = "center",
+            alignItems = "center",
+            onClick = function(self)
+                AudioManager.Click()
+                onClick()
+            end,
+            children = {
+                UI.Label { text = text, fontSize = 14, fontColor = textColor, fontWeight = "bold" },
+            },
+        }
+    end
+
+    local function ExitGame()
+        if currentScreen_ == "game" and GameData.state then
+            SaveSystem.AutoSave()
+        end
+        engine:Exit()
+    end
+
+    local function ShowExitConfirmation()
+        modal:Close()
+
+        local confirmModal = UI.Modal {
+            title = "退出游戏",
+            size = "sm",
+            showCloseButton = true,
+            closeOnOverlay = true,
+        }
+        confirmModal:AddContent(UI.Panel {
+            width = "100%", gap = 12, padding = 8,
+            children = {
+                UI.Label {
+                    text = "确定要退出游戏吗？当前进度会自动保存。",
+                    fontSize = 13,
+                    fontColor = Theme.TEXT_PRIMARY,
+                    textAlign = "center",
+                    whiteSpace = "normal",
+                },
+                UI.Panel {
+                    width = "100%", flexDirection = "row", gap = 8,
+                    children = {
+                        UI.Panel {
+                            flex = 1, height = 40, borderRadius = 8,
+                            backgroundColor = Theme.BG_CARD,
+                            borderWidth = 1, borderColor = Theme.BORDER,
+                            justifyContent = "center", alignItems = "center",
+                            onClick = function(self)
+                                AudioManager.Click()
+                                confirmModal:Close()
+                                ShowSettingsModal()
+                            end,
+                            children = {
+                                UI.Label { text = "取消", fontSize = 14, fontColor = Theme.TEXT_PRIMARY },
+                            },
+                        },
+                        UI.Panel {
+                            flex = 1, height = 40, borderRadius = 8,
+                            backgroundColor = { 205, 76, 65, 255 },
+                            justifyContent = "center", alignItems = "center",
+                            onClick = function(self)
+                                AudioManager.Click()
+                                confirmModal:Close()
+                                ExitGame()
+                            end,
+                            children = {
+                                UI.Label { text = "确认退出", fontSize = 14, fontColor = Theme.TEXT_WHITE, fontWeight = "bold" },
+                            },
+                        },
+                    },
+                },
+            },
+        })
+        confirmModal:Open()
+    end
+
     modal:AddContent(UI.Panel {
         width = "100%",
         gap = 10,
@@ -321,11 +403,25 @@ function ShowSettingsModal()
             UI.Panel {
                 width = "100%", alignItems = "center", gap = 4,
                 children = {
-                    UI.Label { text = "大明浮生志 · 贰", fontSize = 15, fontColor = Theme.TEXT_PRIMARY },
-                    UI.Label { text = "大明风华 · 版本 v2.0.0", fontSize = 11, fontColor = Theme.TEXT_MUTED },
+                    UI.Label { text = "大明浮生志3", fontSize = 15, fontColor = Theme.TEXT_PRIMARY },
+                    UI.Label { text = "版本 v1.0.1", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                     UI.Label { text = "一款大明王朝宗族模拟经营游戏", fontSize = 11, fontColor = Theme.TEXT_MUTED },
                 },
             },
+
+            -- 游戏操作
+            UI.Panel { width = "100%", height = 1, backgroundColor = Theme.BORDER, marginVertical = 6 },
+            UI.Label { text = "游戏操作", fontSize = 14, fontColor = Theme.GOLD, marginBottom = 4 },
+            ActionButton("返回主菜单", Theme.BG_CARD, Theme.TEXT_PRIMARY, function()
+                if currentScreen_ == "game" and GameData.state then
+                    SaveSystem.AutoSave()
+                end
+                modal:Close()
+                ShowScreen("menu")
+            end),
+            ActionButton("退出游戏", { 205, 76, 65, 255 }, Theme.TEXT_WHITE, function()
+                ShowExitConfirmation()
+            end),
         },
     })
 
