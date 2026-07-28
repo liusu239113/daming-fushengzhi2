@@ -857,7 +857,7 @@ object V3EventContent {
                 )
                 V3ActiveEvent(
                     title = "$monthLabel·${site.siteName}${variant.title}",
-                    body = "$monthLabel之际，${site.siteName}${variant.opening}，症结集中在${site.pressure}。${site.ally}将三份处置章程送到宗祠，请当月定夺。",
+                    body = "${monthLabel}之际，${site.siteName}${variant.opening}，症结集中在${site.pressure}。${site.ally}将三份处置章程送到宗祠，请当月定夺。",
                     choices = choices,
                     id = "situation_${site.id}_${month}_${variant.id}",
                     minChapter = site.minChapter,

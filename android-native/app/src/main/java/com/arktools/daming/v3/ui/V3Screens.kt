@@ -1058,6 +1058,19 @@ private fun V3LocalGuideOverlay(
     val configuration = LocalConfiguration.current
     val screenHeightDp = configuration.screenHeightDp.dp
     val gapPx = with(density) { 12.dp.toPx() }
+    // 超时：2.5秒后即使没定位到也启用操作按钮，防止卡关
+    var timeoutReached by remember(safeIndex) { mutableStateOf(false) }
+    LaunchedEffect(safeIndex) {
+        timeoutReached = false
+        delay(2500)
+        timeoutReached = true
+    }
+    val buttonEnabled = targetBounds != null || timeoutReached
+    val buttonText = when {
+        targetBounds != null -> "请完成高亮操作"
+        timeoutReached -> "跳过定位继续"
+        else -> "正在定位目标"
+    }
     // 记录卡片自测量尺寸，用于精确避开高亮洞（避免引导卡片自身 disabled 按钮盖住目标）
     var cardSizePx by remember { mutableStateOf(IntSize.Zero) }
     // 计算卡片的垂直位置：永远贴在洞的对侧，与洞留 12dp 间隙
@@ -1134,11 +1147,13 @@ private fun V3LocalGuideOverlay(
                 }
                 step.requiresAction -> {
                     V3SmallButton(
-                        if (targetBounds == null) "正在定位目标" else "请完成高亮操作",
+                        buttonText,
                         Modifier.fillMaxWidth(),
-                        enabled = false,
+                        enabled = buttonEnabled,
                         selected = true
-                    ) {}
+                    ) {
+                        controller.advanceTutorial(safeIndex)
+                    }
                 }
                 else -> {
                     V3SmallButton("下一步", Modifier.fillMaxWidth(), selected = true) {
@@ -1167,6 +1182,19 @@ private fun V3ElderGuideOverlay(
         controller.playGuideTick()
     }
     val cardAlignment = if (cardAtTop) Alignment.TopCenter else Alignment.BottomCenter
+    // 超时：2.5秒后即使没定位到也启用操作按钮，防止卡关
+    var timeoutReached by remember(safeIndex) { mutableStateOf(false) }
+    LaunchedEffect(safeIndex) {
+        timeoutReached = false
+        delay(2500)
+        timeoutReached = true
+    }
+    val actionEnabled = targetBounds != null || timeoutReached
+    val actionText = when {
+        targetBounds != null -> "请完成高亮操作"
+        timeoutReached -> "跳过定位继续"
+        else -> "正在定位目标"
+    }
     Box(Modifier.fillMaxSize()) {
         V3GuideFocusFrame(
             targetBounds = targetBounds,
@@ -1235,11 +1263,13 @@ private fun V3ElderGuideOverlay(
                         }
                     } else {
                         V3SmallButton(
-                            if (targetBounds == null) "正在定位目标" else "请完成高亮操作",
+                            actionText,
                             Modifier.weight(2f),
-                            enabled = false,
+                            enabled = actionEnabled,
                             selected = true
-                        ) {}
+                        ) {
+                            controller.advanceTutorial(safeIndex)
+                        }
                     }
                 }
             }
@@ -2872,7 +2902,7 @@ private fun V3TaskButtons(
                     Modifier.guideTarget(V3GuideFocus.PersonTask, guideTargets)
                 } else Modifier
                 V3SmallButton(
-                    task.label,
+                    if (site != null) "${task.label}·${site.name}" else task.label,
                     targetModifier.weight(1f),
                     enabled = site != null && person.currentTask == null && person.trainingFocus == null
                 ) {
@@ -4183,12 +4213,12 @@ private fun nextAdvice(state: V3GameState): String {
     return when {
         !hasSpouse -> "前往【宗族】为${state.founderName}完成婚配；完成后解锁添丁传承。"
         waitingMarriage != null -> "${waitingMarriage.name}已到适婚年龄，可前往【宗族】选择此人并查看提亲对象。"
-        builtSites < 2 -> "在【家业】点县域集市并营建第二处产业；完成后形成银粮双收入。"
+        builtSites < 2 -> "在【家业】点县域→集市或医馆营建第二处产业；立户阶段即可建集市与医馆，升小族还可建县衙、书院。"
         !hasAssignment -> "前往【族人】点${state.founderName}，安排培养或派差；月结时获得成长与收益。"
         !advancedFromOpeningMonth -> "返回【家业】点继续或倍速，推进首月结算；倒计时会显示距下月秒数。"
-        state.clanRank == 1 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升小族；解锁议事、书院医馆、县衙与基础募兵。"
+        state.clanRank == 1 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升小族；解锁议事、县衙、书院与基础募兵。"
         state.clanRank == 1 -> "完成首年目标并积累银90、粮130、人口2、产业2、族望10，准备晋升小族。"
-        state.clanRank == 2 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升望族；解锁天下经营、军务产业和跨域征伐。"
+        state.clanRank == 2 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升望族；解锁寨堡、码头、山道与天下征伐。"
         state.clanRank == 2 -> "经营县域、培养族人并扩大家口，满足望族晋升条件。"
         state.clanRank == 3 && V3GameEngine.canRankUp(state) -> "晋升县中大姓，筹备80兵册后可举旗。"
         else -> "按【眼前目标】经营产业、派遣族人并推进月结，逐步完成路线与宗族晋升。"
@@ -4196,7 +4226,7 @@ private fun nextAdvice(state: V3GameState): String {
 }
 
 private fun rankUnlockPreview(rank: Int): String = when (rank) {
-    2 -> "宗族议事、县衙、书院、医馆、铺面粮仓、基础募兵"
+    2 -> "宗族议事、县衙、书院、基础募兵"
     3 -> "寨堡、码头、山道、作坊商队团练营、天下经营与征伐"
     4 -> "举旗割据、骑兵与县域统合"
     5 -> "郡望世家与统一终局"
@@ -4322,12 +4352,23 @@ private fun bestPersonFor(people: List<V3Person>, task: V3TaskType): V3Person? {
 }
 
 private fun targetSiteFor(state: V3GameState, task: V3TaskType): V3CountySite? {
-    return state.sites
+    val candidates = state.sites
         .filter {
             it.taskTypes.contains(task) &&
                 V3GameEngine.isSiteUnlocked(state, it.type)
         }
-        .maxWithOrNull(compareBy<V3CountySite> { it.level }.thenBy { it.risk })
+    if (candidates.isEmpty()) return null
+    return when (task) {
+        // 风险治理类任务：优先派往风险最高的地点，解决问题
+        V3TaskType.Fortify, V3TaskType.Scout -> candidates.maxByOrNull { it.risk }
+        V3TaskType.Govern, V3TaskType.Relief -> candidates.maxByOrNull { it.risk * 2 - it.control - it.level * 5 }
+        // 发展收益类任务：优先已建成地点，再选等级高、风险低的
+        V3TaskType.Farm, V3TaskType.Trade, V3TaskType.Study,
+        V3TaskType.Diplomacy, V3TaskType.Recruit -> candidates
+            .sortedWith(compareByDescending<V3CountySite> { it.level }
+                .thenBy { it.risk })
+            .firstOrNull()
+    }
 }
 
 @Composable

@@ -122,9 +122,14 @@ object V3GameEngine {
         val wife = if (person.gender == V3Gender.Female) person else spouse
         if (wife.age !in 18..45 || husband.age !in 18..55) return "已过自然生育年龄"
         val currentMonth = state.year * 12 + state.month
+        val isFemaleView = person.gender == V3Gender.Female
         wife.pregnancyDueMonth?.let { dueMonth ->
             val remaining = (dueMonth - currentMonth).coerceAtLeast(0)
-            return if (remaining == 0) "已有身孕，本月将临盆" else "已有身孕，约$remaining 个月后临盆"
+            return if (isFemaleView) {
+                if (remaining == 0) "已有身孕，本月将临盆" else "已有身孕，约$remaining 个月后临盆"
+            } else {
+                if (remaining == 0) "配偶即将临盆，本月添丁" else "配偶有孕，约$remaining 个月后添丁"
+            }
         }
         val capacity = 2 + state.clanRank * 4
         val reservedBirths = state.people.count { it.alive && it.gender == V3Gender.Female && it.pregnancyDueMonth != null }
@@ -139,7 +144,11 @@ object V3GameEngine {
             CHILD_BIRTH_INTERVAL_MONTHS
         }
         val remaining = (wait - (currentMonth - anchor)).coerceAtLeast(0)
-        return if (remaining == 0) "已进入添丁候选期，月结时将确认喜脉" else "备孕中，约$remaining 个月后可确认喜脉"
+        return if (isFemaleView) {
+            if (remaining == 0) "已进入添丁候选期，月结时将确认喜脉" else "备孕中，约$remaining 个月后可确认喜脉"
+        } else {
+            if (remaining == 0) "等待添丁，月结时将确认喜讯" else "等待添丁，约$remaining 个月后有喜讯"
+        }
     }
 
     fun normalizeState(state: V3GameState): V3GameState {
@@ -2356,14 +2365,21 @@ object V3GameEngine {
         val route = dominantRoute(state)
         val routeScore = state.routeScores[route] ?: 0
         val stableSites = state.sites.count { it.risk < 35 && it.control >= 40 }
-        val resourceScore = (state.silver / 22) + (state.grain / 30) + (state.militia / 10)
-        val familyScore = alivePeople(state).size * 3 + state.clanRank * 12 + builtSiteCount(state) * 5
-        val relationScore = relationTotal(state.relations) / 8
-        val score = routeScore + stableSites * 4 + resourceScore + familyScore + relationScore + state.cohesion / 5 + state.influence / 4 + estateLevelTotal(state) * 3 + controlledRegionCount(state) * 12 + state.unificationProgress
+        val resourceScore = (state.silver / 30) + (state.grain / 45) + (state.militia / 16)
+        val familyScore = alivePeople(state).size * 4 + state.clanRank * 16 + builtSiteCount(state) * 8
+        val relationScore = relationTotal(state.relations) / 10
+        // 增加内容深度：事件选择次数、传记长度、目标完成度
+        val eventChoices = state.eventLog.count { it.contains("选择：") }
+        val biographyScore = state.biography.size.coerceAtMost(80) / 4
+        val goalScore = state.annualGoals.count { it.completed } * 3
+        val score = routeScore + stableSites * 5 + resourceScore + familyScore + relationScore +
+            state.cohesion / 6 + state.influence / 5 + estateLevelTotal(state) * 5 +
+            controlledRegionCount(state) * 16 + state.unificationProgress * 2 +
+            eventChoices * 2 + biographyScore + goalScore
         val tier = when {
-            score >= 150 -> V3EndingTier.Historic
-            score >= 105 -> V3EndingTier.Strong
-            score >= 65 -> V3EndingTier.Viable
+            score >= 220 -> V3EndingTier.Historic
+            score >= 150 -> V3EndingTier.Strong
+            score >= 95 -> V3EndingTier.Viable
             else -> V3EndingTier.Fragile
         }
         val plan = V3Content.routePlans.firstOrNull { it.route == route }
