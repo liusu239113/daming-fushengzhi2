@@ -72,7 +72,9 @@ enum class V3TrainingType(val label: String, val desc: String) {
 enum class V3ExamStage(val label: String, val title: String) {
     County("县试", "童生"),
     Prefecture("府试", "秀才"),
-    Provincial("乡试", "举人")
+    Provincial("乡试", "举人"),
+    Metropolitan("会试", "贡士"),
+    Palace("殿试", "进士")
 }
 
 @Serializable
@@ -484,7 +486,61 @@ data class V3TaskPlan(
 data class V3ActiveEvent(
     val title: String,
     val body: String,
-    val choices: List<V3EventChoice>
+    val choices: List<V3EventChoice>,
+    val id: String = "",
+    val minChapter: Int = 1,
+    val maxChapter: Int = 6,
+    val months: List<Int> = emptyList(),
+    val minYear: Int = 1601,
+    val maxYear: Int = 1644,
+    val requiredSiteId: String? = null,
+    val preferredRoute: V3Route? = null,
+    val minSilver: Int? = null,
+    val maxSilver: Int? = null,
+    val minGrain: Int? = null,
+    val maxGrain: Int? = null,
+    val minPopulation: Int? = null,
+    val maxPopulation: Int? = null,
+    val minEstateLevel: Int? = null,
+    val relationKey: String? = null,
+    val minRelation: Int? = null,
+    val maxRelation: Int? = null,
+    val minSiteRisk: Int? = null,
+    val maxSiteRisk: Int? = null,
+    val requiredFlag: String? = null,
+    val excludedFlag: String? = null,
+    val cooldownGroup: String = "",
+    val cooldownMonths: Int = 18
+)
+
+@Serializable
+enum class V3MiniGameType(val label: String) {
+    Poetry("诗会对句"),
+    Accounting("账局核算"),
+    Waterworks("治水决策"),
+    Formation("军阵推演"),
+    Medicine("医药辨症"),
+    Etiquette("礼法公议")
+}
+
+@Serializable
+data class V3MiniGameQuestion(
+    val id: String,
+    val type: V3MiniGameType,
+    val title: String,
+    val prompt: String,
+    val options: List<String>,
+    val answerIndex: Int,
+    val note: String
+)
+
+@Serializable
+data class V3MiniGameSession(
+    val questionId: String,
+    val choiceLabel: String,
+    val eventId: String = "",
+    val eventTitle: String = "",
+    val cooldownGroup: String = ""
 )
 
 // 压力点触发的即时激励广告（非存档字段，运行时弹窗用）
@@ -497,7 +553,9 @@ data class V3CrisisAd(
     val grain: Int = 0,
     val cohesion: Int = 0,
     val repairDurability: Int = 0,
-    val cureIllness: Boolean = false   // true 时自动治愈一名患病族人
+    val cureIllness: Boolean = false,
+    val settleDeficit: Boolean = false, // true 时将负银负粮先平到0，再各加奖励
+    val clinicAutoTreatmentMonths: Int = 0
 )
 
 @Serializable
@@ -527,6 +585,7 @@ data class V3EventChoice(
     val branchImpacts: List<V3BranchImpact> = emptyList(),
     val storyFlag: String? = null,
     val removeFlag: String? = null,
+    val miniGameType: V3MiniGameType? = null,
     val createBranch: V3Branch? = null,
     val regionId: String? = null,
     val regionControlDelta: Int = 0,
@@ -696,12 +755,38 @@ data class V3CardRequire(
         if (minChildren != null) parts += "子嗣≥${minChildren}"
         if (minAliveAdults != null) parts += "成丁≥${minAliveAdults}"
         if (minAlivePeople != null) parts += "族人≥${minAlivePeople}"
-        if (requiredBranch != null) parts += "需立${requiredBranch}脉"
+        if (requiredBranch != null) {
+            val branchLabel = when (requiredBranch) {
+                "scholar" -> "读书"
+                "martial" -> "军伍"
+                "merchant" -> "商事"
+                "sea" -> "海贸"
+                "second" -> "二房"
+                else -> "指定支"
+            }
+            parts += "需立${branchLabel}脉"
+        }
         if (minBranchCount != null) parts += "支脉≥${minBranchCount}"
         if (minPatriarchAge != null) parts += "家主≥${minPatriarchAge}岁"
-        if (flagRequired != null) parts += "需$flagRequired"
-        if (flagBlocked != null) parts += "未$flagBlocked"
-        if (minPatriarchStat != null && minPatriarchStatValue != null) parts += "${minPatriarchStat}≥$minPatriarchStatValue"
+        if (flagRequired != null) {
+            val flagLabel = when (flagRequired) {
+                "exam_county_ready" -> "先完成县府试准备"
+                "exam_patronage_ready" -> "先备下县试蒙馆束脩"
+                else -> "先完成前置剧情"
+            }
+            parts += flagLabel
+        }
+        if (flagBlocked != null) parts += "该剧情已结束"
+        if (minPatriarchStat != null && minPatriarchStatValue != null) {
+            val statLabel = when (minPatriarchStat) {
+                "conduct" -> "品行"
+                "stewardship" -> "治家"
+                "prestige" -> "声望"
+                "health" -> "体质"
+                else -> "相关能力"
+            }
+            parts += "家主${statLabel}≥$minPatriarchStatValue"
+        }
         return if (parts.isEmpty()) null else parts.joinToString(" · ")
     }
 }
@@ -905,6 +990,7 @@ data class V3GameState(
     val routeScores: Map<V3Route, Int> = emptyMap(),
     val annualGoals: List<V3AnnualGoal> = emptyList(),
     val examSession: V3ExamSession? = null,
+    val miniGameSession: V3MiniGameSession? = null,
     val battleState: V3BattleState? = null,
     val rebelHeat: Int = 0,
     val finalEnding: V3FinalEnding? = null,
@@ -921,6 +1007,7 @@ data class V3GameState(
     // —— P0 融合字段 ——
     val patriarch: V3Patriarch = V3Patriarch(),
     val pendingSuccession: Boolean = false,
+    val regencyHeirId: Int? = null,
     val refugees: Int = 0,                 // 流民
     val garrisonMorale: Int = 60,          // 守望士气 0-100
     val unrestLevel: Int = 0,              // 庄内怨气象 0-100（过高触发庄乱）
@@ -937,5 +1024,9 @@ data class V3GameState(
     val pendingDice: V3DiceRoll? = null,
     val hexBattleState: V3HexBattleState? = null,
     val hexBattleCompleted: Boolean = false,
-    val currentCrisisStage: String? = null // grain_shortage / unrest / mutiny，便于级联
+    val currentCrisisStage: String? = null, // grain_shortage / unrest / mutiny，便于级联
+    val consecutiveDeficitMonths: Int = 0, // 银两或粮食为负的连续月数；达到12个月触发破产结局
+    val clinicHealerId: Int? = null,
+    val clinicAutoTreatmentMonths: Int = 0,
+    val patriarchCriticalWarningMonth: Int = -1
 )

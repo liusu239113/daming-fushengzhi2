@@ -1,6 +1,54 @@
 package com.arktools.daming.v3.data
 
 object V3EventContent {
+    val miniGameQuestions = listOf(
+        V3MiniGameQuestion("poetry_1", V3MiniGameType.Poetry, "春江诗会", "上句“春潮带雨晚来急”，最合适的下句是？", listOf("野渡无人舟自横", "一枝红杏出墙来", "月落乌啼霜满天"), 0, "出自韦应物《滁州西涧》，以野渡横舟承接春潮急雨。"),
+        V3MiniGameQuestion("poetry_2", V3MiniGameType.Poetry, "秋夜联句", "“海上生明月”的下一句是？", listOf("天涯共此时", "江清月近人", "清泉石上流"), 0, "张九龄名句，以天涯共月寄怀远人。"),
+        V3MiniGameQuestion("poetry_3", V3MiniGameType.Poetry, "书院对句", "“两个黄鹂鸣翠柳”的对句是？", listOf("一行白鹭上青天", "满城春色宫墙柳", "千树万树梨花开"), 0, "杜甫绝句中的工整对仗。"),
+        V3MiniGameQuestion("account_1", V3MiniGameType.Accounting, "商号清账", "三匹绢每匹18两，运费7两，共需多少两？", listOf("54", "61", "65"), 1, "3×18+7=61。"),
+        V3MiniGameQuestion("account_2", V3MiniGameType.Accounting, "田租核算", "收租240石，赈济四分之一，余粮多少？", listOf("160石", "180石", "200石"), 1, "240×3/4=180石。"),
+        V3MiniGameQuestion("account_3", V3MiniGameType.Accounting, "合股分润", "本金120两，获利三成，本利合计？", listOf("144两", "156两", "160两"), 1, "获利36两，本利156两。"),
+        V3MiniGameQuestion("water_1", V3MiniGameType.Waterworks, "梅雨巡堤", "河堤出现管涌，第一步应如何处置？", listOf("背水侧围井反滤", "迎水侧挖开泄洪", "立即撤走所有人"), 0, "管涌应在背水侧围井并铺反滤，避免带走土粒。"),
+        V3MiniGameQuestion("water_2", V3MiniGameType.Waterworks, "分水争议", "上游缺水、下游将涝，最稳妥的方案是？", listOf("尽开上游闸", "分时启闸并设量水簿", "任各村自行争水"), 1, "分时配水并留记录才能兼顾两岸。"),
+        V3MiniGameQuestion("water_3", V3MiniGameType.Waterworks, "冬修水渠", "疏渠土方应优先堆在哪里？", listOf("渠底", "低洼堤段外侧培厚", "村道中央"), 1, "将土用于薄弱低洼堤段，可兼顾清淤与加固。"),
+        V3MiniGameQuestion("formation_1", V3MiniGameType.Formation, "枪骑相遇", "敌骑正面冲阵，宜以何阵迎击？", listOf("密集枪阵", "散开弓手", "轻骑对冲"), 0, "长枪密阵能压制骑兵冲锋。"),
+        V3MiniGameQuestion("formation_2", V3MiniGameType.Formation, "破枪阵", "敌方结成枪阵，哪支兵更适合先行压制？", listOf("骑兵", "弓手", "辎重兵"), 1, "弓矢先削弱密集枪阵更稳妥。"),
+        V3MiniGameQuestion("formation_3", V3MiniGameType.Formation, "追击抉择", "敌军佯败、山口狭窄，宜如何？", listOf("全军急追", "先派斥候查伏", "丢下粮草追击"), 1, "狭口佯败多有伏兵，应先侦察。"),
+        V3MiniGameQuestion("medicine_1", V3MiniGameType.Medicine, "暑疫辨症", "暑日高热口渴、汗多乏力，首要措施是？", listOf("保阴凉并补水盐", "厚被发汗", "禁水一天"), 0, "先降温补液，避免脱水加重。"),
+        V3MiniGameQuestion("medicine_2", V3MiniGameType.Medicine, "风寒问诊", "恶寒、清涕、无汗初起，较符合？", listOf("风寒表证", "积食", "跌打损伤"), 0, "症候更接近风寒束表。"),
+        V3MiniGameQuestion("medicine_3", V3MiniGameType.Medicine, "药柜配伍", "久病老人用药最应注意什么？", listOf("剂量循序并察反应", "一次加倍求快", "多药同服越好"), 0, "年高体弱应谨慎用量、观察反应。"),
+        V3MiniGameQuestion("etiquette_1", V3MiniGameType.Etiquette, "县衙公议", "双方田界争讼，最合礼法的开局是？", listOf("先查契册与界碑", "先杖责弱者", "按出银多少断案"), 0, "先核物证与旧契，才能公断。"),
+        V3MiniGameQuestion("etiquette_2", V3MiniGameType.Etiquette, "族中分席", "祭祖席次争执，宜依据什么？", listOf("辈分与族规", "谁钱多谁居首", "临时抢座"), 0, "宗族礼序应依辈分与既定族规。"),
+        V3MiniGameQuestion("etiquette_3", V3MiniGameType.Etiquette, "赈济名册", "赈粮不足时，何种次序较公允？", listOf("先老弱病幼再按户", "先亲近主房", "先外来商旅"), 0, "灾时应优先救助脆弱者，再按户核发。")
+    )
+
+    val miniGameEvents = listOf(
+        V3ActiveEvent("东林春日诗会", "书院递来诗帖，邀族中才俊赴会联句。胜负不只看声名，还要现场答题。", listOf(
+            V3EventChoice("赴会应题", "进入诗会对句，答对后获得士绅与族望奖励。", miniGameType = V3MiniGameType.Poetry, route = V3Route.Scholar, siteId = "academy"),
+            V3EventChoice("婉辞诗帖", "留在家中整理田账，略增凝聚。", cohesionDelta = 2, route = V3Route.Hermit)
+        ), id = "mini_poetry", minChapter = 1, maxChapter = 5, months = listOf(2, 3, 4), requiredSiteId = "academy", preferredRoute = V3Route.Scholar, cooldownGroup = "minigame_poetry", cooldownMonths = 24),
+        V3ActiveEvent("商会三柜清账", "三家商号账册互相矛盾，商帮请李氏派人当众核算。", listOf(
+            V3EventChoice("开局核账", "进入账局核算，答对后追回漏账并提升商帮关系。", miniGameType = V3MiniGameType.Accounting, route = V3Route.Merchant, siteId = "market"),
+            V3EventChoice("交回商帮", "不介入纷争，保持中立。", merchantsDelta = 1)
+        ), id = "mini_account", minChapter = 1, maxChapter = 6, requiredSiteId = "market", preferredRoute = V3Route.Merchant, cooldownGroup = "minigame_account", cooldownMonths = 20),
+        V3ActiveEvent("梅雨治水公议", "连日暴雨，田庄与码头争夺民夫。必须先判断堤情，再决定如何调度。", listOf(
+            V3EventChoice("勘堤决策", "进入治水决策，答对可显著降低田庄风险。", miniGameType = V3MiniGameType.Waterworks, siteId = "farmland", route = V3Route.Hermit),
+            V3EventChoice("各村自守", "省下银粮，但地点风险上升。", siteId = "farmland", siteRiskDelta = 5)
+        ), id = "mini_water", minChapter = 1, maxChapter = 6, months = listOf(4, 5, 6, 7), requiredSiteId = "farmland", cooldownGroup = "minigame_water", cooldownMonths = 18),
+        V3ActiveEvent("寨堡军阵会操", "军镇派来教头考校枪、弓、骑三阵，族中乡勇可借此赢得军名。", listOf(
+            V3EventChoice("入阵推演", "进入军阵推演，答对后乡勇与军镇关系提升。", miniGameType = V3MiniGameType.Formation, siteId = "fort", route = V3Route.Fortress),
+            V3EventChoice("闭寨不比", "保存粮饷，不参与会操。", cohesionDelta = 1)
+        ), id = "mini_formation", minChapter = 2, maxChapter = 6, requiredSiteId = "fort", preferredRoute = V3Route.Fortress, cooldownGroup = "minigame_formation", cooldownMonths = 20),
+        V3ActiveEvent("医馆疑难会诊", "医馆收治一名高热病患，几位郎中意见不一，请族中医师辨症。", listOf(
+            V3EventChoice("入馆辨症", "进入医药辨症，答对后恢复身板并稳住乡民。", miniGameType = V3MiniGameType.Medicine, siteId = "clinic", route = V3Route.Hermit),
+            V3EventChoice("请外医会诊", "花银请外医处理。", silverDelta = -24, villagersDelta = 3)
+        ), id = "mini_medicine", minChapter = 1, maxChapter = 6, requiredSiteId = "clinic", cooldownGroup = "minigame_medicine", cooldownMonths = 18),
+        V3ActiveEvent("县堂礼法公议", "县堂召集士绅宗族评议田界与赈粮章程，答得合礼方能服众。", listOf(
+            V3EventChoice("登堂公议", "进入礼法公议，答对后改善官府与族望。", miniGameType = V3MiniGameType.Etiquette, siteId = "yamen", route = V3Route.Loyalist),
+            V3EventChoice("托辞不往", "避免卷入县堂争执。", cohesionDelta = 2, yamenDelta = -1)
+        ), id = "mini_etiquette", minChapter = 2, maxChapter = 6, requiredSiteId = "yamen", preferredRoute = V3Route.Loyalist, cooldownGroup = "minigame_etiquette", cooldownMonths = 24)
+    )
+
     val siteEvents = listOf(
         V3ActiveEvent("祠堂议谱", "族老请重修谱牒，将庶支与外迁族人重新登记。主房担心权柄被分，二房则认为此举可稳人心。", listOf(
             V3EventChoice("开祠修谱", "大开祠门，召集族众与庶支，命族老重修谱牒，将外迁者一一录名归宗。主房嫌权柄被分，庶支却感归宗之恩。", silverDelta = -18, cohesionDelta = 6, influenceDelta = 2, siteId = "shrine", siteControlDelta = 6, route = V3Route.Hermit, branchImpacts = listOf(V3BranchImpact("main", grievanceDelta = 2), V3BranchImpact("second", loyaltyDelta = 2, grievanceDelta = -2))),
@@ -707,5 +755,132 @@ object V3EventContent {
         )
     }
 
-    val allEvents = siteEvents + advancedSiteEvents + seasonalEvents + countyManagementEvents + personEvents + advancedPersonEvents + branchEvents + strategyEvents + advancedStrategyEvents + routeEvents + routeMilestoneEvents + crisisRouteEvents + eraPressureEvents + progressEvents
+    private data class SituationSiteSeed(
+        val id: String,
+        val siteName: String,
+        val ally: String,
+        val pressure: String,
+        val route: V3Route,
+        val relationKey: String,
+        val minChapter: Int
+    )
+
+    private data class SituationVariantSeed(
+        val id: String,
+        val title: String,
+        val opening: String,
+        val action: String,
+        val compromise: String,
+        val observe: String
+    )
+
+    private val situationSites = listOf(
+        SituationSiteSeed("shrine", "宗祠", "族老", "谱牒、祭田与房支席位", V3Route.Hermit, "gentry", 1),
+        SituationSiteSeed("farmland", "田庄", "庄头", "水利、佃约与收成分配", V3Route.Hermit, "villagers", 1),
+        SituationSiteSeed("market", "集市", "行首", "货价、牙行与摊位税契", V3Route.Merchant, "merchants", 1),
+        SituationSiteSeed("clinic", "医馆", "医师", "药材、病患与义诊名册", V3Route.Hermit, "villagers", 1),
+        SituationSiteSeed("yamen", "县衙", "书吏", "赋役、讼案与地方章程", V3Route.Loyalist, "yamen", 2),
+        SituationSiteSeed("academy", "书院", "山长", "束脩、讲会与科举名额", V3Route.Scholar, "gentry", 2),
+        SituationSiteSeed("fort", "寨堡", "教头", "哨探、墙垣与乡勇粮饷", V3Route.Fortress, "garrison", 3),
+        SituationSiteSeed("dock", "码头", "船主", "船税、仓位与远途货约", V3Route.Overseas, "merchants", 3),
+        SituationSiteSeed("mountain_pass", "山道", "保正", "塌方、盗踪与过路抽分", V3Route.Warlord, "bandits", 3)
+    )
+
+    private val situationVariants = listOf(
+        SituationVariantSeed("inspection", "旬检", "旧规执行不一，现场又查出新的缺口", "亲自逐项巡检并限期补漏", "让各房推举代表共同验看", "只记入月簿留待下旬"),
+        SituationVariantSeed("labor", "调役", "眼下人手不足，谁出人、谁免役争执不休", "按户按丁重排差役", "出银雇工替代半数徭役", "维持旧班次勉强周转"),
+        SituationVariantSeed("materials", "备料", "常用物料骤然涨价，库存只够维持半月", "趁早跨县购齐物料", "与本地匠户议定分期供给", "拆旧补新暂渡难关"),
+        SituationVariantSeed("ledger", "核簿", "新旧账目有数笔对不上，牵涉经手人与旧例", "公开核簿追回漏项", "请中人私下调平账目", "封存疑账等待年底总审"),
+        SituationVariantSeed("contract", "定约", "旧约期限将满，各方都想趁换约改条件", "当众重订三年新约", "只续一年观察成效", "沿用旧约不作更动"),
+        SituationVariantSeed("security", "戒备", "夜间异动增多，流言已影响办事与往来", "增岗设卡彻夜巡查", "联络乡邻共同守望", "外松内紧暗中观察"),
+        SituationVariantSeed("festival", "时礼", "本月礼俗将至，排场、用度与席次难以兼顾", "按新章操办并公开用度", "从简行礼把余资留给急务", "各房自行操办互不攀比"),
+        SituationVariantSeed("teaching", "传习", "老人会做却少有成文，年轻人又不愿照旧学", "设席传习并把章法写成册", "挑选两名可靠后辈随办随学", "仍由熟手包办不急交接"),
+        SituationVariantSeed("relief", "济急", "有人因灾病断了生计，求助名册越写越长", "核户后按轻重发放银粮", "以工代赈兼顾生计与公事", "只救最危急数户"),
+        SituationVariantSeed("trade", "互市", "外地来客提出交换货物与人手的新办法", "立契互市扩大往来", "先做一月小额试约", "婉拒外约守住本地盘面"),
+        SituationVariantSeed("petition", "听讼", "两方各执一词，都要求李氏当场给出公断", "查旧册、问证人后公开裁断", "请乡约中人调解各退一步", "暂缓裁断让双方补齐凭据"),
+        SituationVariantSeed("review", "复议", "前番整顿已有结果，也暴露出执行中的新问题", "按结果修订长期章程", "保留有效条目、撤去扰民条目", "再试行一季后决定"),
+    )
+
+    private val situationMonths = listOf(
+        "正月开门", "二月春动", "三月清明", "四月农忙", "五月梅雨", "六月暑盛",
+        "七月夜长", "八月秋成", "九月重阳", "十月入仓", "冬月封河", "腊月结账"
+    )
+
+    val situationalEvents = situationSites.flatMap { site ->
+        situationMonths.flatMapIndexed { monthIndex, monthLabel ->
+            situationVariants.mapIndexed { variantIndex, variant ->
+                val month = monthIndex + 1
+                val auditFlag = "situation_${site.id}_audit"
+                val reviewFlag = "situation_${site.id}_reviewed"
+                val choices = listOf(
+                    V3EventChoice(
+                        variant.action,
+                        "由${site.ally}主持落实：${variant.action}，当月投入更多，但${site.pressure}从此有据可循。",
+                        silverDelta = -18 - variantIndex * 2,
+                        grainDelta = if (variant.id in setOf("labor", "relief", "festival")) -16 else -6,
+                        cohesionDelta = 2,
+                        influenceDelta = if (variant.id in setOf("ledger", "petition", "review")) 3 else 1,
+                        siteId = site.id,
+                        siteControlDelta = 7 + variantIndex % 5,
+                        siteRiskDelta = -8 - variantIndex % 4,
+                        route = site.route,
+                        routeDelta = 5 + variantIndex % 4,
+                        storyFlag = when (variant.id) {
+                            "inspection" -> auditFlag
+                            "review" -> reviewFlag
+                            else -> null
+                        }
+                    ),
+                    V3EventChoice(
+                        variant.compromise,
+                        "让${site.ally}居中协调：${variant.compromise}，资源压力较小，也为各方保留余地。",
+                        silverDelta = -8,
+                        grainDelta = -5,
+                        cohesionDelta = 3,
+                        siteId = site.id,
+                        siteControlDelta = 4,
+                        siteRiskDelta = -3,
+                        route = V3Route.Hermit,
+                        routeDelta = 2
+                    ),
+                    V3EventChoice(
+                        variant.observe,
+                        "本月先选择${variant.observe}，省下眼前开支，但${site.pressure}仍可能在以后发作。",
+                        silverDelta = 6,
+                        cohesionDelta = if (variant.id == "petition") -2 else 0,
+                        siteId = site.id,
+                        siteControlDelta = 1,
+                        siteRiskDelta = 3,
+                        route = V3Route.Hermit,
+                        routeDelta = 1
+                    )
+                )
+                V3ActiveEvent(
+                    title = "$monthLabel·${site.siteName}${variant.title}",
+                    body = "$monthLabel之际，${site.siteName}${variant.opening}，症结集中在${site.pressure}。${site.ally}将三份处置章程送到宗祠，请当月定夺。",
+                    choices = choices,
+                    id = "situation_${site.id}_${month}_${variant.id}",
+                    minChapter = site.minChapter,
+                    months = listOf(month),
+                    requiredSiteId = site.id,
+                    preferredRoute = if (variant.id in setOf("trade", "teaching", "security")) site.route else null,
+                    minSilver = if (variant.id == "materials") 35 else null,
+                    minGrain = if (variant.id == "relief") 90 else null,
+                    minPopulation = if (variant.id in setOf("labor", "teaching")) 3 else null,
+                    minEstateLevel = if (variant.id in setOf("ledger", "contract")) 2 else null,
+                    relationKey = if (variant.id in setOf("trade", "petition")) site.relationKey else null,
+                    minRelation = if (variant.id == "trade") -20 else null,
+                    maxRelation = if (variant.id == "petition") 45 else null,
+                    minSiteRisk = if (variant.id == "security") 32 else null,
+                    maxSiteRisk = if (variant.id == "review") 55 else null,
+                    requiredFlag = if (variant.id == "review") auditFlag else null,
+                    excludedFlag = if (variant.id == "review") reviewFlag else null,
+                    cooldownGroup = "situation_${site.id}_${variant.id}",
+                    cooldownMonths = 24
+                )
+            }
+        }
+    }
+
+    val allEvents = miniGameEvents + situationalEvents + siteEvents + advancedSiteEvents + seasonalEvents + countyManagementEvents + personEvents + advancedPersonEvents + branchEvents + strategyEvents + advancedStrategyEvents + routeEvents + routeMilestoneEvents + crisisRouteEvents + eraPressureEvents + progressEvents
 }

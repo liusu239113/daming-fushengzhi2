@@ -33,8 +33,8 @@ android {
         applicationId = "com.arktools.daming"
         minSdk = 26
         targetSdk = 35
-        versionCode = 63
-        versionName = "1.0.1"
+        versionCode = 65
+        versionName = "1.0.3"
 
         buildConfigField("long", "AD_APP_ID", "2079155823355506689L")
         buildConfigField("String", "REWARDED_AD_PLACEMENT_ID", "\"2079387068379312129\"")

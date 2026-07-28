@@ -43,11 +43,15 @@ object V3CardEngine {
         val visitorCards = visitorIntroCards(state) + visitorChainCards(state)
         val available = (cards + visitorCards).distinctBy { it.id }.filter { card ->
             val chapter = V3ProgressionEngine.currentChapter(state).number
+            // 至少有一个选项在当前状态下可操作（条件为 nil 或 meets），避免出现所有选项都点不了的卡死卡
+            val hasPlayableChoice = card.choices.any { choice -> meets(choice.require, state) }
             chapter in card.minChapter..card.maxChapter &&
                 card.id !in state.activeCards.map { it.id } &&
                 (card.pool != V3CardPool.Crisis || crisisCardApplies(card, state)) &&
                 (card.pool != V3CardPool.Annual || annualCardApplies(card, state)) &&
+                hasPlayableChoice &&
                 (!card.once || card.id !in state.seenCardIds) &&
+                (card.pool != V3CardPool.Chain || card.id !in generationSeen) &&
                 (card.require == null || meets(card.require, state)) &&
                 (!card.oncePerGeneration || card.id !in generationSeen)
         }
@@ -165,13 +169,17 @@ object V3CardEngine {
         var next = applyDelta(state, applyOriginTraitBonus(state, card, delta))
         val nextSeen = if (card.once) {
             (next.seenCardIds + card.id).distinct()
-        } else next.seenCardIds
-        val nextGenerationSeen = if (card.oncePerGeneration) {
-            next.seenCardGenerations + (
-                next.patriarch.generation to
-                    (next.seenCardGenerations[next.patriarch.generation].orEmpty() + card.id).distinct()
-                )
-        } else next.seenCardGenerations
+        } else {
+            next.seenCardIds
+        }
+        val nextGenerationSeen = when {
+            card.oncePerGeneration || card.pool == V3CardPool.Chain ->
+                next.seenCardGenerations + (
+                    next.patriarch.generation to
+                        (next.seenCardGenerations[next.patriarch.generation].orEmpty() + card.id).distinct()
+                    )
+            else -> next.seenCardGenerations
+        }
         val chainCard = choice.nextCardId?.let { id -> next.activeCards.firstOrNull { it.id == id } }
         val remainingCards = next.activeCards.filterNot { it.id == card.id }.let { cards ->
             if (chainCard != null && chainCard.id !in cards.map { it.id }) listOf(chainCard) + cards else cards

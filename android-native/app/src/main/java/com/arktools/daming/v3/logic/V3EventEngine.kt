@@ -6,6 +6,8 @@ import com.arktools.daming.v3.data.V3BranchImpact
 import com.arktools.daming.v3.data.V3EventContent
 import com.arktools.daming.v3.data.V3EventChoice
 import com.arktools.daming.v3.data.V3GameState
+import com.arktools.daming.v3.data.V3MiniGameSession
+import com.arktools.daming.v3.data.V3MiniGameType
 import com.arktools.daming.v3.data.V3RegionStatus
 import com.arktools.daming.v3.data.V3RelationBand
 import com.arktools.daming.v3.data.V3Route
@@ -13,6 +15,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 object V3EventEngine {
+    private val EVENT_LOG_MONTH = Regex("""^(\d+)年(\d+)月""")
     private val chapterMilestoneIds = mapOf(
         "小族立约" to "rooting_covenant",
         "望族会盟" to "expansion_alliance",
@@ -84,6 +87,26 @@ object V3EventEngine {
     }
 
     fun choose(state: V3GameState, choice: V3EventChoice): V3GameState {
+        if (choice.miniGameType != null) {
+            val questions = V3EventContent.miniGameQuestions.filter { it.type == choice.miniGameType }
+            if (questions.isEmpty()) return state.copy(activeEvent = null)
+            val activeEvent = state.activeEvent
+            val index = Math.floorMod(
+                state.year * 31 + state.month * 7 + state.eventLog.size,
+                questions.size
+            )
+            return state.copy(
+                miniGameSession = V3MiniGameSession(
+                    questionId = questions[index].id,
+                    choiceLabel = choice.label,
+                    eventId = activeEvent?.id.orEmpty(),
+                    eventTitle = activeEvent?.title.orEmpty(),
+                    cooldownGroup = activeEvent?.cooldownGroup.orEmpty()
+                ),
+                activeEvent = null,
+                pendingReports = emptyList()
+            )
+        }
         val routeScore = choice.route?.let { r -> (state.routeScores[r] ?: 0) + choice.routeDelta }
         val nextRelations = state.relations.copy(
             yamen = clamp(state.relations.yamen + choice.yamenDelta),
@@ -152,7 +175,8 @@ object V3EventEngine {
             if (state.branches.any { it.id == branch.id }) nextBranches else nextBranches + branch
         } ?: nextBranches
         val branchNotes = choice.branchImpacts.mapNotNull { it.note.takeIf { note -> note.isNotBlank() } }
-        val eventTitle = state.activeEvent?.title ?: "县域抉择"
+        val activeEvent = state.activeEvent
+        val eventTitle = activeEvent?.title ?: "县域抉择"
         val completedMilestoneId = chapterMilestoneIds[eventTitle]
         val completedStoryFlags = buildList {
             addAll(state.completedStoryFlags)
@@ -178,7 +202,11 @@ object V3EventEngine {
             "选择：${choice.label}",
             choice.desc
         ) + impactLines + branchNotes).joinToString("\n")
-        val logLine = "事件【$eventTitle】选择：${choice.label}。${impactLines.joinToString("；")}"
+        val groupMarker = activeEvent?.cooldownGroup
+            ?.takeIf { it.isNotBlank() }
+            ?.let { " 事件组【$it】。" }
+            .orEmpty()
+        val logLine = "事件【$eventTitle】选择：${choice.label}。${impactLines.joinToString("；")}$groupMarker"
         val nextArmy = if (choice.militiaDelta >= 0) {
             state.army.add(com.arktools.daming.v3.data.V3TroopType.Militia, choice.militiaDelta)
         } else {
@@ -226,6 +254,89 @@ object V3EventEngine {
             },
             pendingReports = listOf(report),
             eventLog = (listOf("${state.year}年${state.month}月 · $logLine") + state.eventLog).take(100)
+        )
+    }
+
+    fun answerMiniGame(state: V3GameState, answerIndex: Int): V3GameState {
+        val session = state.miniGameSession ?: return state
+        val question = V3EventContent.miniGameQuestions.firstOrNull { it.id == session.questionId }
+            ?: return state.copy(miniGameSession = null)
+        val correct = answerIndex == question.answerIndex
+        val reward = when (question.type) {
+            V3MiniGameType.Poetry -> Triple(22, 0, 7)
+            V3MiniGameType.Accounting -> Triple(70, 0, 3)
+            V3MiniGameType.Waterworks -> Triple(0, 55, 4)
+            V3MiniGameType.Formation -> Triple(20, 20, 5)
+            V3MiniGameType.Medicine -> Triple(0, 30, 4)
+            V3MiniGameType.Etiquette -> Triple(18, 15, 6)
+        }
+        val targetSiteId = when (question.type) {
+            V3MiniGameType.Poetry -> "academy"
+            V3MiniGameType.Accounting -> "market"
+            V3MiniGameType.Waterworks -> "farmland"
+            V3MiniGameType.Formation -> "fort"
+            V3MiniGameType.Medicine -> "clinic"
+            V3MiniGameType.Etiquette -> "yamen"
+        }
+        val nextSites = state.sites.map { site ->
+            if (site.id == targetSiteId && correct) {
+                val control = (site.control + 8).coerceAtMost(100)
+                val risk = (site.risk - 10).coerceAtLeast(0)
+                site.copy(control = control, risk = risk, status = V3GameEngine.siteStatusFor(control, risk))
+            } else {
+                site
+            }
+        }
+        val nextArmy = if (correct && question.type == V3MiniGameType.Formation) {
+            state.army.add(com.arktools.daming.v3.data.V3TroopType.Militia, 12)
+        } else {
+            state.army
+        }
+        val nextPatriarch = if (correct && question.type == V3MiniGameType.Medicine) {
+            state.patriarch.copy(health = (state.patriarch.health + 12).coerceAtMost(100))
+        } else {
+            state.patriarch
+        }
+        val result = if (correct) {
+            "答对：${question.note} 奖励已发放。"
+        } else {
+            "答错：正确答案是“${question.options[question.answerIndex]}”。${question.note} 本次无奖励。"
+        }
+        val sourceTitle = session.eventTitle.ifBlank { question.title }
+        val groupMarker = session.cooldownGroup
+            .takeIf { it.isNotBlank() }
+            ?.let { " 事件组【$it】。" }
+            .orEmpty()
+        val eventMarker = if (session.eventTitle.isBlank()) {
+            ""
+        } else {
+            "事件【${session.eventTitle}】选择：${session.choiceLabel}。"
+        }
+        return state.copy(
+            silver = state.silver + if (correct) reward.first else 0,
+            grain = state.grain + if (correct) reward.second else 0,
+            influence = (state.influence + if (correct) reward.third else 0).coerceIn(0, 100),
+            militia = nextArmy.militia,
+            army = nextArmy,
+            patriarch = nextPatriarch,
+            sites = nextSites,
+            relations = if (!correct) state.relations else when (question.type) {
+                V3MiniGameType.Poetry -> state.relations.copy(gentry = clamp(state.relations.gentry + 6))
+                V3MiniGameType.Accounting -> state.relations.copy(merchants = clamp(state.relations.merchants + 6))
+                V3MiniGameType.Waterworks -> state.relations.copy(villagers = clamp(state.relations.villagers + 6))
+                V3MiniGameType.Formation -> state.relations.copy(garrison = clamp(state.relations.garrison + 6))
+                V3MiniGameType.Medicine -> state.relations.copy(villagers = clamp(state.relations.villagers + 7))
+                V3MiniGameType.Etiquette -> state.relations.copy(yamen = clamp(state.relations.yamen + 6))
+            },
+            miniGameSession = null,
+            pendingReports = listOf("【${question.type.label}】$result"),
+            eventLog = (
+                listOf(
+                    "${state.year}年${state.month}月 · $eventMarker" +
+                        "小游戏【${question.title}】${if (correct) "胜" else "负"}。" +
+                        " 来源【$sourceTitle】。$groupMarker"
+                ) + state.eventLog
+            ).take(100)
         )
     }
 
@@ -294,28 +405,28 @@ object V3EventEngine {
         )
         val slots = listOf(
             RelationSlot("县衙", state.relations.yamen, { sign ->
-                if (sign < 0) V3EventChoice("yamen_hostile", "以账册与证人自证清白，拒绝无理摊派。", silverDelta = -18, yamenDelta = 12, influenceDelta = 3, route = V3Route.Loyalist, routeDelta = 6)
-                else V3EventChoice("yamen_allied", "替县衙承担一段可核验的粮税与治安。", silverDelta = -28, grainDelta = -20, yamenDelta = 12, influenceDelta = 5, route = V3Route.Loyalist, routeDelta = 8)
+                if (sign < 0) V3EventChoice("自证清白", "以账册与证人自证清白，拒绝无理摊派。", silverDelta = -18, yamenDelta = 12, influenceDelta = 3, route = V3Route.Loyalist, routeDelta = 6)
+                else V3EventChoice("助办粮税", "替县衙承担一段可核验的粮税与治安。", silverDelta = -28, grainDelta = -20, yamenDelta = 12, influenceDelta = 5, route = V3Route.Loyalist, routeDelta = 8)
             }, "县中豪强"),
             RelationSlot("士绅", state.relations.gentry, { sign ->
-                if (sign < 0) V3EventChoice("gentry_hostile", "在乡约与族学中自证门风，不向冷眼低头。", silverDelta = -16, gentryDelta = 12, influenceDelta = 4, route = V3Route.Scholar, routeDelta = 7)
-                else V3EventChoice("gentry_allied", "共同出资修学，给各家留一张可持续的席位。", silverDelta = -36, gentryDelta = 12, influenceDelta = 7, route = V3Route.Scholar, routeDelta = 9)
+                if (sign < 0) V3EventChoice("自证门风", "在乡约与族学中自证门风，不向冷眼低头。", silverDelta = -16, gentryDelta = 12, influenceDelta = 4, route = V3Route.Scholar, routeDelta = 7)
+                else V3EventChoice("合资修学", "共同出资修学，给各家留一张可持续的席位。", silverDelta = -36, gentryDelta = 12, influenceDelta = 7, route = V3Route.Scholar, routeDelta = 9)
             }, "邻县书院"),
             RelationSlot("乡民", state.relations.villagers, { sign ->
-                if (sign < 0) V3EventChoice("villagers_hostile", "重订租契与乡约，不让庄门外的怨气继续无名。", grainDelta = -22, silverDelta = -12, villagersDelta = 14, cohesionDelta = 5, route = V3Route.Hermit, routeDelta = 7)
-                else V3EventChoice("villagers_allied", "开义仓并让乡民参与守望，家庄与乡里共担风雨。", grainDelta = -35, villagersDelta = 12, cohesionDelta = 7, route = V3Route.Hermit, routeDelta = 9)
+                if (sign < 0) V3EventChoice("重订乡约", "重订租契与乡约，不让庄门外的怨气继续无名。", grainDelta = -22, silverDelta = -12, villagersDelta = 14, cohesionDelta = 5, route = V3Route.Hermit, routeDelta = 7)
+                else V3EventChoice("义仓守望", "开义仓并让乡民参与守望，家庄与乡里共担风雨。", grainDelta = -35, villagersDelta = 12, cohesionDelta = 7, route = V3Route.Hermit, routeDelta = 9)
             }, "流民首领"),
             RelationSlot("山贼", state.relations.bandits, { sign ->
-                if (sign < 0) V3EventChoice("bandits_hostile", "设伏守道，切断其对田庄与商路的试探。", grainDelta = -18, militiaDelta = 12, banditsDelta = -12, garrisonDelta = 5, route = V3Route.Fortress, routeDelta = 8)
-                else V3EventChoice("bandits_allied", "以粮与互不扰民换一纸山道旧盟。", grainDelta = -28, banditsDelta = 14, garrisonDelta = 4, route = V3Route.Warlord, routeDelta = 8)
+                if (sign < 0) V3EventChoice("设伏守道", "设伏守道，切断其对田庄与商路的试探。", grainDelta = -18, militiaDelta = 12, banditsDelta = -12, garrisonDelta = 5, route = V3Route.Fortress, routeDelta = 8)
+                else V3EventChoice("互不扰民", "以粮与互不扰民换一纸山道旧盟。", grainDelta = -28, banditsDelta = 14, garrisonDelta = 4, route = V3Route.Warlord, routeDelta = 8)
             }, "山道头目"),
             RelationSlot("商帮", state.relations.merchants, { sign ->
-                if (sign < 0) V3EventChoice("merchants_hostile", "公开账目、重开货路，不让商帮把价钱写成家族命门。", silverDelta = -20, merchantsDelta = 12, influenceDelta = 3, route = V3Route.Merchant, routeDelta = 7)
-                else V3EventChoice("merchants_allied", "以族产入股并固定分润，换来跨县货路。", silverDelta = -55, merchantsDelta = 14, route = V3Route.Merchant, routeDelta = 10)
+                if (sign < 0) V3EventChoice("重开货路", "公开账目、重开货路，不让商帮把价钱写成家族命门。", silverDelta = -20, merchantsDelta = 12, influenceDelta = 3, route = V3Route.Merchant, routeDelta = 7)
+                else V3EventChoice("族产入股", "以族产入股并固定分润，换来跨县货路。", silverDelta = -55, merchantsDelta = 14, route = V3Route.Merchant, routeDelta = 10)
             }, "河埠会首"),
             RelationSlot("军镇", state.relations.garrison, { sign ->
-                if (sign < 0) V3EventChoice("garrison_hostile", "先修粮道与寨墙，拒绝把乡勇交给陌生号令。", silverDelta = -22, grainDelta = -25, garrisonDelta = 12, route = V3Route.Fortress, routeDelta = 7)
-                else V3EventChoice("garrison_allied", "以守庄战约换取兵械、操练与共同守望。", silverDelta = -35, grainDelta = -35, militiaDelta = 18, garrisonDelta = 14, route = V3Route.Loyalist, routeDelta = 9)
+                if (sign < 0) V3EventChoice("修寨自守", "先修粮道与寨墙，拒绝把乡勇交给陌生号令。", silverDelta = -22, grainDelta = -25, garrisonDelta = 12, route = V3Route.Fortress, routeDelta = 7)
+                else V3EventChoice("共守望庄", "以守庄战约换取兵械、操练与共同守望。", silverDelta = -35, grainDelta = -35, militiaDelta = 18, garrisonDelta = 14, route = V3Route.Loyalist, routeDelta = 9)
             }, "边镇使者")
         )
         val candidates = slots.filter {
@@ -338,7 +449,7 @@ object V3EventEngine {
         } else {
             "${slot.name}关系已抵达【${band.label}】。${slot.rival}带着盟约来庄，愿把一段地方利益与李氏相连。"
         }
-        return V3ActiveEvent(title, body, listOf(choice.copy(storyFlag = flag), V3EventChoice("defer", "暂不正面回应，让关系维持现状。", cohesionDelta = -2, route = V3Route.Hermit, routeDelta = 2, storyFlag = flag)))
+        return V3ActiveEvent(title, body, listOf(choice.copy(storyFlag = flag), V3EventChoice("暂不回应", "暂不正面回应，让关系维持现状。", cohesionDelta = -2, route = V3Route.Hermit, routeDelta = 2, storyFlag = flag)))
     }
 
     fun relationBand(value: Int): V3RelationBand = when {
@@ -1074,6 +1185,36 @@ object V3EventEngine {
     )
 
     private fun eventMatchesState(event: V3ActiveEvent, state: V3GameState): Boolean {
+        val chapter = V3ProgressionEngine.currentChapter(state).number
+        if (chapter !in event.minChapter..event.maxChapter) return false
+        if (state.year !in event.minYear..event.maxYear) return false
+        if (event.months.isNotEmpty() && state.month !in event.months) return false
+        if (
+            event.requiredSiteId != null &&
+            state.sites.none { it.id == event.requiredSiteId && it.level > 0 }
+        ) return false
+        if (
+            event.preferredRoute != null &&
+            chapter >= 3 &&
+            (state.routeScores[event.preferredRoute] ?: 0) < 12
+        ) return false
+        if (event.minSilver != null && state.silver < event.minSilver) return false
+        if (event.maxSilver != null && state.silver > event.maxSilver) return false
+        if (event.minGrain != null && state.grain < event.minGrain) return false
+        if (event.maxGrain != null && state.grain > event.maxGrain) return false
+        val population = V3GameEngine.alivePeople(state).size
+        if (event.minPopulation != null && population < event.minPopulation) return false
+        if (event.maxPopulation != null && population > event.maxPopulation) return false
+        if (event.minEstateLevel != null && V3GameEngine.estateLevelTotal(state) < event.minEstateLevel) return false
+        val relationValue = event.relationKey?.let { relationValue(state, it) }
+        if (event.minRelation != null && (relationValue == null || relationValue < event.minRelation)) return false
+        if (event.maxRelation != null && (relationValue == null || relationValue > event.maxRelation)) return false
+        val requiredSite = event.requiredSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
+        if (event.minSiteRisk != null && (requiredSite == null || requiredSite.risk < event.minSiteRisk)) return false
+        if (event.maxSiteRisk != null && (requiredSite == null || requiredSite.risk > event.maxSiteRisk)) return false
+        if (event.requiredFlag != null && event.requiredFlag !in state.completedStoryFlags) return false
+        if (event.excludedFlag != null && event.excludedFlag in state.completedStoryFlags) return false
+        if (isEventCoolingDown(event, state)) return false
         val personOk = event.choices.all { choice ->
             choice.personId == null || state.people.any { it.id == choice.personId && it.alive }
         }
@@ -1085,6 +1226,39 @@ object V3EventEngine {
                 state.branches.any { branch -> branchMatchesImpact(branch.id, branch.focus, impact.branchId) }
         }
         return personOk && siteOk && branchOk && eventTimeMatches(event, state) && eventProgressMatches(event, state)
+    }
+
+    private fun relationValue(state: V3GameState, key: String): Int? = when (key) {
+        "yamen" -> state.relations.yamen
+        "gentry" -> state.relations.gentry
+        "villagers" -> state.relations.villagers
+        "bandits" -> state.relations.bandits
+        "merchants" -> state.relations.merchants
+        "garrison" -> state.relations.garrison
+        else -> null
+    }
+
+    private fun isEventCoolingDown(event: V3ActiveEvent, state: V3GameState): Boolean {
+        val titleKey = event.title
+        val groupKey = event.cooldownGroup.takeIf { it.isNotBlank() }
+        val currentAbsoluteMonth = state.year * 12 + state.month
+        val cooldownMonths = event.cooldownMonths.coerceAtLeast(6)
+        return state.eventLog.any { log ->
+            val matchedEvent =
+                log.contains("事件【$titleKey】") ||
+                    (groupKey != null && log.contains("事件组【$groupKey】"))
+            if (!matchedEvent) {
+                false
+            } else {
+                val match = EVENT_LOG_MONTH.find(log)
+                val eventAbsoluteMonth = match?.let {
+                    it.groupValues[1].toIntOrNull()?.times(12)
+                        ?.plus(it.groupValues[2].toIntOrNull() ?: 0)
+                }
+                eventAbsoluteMonth == null ||
+                    currentAbsoluteMonth - eventAbsoluteMonth in 0 until cooldownMonths
+            }
+        }
     }
 
     private fun eventTimeMatches(event: V3ActiveEvent, state: V3GameState): Boolean {

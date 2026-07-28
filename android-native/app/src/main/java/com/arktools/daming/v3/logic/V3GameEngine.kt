@@ -207,6 +207,43 @@ object V3GameEngine {
             prestige = state.patriarch.prestige.coerceIn(0, 100),
             health = state.patriarch.health.coerceIn(0, 100)
         )
+        val adultSuccessionCandidates = migratedPeople.filter {
+            it.alive &&
+                it.id != migratedPatriarch.personId &&
+                it.age >= CHILD_ADULT_AGE
+        }
+        val livingMinors = migratedPeople.filter { it.alive && it.age < CHILD_ADULT_AGE }
+        val migratedRegencyHeirId = state.regencyHeirId
+            ?.takeIf { heirId -> livingMinors.any { it.id == heirId } }
+            ?: if (
+                state.pendingSuccession &&
+                adultSuccessionCandidates.isEmpty()
+            ) {
+                livingMinors.maxWithOrNull(
+                    compareBy<V3Person> { it.ageMonths.coerceAtLeast(it.age * 12) }
+                        .thenBy { it.generation }
+                        .thenBy { it.merit }
+                )?.id
+            } else {
+                null
+            }
+        val migratedPendingSuccession = state.pendingSuccession &&
+            (adultSuccessionCandidates.isNotEmpty() || livingMinors.isEmpty())
+        val migratedRegencyPatriarch = if (migratedRegencyHeirId != null) {
+            val heirName = migratedPeople.firstOrNull { it.id == migratedRegencyHeirId }?.name ?: "少主"
+            migratedPatriarch.copy(
+                name = "族老摄政（少主$heirName）",
+                health = migratedPatriarch.health.coerceAtLeast(50)
+            )
+        } else {
+            migratedPatriarch
+        }
+        val migratedClinicHealerId = state.clinicHealerId?.takeIf { healerId ->
+            migratedPeople.any { person ->
+                person.id == healerId && person.alive && person.age >= CHILD_ADULT_AGE
+            }
+        }
+        val migratedClinicAutoTreatmentMonths = state.clinicAutoTreatmentMonths.coerceIn(0, 24)
         val migratedCardBudget = state.cardBudget.coerceIn(3, 5)
         val normalizedEncounterState = when {
             state.finalEnding != null -> Triple<V3BattleState?, V3HexBattleState?, V3ConquestState?>(null, null, null)
@@ -226,7 +263,11 @@ object V3GameEngine {
             state.tutorialVersion == V3_TUTORIAL_VERSION &&
             migratedTutorialStep == state.tutorialStep &&
             migratedTutorialCompleted == state.tutorialCompleted &&
-            migratedPatriarch == state.patriarch &&
+            migratedRegencyPatriarch == state.patriarch &&
+            migratedPendingSuccession == state.pendingSuccession &&
+            migratedRegencyHeirId == state.regencyHeirId &&
+            migratedClinicHealerId == state.clinicHealerId &&
+            migratedClinicAutoTreatmentMonths == state.clinicAutoTreatmentMonths &&
             migratedCardBudget == state.cardBudget &&
             normalizedOriginTraits == state.originTraits &&
             normalizedCrisisStage == state.currentCrisisStage &&
@@ -241,7 +282,11 @@ object V3GameEngine {
             army = migratedArmy,
             people = migratedPeople,
             worldRegions = mergedRegions,
-            patriarch = migratedPatriarch,
+            patriarch = migratedRegencyPatriarch,
+            pendingSuccession = migratedPendingSuccession,
+            regencyHeirId = migratedRegencyHeirId,
+            clinicHealerId = migratedClinicHealerId,
+            clinicAutoTreatmentMonths = migratedClinicAutoTreatmentMonths,
             cardBudget = migratedCardBudget,
             originTraits = normalizedOriginTraits,
             currentCrisisStage = normalizedCrisisStage,
@@ -548,6 +593,7 @@ object V3GameEngine {
         state.finalEnding != null ||
             state.activeEvent != null ||
             state.examSession != null ||
+            state.miniGameSession != null ||
             state.battleState != null ||
             state.hexBattleState != null ||
             state.conquestState != null ||
@@ -985,6 +1031,91 @@ object V3GameEngine {
         )
     }
 
+    fun clinicHealerCandidates(state: V3GameState): List<V3Person> =
+        alivePeople(state)
+            .filter { it.age >= CHILD_ADULT_AGE && it.illness == null }
+            .sortedWith(
+                compareByDescending<V3Person> {
+                    it.study + it.diplomacy + if (it.gender == V3Gender.Female) 8 else 0
+                }.thenBy { it.fatigue }
+            )
+
+    fun assignClinicHealer(state: V3GameState, personId: Int?): V3GameState {
+        if (personId == null) {
+            return state.copy(
+                clinicHealerId = null,
+                pendingReports = listOf("仁心医馆暂不设常驻医师，仍可付银请外医问诊。")
+            )
+        }
+        val healer = clinicHealerCandidates(state).firstOrNull { it.id == personId }
+            ?: return state.copy(pendingReports = listOf("该族人尚不能担任医师：需年满16岁、在世且未患病。"))
+        return state.copy(
+            clinicHealerId = healer.id,
+            pendingReports = listOf("已安排${healer.name}担任仁心医馆医师。男女族人均可行医，学识与谋略越高，治疗越稳。")
+        )
+    }
+
+    fun treatmentCost(age: Int, patriarch: Boolean = false): Int {
+        val ageCost = when {
+            age < 16 -> 12
+            age < 40 -> 18
+            age < 55 -> 26
+            age < 65 -> 36
+            age < 75 -> 50
+            else -> 68
+        }
+        return ageCost + if (patriarch) 10 else 0
+    }
+
+    fun treatPersonAtClinic(state: V3GameState, personId: Int): V3GameState {
+        val person = state.people.firstOrNull { it.id == personId && it.alive }
+            ?: return state.copy(pendingReports = listOf("该族人已无法入馆问诊。"))
+        val cost = treatmentCost(person.age)
+        if (state.silver < cost) {
+            return state.copy(pendingReports = listOf("为${person.name}诊治需要银${cost}两，当前银${state.silver}两。"))
+        }
+        val nextPeople = state.people.map { current ->
+            if (current.id == personId) {
+                current.copy(
+                    illness = null,
+                    illnessMonths = 0,
+                    fatigue = (current.fatigue - 28).coerceAtLeast(0)
+                )
+            } else {
+                current
+            }
+        }
+        return state.copy(
+            silver = state.silver - cost,
+            people = nextPeople,
+            pendingReports = listOf("${person.name}在仁心医馆完成诊治。银-$cost，病症已解，疲劳下降。")
+        )
+    }
+
+    fun treatPatriarchAtClinic(state: V3GameState): V3GameState {
+        val holder = state.people.firstOrNull { it.id == state.patriarch.personId && it.alive }
+        if (holder == null && state.regencyHeirId == null) {
+            return state.copy(pendingReports = listOf("族长已故，请先完成继任。"))
+        }
+        val age = holder?.age ?: state.regencyHeirId?.let { heirId ->
+            state.people.firstOrNull { it.id == heirId }?.age
+        } ?: 60
+        val cost = treatmentCost(age, patriarch = true)
+        if (state.silver < cost) {
+            return state.copy(pendingReports = listOf("族长诊治需要银${cost}两，当前银${state.silver}两。"))
+        }
+        val recovery = when {
+            state.clinicHealerId != null -> 32
+            state.clinicAutoTreatmentMonths > 0 -> 28
+            else -> 22
+        }
+        return state.copy(
+            silver = state.silver - cost,
+            patriarch = state.patriarch.copy(health = (state.patriarch.health + recovery).coerceAtMost(100)),
+            pendingReports = listOf("族长在仁心医馆调治。银-$cost，身板+$recovery。")
+        )
+    }
+
     fun siteSpecialAction(state: V3GameState, siteId: String): V3GameState {
         val site = state.sites.firstOrNull { it.id == siteId } ?: return state
         if (!isSiteUnlocked(state, site.type)) {
@@ -1270,7 +1401,9 @@ object V3GameEngine {
         null -> V3ExamStage.County
         V3ExamStage.County -> V3ExamStage.Prefecture
         V3ExamStage.Prefecture -> V3ExamStage.Provincial
-        V3ExamStage.Provincial -> null
+        V3ExamStage.Provincial -> V3ExamStage.Metropolitan
+        V3ExamStage.Metropolitan -> V3ExamStage.Palace
+        V3ExamStage.Palace -> null
     }
 
     fun canStartExam(state: V3GameState, person: V3Person): Boolean {
@@ -1280,8 +1413,21 @@ object V3GameEngine {
             V3ExamStage.County -> 18
             V3ExamStage.Prefecture -> 36
             V3ExamStage.Provincial -> 58
+            V3ExamStage.Metropolitan -> 72
+            V3ExamStage.Palace -> 84
         }
-        return person.alive && person.age >= 12 && person.study >= requiredStudy && state.examSession == null && (academy?.level ?: 0) > 0
+        val requiredRank = when (stage) {
+            V3ExamStage.County, V3ExamStage.Prefecture -> 2
+            V3ExamStage.Provincial -> 3
+            V3ExamStage.Metropolitan -> 4
+            V3ExamStage.Palace -> 5
+        }
+        return person.alive &&
+            person.age >= 12 &&
+            person.study >= requiredStudy &&
+            state.clanRank >= requiredRank &&
+            state.examSession == null &&
+            (academy?.level ?: 0) > 0
     }
 
     fun examQuestion(session: V3ExamSession): V3ExamQuestion? = V3Content.examQuestions.firstOrNull { it.id == session.questionId }
@@ -1291,20 +1437,25 @@ object V3GameEngine {
             return state.copy(pendingReports = listOf("当前已有待处理的战事、事件或终局事务，不能同时开考。"))
         }
         val person = state.people.firstOrNull { it.id == personId && it.alive } ?: return state
-        val stage = nextExamStage(person) ?: return state.copy(pendingReports = listOf("${person.name}已过乡试，暂不需要继续考试。"))
+        val stage = nextExamStage(person) ?: return state.copy(pendingReports = listOf("${person.name}已过殿试，取得进士功名，当前科举链路已全部完成。"))
         val academy = state.sites.firstOrNull { it.type == V3CountySiteType.Academy }
         if ((academy?.level ?: 0) <= 0) return state.copy(pendingReports = listOf("需要先营建书院，才能送族人参加科举。"))
         if (!canStartExam(state, person)) {
-            return state.copy(pendingReports = listOf("${person.name}暂不适合参加${stage.label}：需年龄12岁以上、学识达标，且当前没有正在进行的考试。"))
+            return state.copy(pendingReports = listOf("${person.name}暂不适合参加${stage.label}：需年龄12岁以上、学识与宗族品第达标，已营建书院，且当前没有正在进行的考试。"))
         }
         val costSilver = when (stage) {
             V3ExamStage.County -> 8
             V3ExamStage.Prefecture -> 18
             V3ExamStage.Provincial -> 36
+            V3ExamStage.Metropolitan -> 68
+            V3ExamStage.Palace -> 96
         }
         if (state.silver < costSilver) return state.copy(pendingReports = listOf("参加${stage.label}需要银$costSilver，用于束脩、盘缠与打点。"))
         val pool = V3Content.examQuestions.filter { it.stage == stage }
-        val question = pool[(person.id + state.year + state.month) % pool.size]
+        if (pool.isEmpty()) {
+            return state.copy(pendingReports = listOf("${stage.label}题库暂不可用，本次未扣除盘缠。"))
+        }
+        val question = pool[Math.floorMod(person.id * 31 + state.year * 12 + state.month + state.eventLog.size, pool.size)]
         return state.copy(
             silver = state.silver - costSilver,
             examSession = V3ExamSession(person.id, stage, question.id),
@@ -1320,6 +1471,8 @@ object V3GameEngine {
             V3ExamStage.County -> 34
             V3ExamStage.Prefecture -> 58
             V3ExamStage.Provincial -> 82
+            V3ExamStage.Metropolitan -> 98
+            V3ExamStage.Palace -> 112
         }
         val examPower = person.study + person.diplomacy / 3 + traitExamBonus(person.trait)
         val answeredCorrectly = answerIndex == question.answerIndex
@@ -1369,8 +1522,8 @@ object V3GameEngine {
     }
 
     fun siteRequiredRank(type: V3CountySiteType): Int = when (type) {
-        V3CountySiteType.Shrine, V3CountySiteType.Farmland, V3CountySiteType.Market -> 1
-        V3CountySiteType.Yamen, V3CountySiteType.Academy, V3CountySiteType.Clinic -> 2
+        V3CountySiteType.Shrine, V3CountySiteType.Farmland, V3CountySiteType.Market, V3CountySiteType.Clinic -> 1
+        V3CountySiteType.Yamen, V3CountySiteType.Academy -> 2
         V3CountySiteType.Fort, V3CountySiteType.Dock, V3CountySiteType.MountainPass -> 3
     }
 
@@ -1458,23 +1611,68 @@ object V3GameEngine {
         }
         return state.copy(equipment = equipment, pendingReports = listOf("${person.name}装备【${item.name}】：战斗时计入攻击与防御。"))
     }
-    fun startBattle(state: V3GameState): V3GameState {
+    fun startBattle(state: V3GameState): V3GameState = startBattle(state, null)
+
+    /**
+     * 发起现有 6v6 回合制战斗。forcedTarget 非空时用于敌对关系事件（官府捉拿、山贼来袭等）。
+     */
+    fun startBattle(state: V3GameState, forcedTarget: String?): V3GameState {
         if (hasBlockingEncounter(state)) {
             return state.copy(pendingReports = listOf("当前已有待处理的战事、考试或终局事务，不能同时发起地点讨伐。"))
         }
-        if (!isUnlocked(state, "Recruit")) return state.copy(pendingReports = listOf("军务尚未成形：先升为小族，或修建寨堡后再讨伐。"))
-        if (state.army.total() < 15) return state.copy(pendingReports = listOf("兵册不足15，不宜出兵。先募乡勇或筑寨。"))
+        if (!isUnlocked(state, "Recruit") || state.army.total() < 15) {
+            if (forcedTarget != null) return resolveUnopposedHostileAttack(state, forcedTarget)
+            val reason = if (!isUnlocked(state, "Recruit")) {
+                "军务尚未成形：先升为小族，或修建寨堡后再讨伐。"
+            } else {
+                "兵册不足15，不宜出兵。先募乡勇或筑寨。"
+            }
+            return state.copy(pendingReports = listOf(reason))
+        }
         val riskySite = state.sites.maxByOrNull { it.risk } ?: return state
-        val enemyPower = 35 + riskySite.risk + state.rebelHeat / 3
+        val target = forcedTarget ?: riskySite.name
+        val relationPressure = when {
+            forcedTarget?.contains("官") == true -> (-state.relations.yamen).coerceAtLeast(0)
+            forcedTarget?.contains("军镇") == true -> (-state.relations.garrison).coerceAtLeast(0)
+            forcedTarget?.contains("贼") == true || forcedTarget?.contains("寇") == true -> (-state.relations.bandits).coerceAtLeast(0)
+            else -> 0
+        }
+        val encounterRisk = if (forcedTarget == null) riskySite.risk else (45 + relationPressure / 2).coerceAtMost(90)
+        val enemyPower = 35 + encounterRisk + state.rebelHeat / 3 + relationPressure / 2
         val battle = V3BattleState(
-            target = riskySite.name,
+            target = target,
             enemyPower = enemyPower,
-            rewardInfluence = 4 + riskySite.risk / 12,
-            rewardSilver = 12 + riskySite.risk / 5,
+            rewardInfluence = 4 + encounterRisk / 12,
+            rewardSilver = 12 + encounterRisk / 5,
             risk = if (enemyPower > state.army.battlePower() / 8 + 40) "凶险" else "可战",
-            enemies = enemyLineup(riskySite.name, enemyPower)
+            enemies = enemyLineup(target, enemyPower)
         )
-        return state.copy(battleState = battle, pendingReports = listOf("已发现【${battle.target}】贼势。请选择最多6名族人出战，再逐回合推进。"))
+        return state.copy(battleState = battle, pendingReports = listOf("【${battle.target}】来势已成。请选择最多6名族人出战，再逐回合推进。"))
+    }
+
+    private fun resolveUnopposedHostileAttack(state: V3GameState, target: String): V3GameState {
+        val isYamen = target.contains("官")
+        val isGarrison = target.contains("军镇")
+        val isBandit = target.contains("贼") || target.contains("寇")
+        val silverLoss = if (isYamen) 55 else 35
+        val grainLoss = if (isBandit) 55 else 30
+        val message = when {
+            isYamen -> "【$target】时族中无兵可守，官差封门拘问并查抄部分家资。银-$silverLoss、粮-$grainLoss、凝聚-8。"
+            isGarrison -> "【$target】时族中无兵可守，军镇强征粮饷并扣押族中管事。银-$silverLoss、粮-$grainLoss、凝聚-8。"
+            else -> "【$target】时族中无兵可守，贼众破门劫走银粮。银-$silverLoss、粮-$grainLoss、凝聚-8。"
+        }
+        return state.copy(
+            silver = (state.silver - silverLoss).coerceAtLeast(-999),
+            grain = (state.grain - grainLoss).coerceAtLeast(-999),
+            cohesion = (state.cohesion - 8).coerceAtLeast(0),
+            relations = state.relations.copy(
+                yamen = clamp(state.relations.yamen - if (isYamen) 6 else 0),
+                garrison = clamp(state.relations.garrison - if (isGarrison) 6 else 0),
+                bandits = clamp(state.relations.bandits - if (isBandit) 6 else 0)
+            ),
+            pendingReports = listOf(message),
+            eventLog = (listOf("${state.year}年${state.month}月 · $message") + state.eventLog).take(100)
+        )
     }
 
     fun selectBattlePerson(state: V3GameState, personId: Int): V3GameState {
@@ -1519,10 +1717,18 @@ object V3GameEngine {
         val battle = state.battleState ?: return state
         if (battle.finished) return state
         if (battle.phase != V3BattlePhase.Fighting) return state.copy(pendingReports = listOf("请先确认出战阵容。"))
-        if (battle.allies.isEmpty()) return state.copy(pendingReports = listOf("请先在下方选择出战族人，最多6名。"))
+        if (battle.allies.isEmpty()) return state.copy(pendingReports = listOf("当前出战阵容无有效战力，请重新选择可出战的成年族人并确认编队。"))
         val aliveAllies = battle.allies.filter { it.hp > 0 }
         val aliveEnemies = battle.enemies.filter { it.hp > 0 }
-        if (aliveAllies.isEmpty() || aliveEnemies.isEmpty()) return state.copy(battleState = battle.copy(phase = V3BattlePhase.Finished, finished = true, victory = aliveEnemies.isEmpty()))
+        if (aliveAllies.isEmpty() || aliveEnemies.isEmpty()) {
+            return state.copy(
+                battleState = battle.copy(
+                    phase = V3BattlePhase.Finished,
+                    finished = true,
+                    victory = aliveEnemies.isEmpty()
+                )
+            )
+        }
         val allyTurn = battle.turn % 2 == 0
         val attackers = if (allyTurn) aliveAllies else aliveEnemies
         var nextAllies = battle.allies
@@ -1563,7 +1769,6 @@ object V3GameEngine {
             roundLog = (newLogs.reversed() + battle.roundLog).take(10)
         )
         val ended = nextAllies.none { it.hp > 0 } || nextEnemies.none { it.hp > 0 } || nextBattle.turn >= 18
-        val alliesAllDead = nextAllies.none { it.hp > 0 }
         val enemiesAllDead = nextEnemies.none { it.hp > 0 }
         // 超时（18回合仍未全歼）按败绩处理：只有敌人全灭才判胜
         val timeoutVictory = enemiesAllDead
@@ -1584,7 +1789,17 @@ object V3GameEngine {
         return finishBattle(state, battle)
     }
 
-    fun cancelBattle(state: V3GameState): V3GameState = state.copy(battleState = null, pendingReports = listOf("已暂缓出兵，族人回寨待命。"))
+    fun cancelBattle(state: V3GameState): V3GameState {
+        val battle = state.battleState ?: return state
+        return if (isForcedHostileTarget(battle.target)) {
+            resolveUnopposedHostileAttack(state.copy(battleState = null), battle.target)
+        } else {
+            state.copy(battleState = null, pendingReports = listOf("已暂缓出兵，族人回寨待命。"))
+        }
+    }
+
+    private fun isForcedHostileTarget(target: String): Boolean =
+        target == "官差围庄" || target == "山贼来袭" || target == "军镇问罪" || target == "敌对势力来袭"
 
     private fun finishBattle(state: V3GameState, battle: V3BattleState): V3GameState {
         val victory = battle.victory
@@ -1593,9 +1808,9 @@ object V3GameEngine {
         val targetSite = state.sites.firstOrNull { it.name == battle.target }
             ?: state.sites.maxByOrNull { it.risk }
         val nextSites = state.sites.map { site ->
-            if (site.id == targetSite?.id) {
-                val risk = (site.risk - (if (victory) 24 else 8)).coerceAtLeast(0)
-                val control = (site.control + (if (victory) 12 else 3)).coerceAtMost(100)
+            if (victory && site.id == targetSite?.id) {
+                val risk = (site.risk - 24).coerceAtLeast(0)
+                val control = (site.control + 12).coerceAtMost(100)
                 site.copy(risk = risk, control = control, status = statusFor(control, risk))
             } else site
         }
@@ -2006,11 +2221,13 @@ object V3GameEngine {
         val grownPeople = processLifeCycle(growPeople(state.people, assignmentResults, detailLines, state.month == 12), state, detailLines, state.month == 12)
         val nextSites = sites.map { it.copy(assignedPersonId = null) }
         val nextArmy = if (militiaDelta >= 0) state.army.add(V3TroopType.Militia, militiaDelta) else state.army.lose(-militiaDelta)
+        val nextSilver = (state.silver + silverDelta).coerceAtLeast(-999)
+        val nextGrain = (state.grain + grainDelta).coerceAtLeast(-999)
         var settledState = state.copy(
             year = nextYear,
             month = nextMonth,
-            silver = (state.silver + silverDelta).coerceAtLeast(-999),
-            grain = (state.grain + grainDelta).coerceAtLeast(-999),
+            silver = nextSilver,
+            grain = nextGrain,
             influence = (state.influence + influenceDelta).coerceIn(0, 100),
             cohesion = (state.cohesion + cohesionDelta).coerceIn(0, 100),
             militia = nextArmy.militia,
@@ -2026,6 +2243,9 @@ object V3GameEngine {
         settledState = V3CardEngine.applyCrisisCascade(settledState, detailLines)
         settledState = V3CardEngine.applyInventoryEffects(settledState, detailLines)
         settledState = advancePatriarch(settledState, detailLines)
+        settledState = settledState.copy(
+            clinicAutoTreatmentMonths = (settledState.clinicAutoTreatmentMonths - 1).coerceAtLeast(0)
+        )
         settledState = unlockAutomaticPlaques(settledState, detailLines)
         settledState = V3CardEngine.refreshMonth(settledState)
         // 房支结算放在级联效果之后：使用最终银/粮变化与最终人口，避免房支看到危机/库存/添丁前的旧数值
@@ -2044,13 +2264,20 @@ object V3GameEngine {
         summary += "生活消耗：人口吃粮-$peopleFood，乡勇耗粮-$militiaFood，赋役杂费银-$taxSilver。人口越多越能办事，但粮仓压力也会更大。"
         summary += detailLines.take(6)
 
-        val nextState = evaluateAnnualGoals(
+        val progressedState = evaluateAnnualGoals(
             settledState.copy(
                 pendingReports = summary,
                 eventLog = (summary.map { "${state.year}年${state.month}月 · $it" } + state.eventLog).take(80)
             ),
             summary,
             state.month == 12
+        )
+        val nextState = progressedState.copy(
+            consecutiveDeficitMonths = if (progressedState.silver < 0 || progressedState.grain < 0) {
+                state.consecutiveDeficitMonths + 1
+            } else {
+                0
+            }
         )
         val progression = V3ProgressionEngine.snapshot(nextState)
         val primaryAction = progression.primaryAction
@@ -2178,6 +2405,7 @@ object V3GameEngine {
         return state.copy(
             patriarch = nextPatriarch,
             pendingSuccession = false,
+            regencyHeirId = null,
             seenCardGenerations = state.seenCardGenerations + (nextGeneration to emptyList()),
             biography = (state.biography + "${heir.name}承继族长之位，家业换了掌灯人。").take(80),
             pendingReports = listOf("族长继任：${heir.name}接过族印，旧一代的账本交到了新一代手中。")
@@ -2185,6 +2413,29 @@ object V3GameEngine {
     }
 
     private fun advancePatriarch(state: V3GameState, lines: MutableList<String>): V3GameState {
+        val regencyHeir = state.regencyHeirId?.let { heirId ->
+            state.people.firstOrNull { it.id == heirId && it.alive }
+        }
+        if (regencyHeir != null) {
+            if (regencyHeir.age >= CHILD_ADULT_AGE) {
+                lines += "少主${regencyHeir.name}已成年，族老交还族印，摄政结束。"
+                return succeedPatriarch(
+                    state.copy(
+                        pendingSuccession = true,
+                        patriarch = state.patriarch.copy(personId = -1)
+                    ),
+                    regencyHeir.id
+                ).copy(regencyHeirId = null)
+            }
+            return state.copy(
+                patriarch = state.patriarch.copy(
+                    name = "族老摄政（少主${regencyHeir.name}）",
+                    health = 50,
+                    term = state.patriarch.term + 1
+                ),
+                pendingSuccession = false
+            )
+        }
         val current = state.patriarch
         val holder = state.people.firstOrNull { it.id == current.personId && it.alive }
         val agePenalty = when {
@@ -2194,20 +2445,65 @@ object V3GameEngine {
             holder.age >= 55 -> 1
             else -> 0
         }
-        val nextHealth = (current.health - 1 - agePenalty).coerceAtLeast(0)
+        val automaticTreatment = state.clinicAutoTreatmentMonths > 0
+        val healerAvailable = state.clinicHealerId?.let { healerId ->
+            state.people.any { it.id == healerId && it.alive && it.age >= CHILD_ADULT_AGE }
+        } == true
+        val treatmentRecovery = when {
+            automaticTreatment -> 5
+            healerAvailable -> 3
+            else -> 0
+        }
+        val nextHealth = (current.health - 1 - agePenalty + treatmentRecovery).coerceIn(0, 100)
         val next = current.copy(health = nextHealth, term = current.term + 1)
         if (nextHealth > 0 && holder != null) return state.copy(patriarch = next)
-        val candidates = patriarchCandidates(state)
+        val successionState = if (holder != null) {
+            state.copy(
+                people = state.people.map { person ->
+                    if (person.id == holder.id) {
+                        person.copy(
+                            alive = false,
+                            spouseId = null,
+                            spouseSinceMonth = null,
+                            pregnancyDueMonth = null,
+                            currentTask = null,
+                            assignedSiteId = null,
+                            trainingFocus = null,
+                            deathYear = state.year,
+                            deathMonth = state.month,
+                            deathCause = "身板衰竭"
+                        )
+                    } else {
+                        person
+                    }
+                }
+            )
+        } else {
+            state
+        }
+        val candidates = patriarchCandidates(successionState)
         if (candidates.isEmpty()) {
-            // 无成年继任者：若尚有未成年族人在世，强制族长续命数月（等孩童成年），避免"族长病逝"死锁
-            val hasMinors = alivePeople(state).any { it.age < CHILD_ADULT_AGE }
-            return if (hasMinors) {
-                lines += "族长${current.name}身板虚弱，但族中尚无成年子弟堪当大任，只得勉力撑持，等待幼辈长成。"
-                state.copy(patriarch = current.copy(health = 15, term = current.term + 1))
+            val minorHeir = alivePeople(successionState)
+                .filter { it.age < CHILD_ADULT_AGE }
+                .maxWithOrNull(
+                    compareBy<V3Person> { it.ageMonths.coerceAtLeast(it.age * 12) }
+                        .thenBy { it.generation }
+                        .thenBy { it.merit }
+                )
+            return if (minorHeir != null) {
+                lines += "族长${current.name}病故，族老推举${minorHeir.name}为少主并代掌族印；时间仍可推进，待少主成年后自动亲政。"
+                successionState.copy(
+                    patriarch = current.copy(
+                        name = "族老摄政（少主${minorHeir.name}）",
+                        health = 50,
+                        term = 0
+                    ),
+                    pendingSuccession = false,
+                    regencyHeirId = minorHeir.id
+                )
             } else {
-                // 真无活人：进入终局
                 lines += "族长${current.name}故去，族中再无后人。"
-                state.copy(patriarch = next, pendingSuccession = true)
+                successionState.copy(patriarch = next, pendingSuccession = true)
             }
         }
         lines += if (holder == null) {
@@ -2215,7 +2511,7 @@ object V3GameEngine {
         } else {
             "族长${current.name}身板已衰，族印暂交族老保管，候选继任者等待议定。"
         }
-        return state.copy(
+        return successionState.copy(
             patriarch = next,
             pendingSuccession = true
         )
@@ -2240,11 +2536,10 @@ object V3GameEngine {
     }
 
     fun failureKind(state: V3GameState): String? = when {
+        state.consecutiveDeficitMonths >= 12 -> "长期亏空"
         state.pendingSuccession && patriarchCandidates(state).isEmpty() -> "族长病逝"
         state.currentCrisisStage == "mutiny" && state.garrisonMorale <= 0 -> "庄毁人亡"
-        state.grain <= -300 -> "举族逃荒"
         state.cohesion <= 0 -> "兄弟阋墙"
-        state.silver <= -300 -> "抄家流徙"
         state.routeScores[V3Route.Loyalist]?.let { it >= 80 } == true &&
             state.relations.garrison < 0 && state.militia <= 0 -> "从龙失败"
         state.completedStoryFlags.any { it.contains("抗清") } && state.militia <= 0 -> "抗清殉族"
@@ -2270,6 +2565,7 @@ object V3GameEngine {
         val decisionText = finalDecision?.let { "甲申前夜，宗族最终选择【$it】。" }.orEmpty()
         val kind = failureKind(state)
         val failureCause = when (kind) {
+            "长期亏空" -> "银粮连续十二个月无法平账，债主封门、粮仓见底，宗族再无周转余地。"
             "族长病逝" -> "族长病逝而族中无人能承继族印，家业失去共同的掌灯人。"
             "举族逃荒" -> "粮仓长期亏空，族人与佃户相继逃散，延续家业已无现实基础。"
             "兄弟阋墙" -> "各房争产离散，主房再也无法维持共同家业。"

@@ -56,6 +56,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
@@ -82,7 +84,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.arktools.daming.ads.RewardClaimStore
 import com.arktools.daming.ads.RewardedAdController
-import com.arktools.daming.ads.SpeedPassStore
 import com.arktools.daming.ads.ui.AdLoadingOverlay
 import com.arktools.daming.data.GameImages
 import com.arktools.daming.ui.components.AssetImage
@@ -102,6 +103,8 @@ import com.arktools.daming.v3.data.V3CountySite
 import com.arktools.daming.v3.data.V3CountySiteType
 import com.arktools.daming.v3.data.V3CrisisAd
 import com.arktools.daming.v3.data.V3EventChoice
+import com.arktools.daming.v3.data.V3EventContent
+import com.arktools.daming.v3.data.V3MiniGameSession
 import com.arktools.daming.v3.data.V3EquipmentQuality
 import com.arktools.daming.v3.data.V3EquipmentSlot
 import com.arktools.daming.v3.data.V3EstateType
@@ -141,6 +144,53 @@ private val V3Rice = Color(0xFF171511)
 private val V3SoftShape = RoundedCornerShape(16.dp)
 private val V3PanelShape = RoundedCornerShape(20.dp)
 private val V3ButtonShape = RoundedCornerShape(14.dp)
+private val V3DeceasedFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+
+@Composable
+private fun V3PersonPortrait(person: V3Person, modifier: Modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
+        AssetImage(
+            v3AvatarFor(person),
+            person.name,
+            Modifier.matchParentSize(),
+            ContentScale.Fit,
+            alpha = if (person.alive) 1f else 0.58f,
+            colorFilter = if (person.alive) null else V3DeceasedFilter
+        )
+        if (!person.alive) {
+            Canvas(Modifier.matchParentSize()) {
+                drawCircle(
+                    color = V3SealRed.copy(alpha = 0.88f),
+                    radius = size.minDimension * 0.28f,
+                    center = Offset(size.width * 0.72f, size.height * 0.72f),
+                    style = Stroke(width = size.minDimension * 0.045f)
+                )
+                drawLine(
+                    color = V3SealRed.copy(alpha = 0.9f),
+                    start = Offset(size.width * 0.57f, size.height * 0.72f),
+                    end = Offset(size.width * 0.87f, size.height * 0.72f),
+                    strokeWidth = size.minDimension * 0.045f
+                )
+                drawLine(
+                    color = V3SealRed.copy(alpha = 0.9f),
+                    start = Offset(size.width * 0.72f, size.height * 0.57f),
+                    end = Offset(size.width * 0.72f, size.height * 0.87f),
+                    strokeWidth = size.minDimension * 0.045f
+                )
+            }
+            Text(
+                "已故",
+                color = V3SealRed,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .background(V3Rice.copy(alpha = 0.88f), V3SoftShape)
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+            )
+        }
+    }
+}
 
 @Composable
 fun V3CreateScreen(controller: V3GameController, onBack: () -> Unit, onStart: () -> Unit) {
@@ -588,6 +638,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
                     !controller.settingsVisible &&
                     state.activeEvent == null &&
                     state.examSession == null &&
+                    state.miniGameSession == null &&
                     state.battleState == null &&
                     state.hexBattleState == null &&
                     state.conquestState == null
@@ -637,6 +688,9 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
         )
     }
     if (controller.state.finalEnding == null) {
+        controller.state.miniGameSession?.let { session ->
+            V3MiniGameDialog(session = session, controller = controller)
+        }
         controller.state.examSession?.let { session ->
             V3ExamDialog(session = session, controller = controller)
         }
@@ -798,6 +852,7 @@ private fun V3ActionCenterPanel(
         }
         Text(quest.title, color = V3Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(quest.description, color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+        Text("本章条件：已完成 ${quest.completedCount}/${quest.totalCount} 项；未全部完成不会自动进入下一章。全部达标后请在此直接晋升。", color = V3Red, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
         quest.conditions.chunked(2).forEach { rowConditions ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 rowConditions.forEach { condition ->
@@ -831,14 +886,20 @@ private fun V3ActionCenterPanel(
             Text(primary.reason, color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
             Text("预期：${primary.expectedImpact}", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
         }
+        if (V3GameEngine.canRankUp(controller.state)) {
+            V3SmallButton("条件已全部达成 · 立即晋升下一章", Modifier.fillMaxWidth(), selected = true) {
+                controller.rankUp()
+            }
+        } else {
+            V3SmallButton(primary.actionLabel, Modifier.fillMaxWidth(), enabled = primary.canExecute, selected = true) {
+                onNavigate(primary.destination)
+            }
+        }
         progression.claimableReward?.let { reward ->
             V3SmallButton(
                 "领取第${reward.chapter.number}章奖励 · ${reward.text}",
-                Modifier.fillMaxWidth(),
-                selected = true
+                Modifier.fillMaxWidth()
             ) { controller.claimChapterReward(reward.chapter) }
-        } ?: V3SmallButton(primary.actionLabel, Modifier.fillMaxWidth(), enabled = primary.canExecute, selected = true) {
-            onNavigate(primary.destination)
         }
         if (progression.recommendedActions.size > 1) {
             Text("随后可做", color = V3Muted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -955,7 +1016,7 @@ private fun elderGuideSteps(state: V3GameState): List<V3ElderGuideStep> {
     V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "第三章 · 人才经营", "产业不会自己运转。族谱展示亲子关系和每个人当前状态；真正的培养、派差和科举都从族人详情开始。", "点击高亮族人卡片，打开详情", V3GuideFocus.Genealogy, requiresAction = true),
     V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "读懂一个族人", "学、武、商、谋决定适合的差事；忠影响宗族稳定；绩记录功劳；劳过高会降低办事效果。先看清人，再安排。", "在族人详情中查看高亮信息，读完点击下一步", V3GuideFocus.PersonOverview),
     V3ElderGuideStep(V3Screen.People, "族老", "male_elder", "培养决定长期成长", "读书、习武、学算、礼法分别提高学、武、商、谋。培养会占用本月行动，所以不能同时派差；儿童不能外出，但培养成长更快。", "查看高亮培养区域，读完点击下一步", V3GuideFocus.PersonTraining),
-    V3ElderGuideStep(V3Screen.People, "周管事", "male_middle", "亲手派一次差事", "系统会根据族人所长和地点情况给出推荐差事。这里高亮的是「治理」——派去能压风险、稳凝聚。请点击高亮的「治理」按钮，让这名族人本月去治理对应地点；月结时才会兑现差事结果。", "点击高亮的「治理」按钮", V3GuideFocus.PersonTask, requiresAction = true),
+    V3ElderGuideStep(V3Screen.People, "周管事", "male_middle", "亲手派一次差事", "系统会根据族人所长和地点情况给出推荐差事，这里高亮的是「治理」——派去能压风险、稳凝聚。点任意一个差事按钮都可以；不强制点「治理」，点完即推进教程。", "任意点击一个差事按钮即可", V3GuideFocus.PersonTask, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "周管事", "male_middle", "自动安排其余人手", "手动派差适合精细经营；人多以后可用一键安排，让系统根据缺粮、缺银、地点风险和族人所长处理其余待命者。", "点击一键安排本月派遣与培养", V3GuideFocus.AutoArrange, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "族老", "male_elder", "第四章 · 完成一个经营月", "安排只是计划，必须推进月结才会获得产出、成长、婚育进度与事件结果。点击继续，真实推进一个月。", "点击继续，推进一个月", V3GuideFocus.TimeControls, requiresAction = true),
     V3ElderGuideStep(V3Screen.County, "沈账房", "male_scholar", "阅读月报", "月报会列出银粮变化、地点经营、族人成长和目标进度。不要只看库存数字，要从月报判断下个月该补什么。", "阅读月报后点击知道了", V3GuideFocus.MonthlyReportDismiss, requiresAction = true),
@@ -987,7 +1048,8 @@ private fun V3LocalGuideOverlay(
     state: V3GameState,
     controller: V3GameController,
     targetBounds: Rect?,
-    cardAtTop: Boolean
+    cardAtTop: Boolean,
+    allowAnyTap: Boolean = false
 ) {
     val steps = elderGuideSteps(state)
     val safeIndex = state.tutorialStep.coerceIn(0, steps.lastIndex)
@@ -1017,10 +1079,19 @@ private fun V3LocalGuideOverlay(
         }
     }
     Box(Modifier.fillMaxSize()) {
-        V3GuideFocusFrame(
-            targetBounds = targetBounds,
-            blockInput = step.requiresAction && targetBounds != null
-        )
+        // 第15步不要求命中狭小按钮：点击屏幕任意位置即可推进教程。
+        if (allowAnyTap) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clickable { controller.advanceTutorial(safeIndex) }
+            )
+        } else {
+            V3GuideFocusFrame(
+                targetBounds = targetBounds,
+                blockInput = step.requiresAction && targetBounds != null
+            )
+        }
         Column(
             Modifier
                 .align(Alignment.TopStart)
@@ -1036,7 +1107,7 @@ private fun V3LocalGuideOverlay(
             Text(step.title, color = V3Red, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Text(step.words, color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
             Text(step.action, color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            if (step.requiresAction && targetBounds == null) {
+            if (step.requiresAction && targetBounds == null && !allowAnyTap) {
                 Text(
                     "正在定位可操作目标，请稍候。目标出现前不会要求你盲点。",
                     color = V3Red,
@@ -1045,17 +1116,34 @@ private fun V3LocalGuideOverlay(
                     fontWeight = FontWeight.Bold
                 )
             }
+            if (allowAnyTap) {
+                Text(
+                    "任意点击一个差事按钮即可继续，不必非点高亮位置。",
+                    color = V3Red,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text("步骤 ${safeIndex + 1}/${steps.size}", color = V3Muted, fontSize = 10.sp)
-            if (step.requiresAction) {
-                V3SmallButton(
-                    if (targetBounds == null) "正在定位目标" else "请完成高亮操作",
-                    Modifier.fillMaxWidth(),
-                    enabled = false,
-                    selected = true
-                ) {}
-            } else {
-                V3SmallButton("下一步", Modifier.fillMaxWidth(), selected = true) {
-                    controller.advanceTutorial(safeIndex)
+            when {
+                allowAnyTap -> {
+                    V3SmallButton("点任意差事即可（或点此跳过）", Modifier.fillMaxWidth(), selected = true) {
+                        controller.advanceTutorial(safeIndex)
+                    }
+                }
+                step.requiresAction -> {
+                    V3SmallButton(
+                        if (targetBounds == null) "正在定位目标" else "请完成高亮操作",
+                        Modifier.fillMaxWidth(),
+                        enabled = false,
+                        selected = true
+                    ) {}
+                }
+                else -> {
+                    V3SmallButton("下一步", Modifier.fillMaxWidth(), selected = true) {
+                        controller.advanceTutorial(safeIndex)
+                    }
                 }
             }
         }
@@ -1740,7 +1828,7 @@ private fun V3FamilyMiniNode(
         ) {
             Text("第${person.generation}世", color = V3Gold, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Box(Modifier.size(54.dp).clip(CircleShape).background(V3Rice).border(2.dp, statusColor, CircleShape).padding(4.dp), contentAlignment = Alignment.Center) {
-                AssetImage(v3AvatarFor(person), person.name, Modifier.matchParentSize().clip(CircleShape), ContentScale.Fit)
+                V3PersonPortrait(person, Modifier.matchParentSize().clip(CircleShape))
             }
             Text(person.name, color = V3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text("${person.age}岁${person.ageMonths.coerceAtLeast(person.age * 12) % 12}个月 · ${person.trait.label}", color = V3Muted, fontSize = 9.sp, maxLines = 1)
@@ -1827,11 +1915,13 @@ private fun V3PersonDetailDialog(
                 val bounds = localTargets[currentFocus]
                 val density = LocalDensity.current
                 val halfScreenPx = with(density) { (LocalConfiguration.current.screenHeightDp.dp / 2).toPx() }
+                // 第15步（tutorialStep=14）：派差事步骤允许全屏任意点击推进。
                 V3LocalGuideOverlay(
                     state = state,
                     controller = controller,
                     targetBounds = bounds,
-                    cardAtTop = (bounds?.center?.y ?: 0f) > halfScreenPx
+                    cardAtTop = (bounds?.center?.y ?: 0f) > halfScreenPx,
+                    allowAnyTap = tutorialStep == 14
                 )
             }
         }
@@ -2419,6 +2509,9 @@ private fun V3SiteManageDialog(
                     controller,
                     overviewModifier = Modifier.guideTarget(V3GuideFocus.SiteOverview, localTargets)
                 )
+                if (site.type == V3CountySiteType.Clinic) {
+                    V3ClinicPanel(state, controller)
+                }
                 Text(
                     "地点操作包括专属事务、营建升级和派遣建议。派遣需到族人详情选择具体族人与差事。",
                     color = V3Ink,
@@ -2445,6 +2538,92 @@ private fun V3SiteManageDialog(
                     targetBounds = bounds,
                     cardAtTop = currentFocus != V3GuideFocus.SiteOverview
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun V3ClinicPanel(
+    state: V3GameState,
+    controller: V3GameController
+) {
+    val healerCandidates = V3GameEngine.clinicHealerCandidates(state)
+    val healer = state.clinicHealerId?.let { healerId ->
+        state.people.firstOrNull { it.id == healerId && it.alive }
+    }
+    val holder = state.people.firstOrNull {
+        it.id == state.patriarch.personId && it.alive
+    }
+    val patriarchAge = holder?.age ?: 60
+    val patriarchCost = V3GameEngine.treatmentCost(patriarchAge, patriarch = true)
+    val patients = state.people.filter {
+        it.alive && (it.illness != null || it.fatigue >= 55)
+    }
+    V3Panel {
+        Text("医馆诊治", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "常驻医师：${healer?.let { "${it.name}（${it.gender.label}）" } ?: "未安排"}。女性族人与男性族人均可担任医师。",
+            color = if (healer == null) V3Muted else V3Green,
+            fontSize = 12.sp,
+            lineHeight = 18.sp
+        )
+        healerCandidates.take(6).chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                row.forEach { person ->
+                    V3SmallButton(
+                        "${person.name} · ${person.gender.label}\n学${person.study} 谋${person.diplomacy}",
+                        Modifier.weight(1f),
+                        selected = person.id == state.clinicHealerId
+                    ) { controller.assignClinicHealer(person.id) }
+                }
+                repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        if (healer != null) {
+            V3SmallButton("撤下常驻医师", Modifier.fillMaxWidth()) {
+                controller.assignClinicHealer(null)
+            }
+        }
+        Text(
+            "族长身板 ${state.patriarch.health}/100 · ${patriarchAge}岁 · 本次诊金银${patriarchCost}两",
+            color = if (state.patriarch.health <= 20) V3Red else V3Ink,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
+        V3SmallButton("付银为族长治疗", Modifier.fillMaxWidth(), selected = state.patriarch.health <= 35) {
+            controller.treatPatriarchAtClinic()
+        }
+        patients.take(6).forEach { patient ->
+            val cost = V3GameEngine.treatmentCost(patient.age)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "${patient.name} · ${patient.age}岁 · ${patient.illness ?: "劳倦"} · 银${cost}",
+                    color = V3Ink,
+                    fontSize = 11.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                V3SmallButton("诊治", Modifier.width(76.dp)) {
+                    controller.treatPersonAtClinic(patient.id)
+                }
+            }
+        }
+        val autoText = if (state.clinicAutoTreatmentMonths > 0) {
+            "药商义约生效 · 自动治疗剩余${state.clinicAutoTreatmentMonths}个月"
+        } else {
+            "治疗确有需要时，可自愿观看广告解锁24个月自动治疗；不观看不影响付银问诊。"
+        }
+        Text(autoText, color = if (state.clinicAutoTreatmentMonths > 0) V3Green else V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+        if (
+            state.clinicAutoTreatmentMonths == 0 &&
+            (state.patriarch.health < 70 || patients.isNotEmpty())
+        ) {
+            V3SmallButton("药商援手 · 解锁两年自动治疗", Modifier.fillMaxWidth()) {
+                controller.requestClinicAutoTreatmentAd()
             }
         }
     }
@@ -2543,7 +2722,7 @@ private fun V3PersonCard(
     val content: @Composable ColumnScope.() -> Unit = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(72.dp).clip(CircleShape).background(V3Rice).border(3.dp, V3Gold, CircleShape).padding(5.dp), contentAlignment = Alignment.Center) {
-                        AssetImage(v3AvatarFor(person), person.name, Modifier.matchParentSize().clip(CircleShape), ContentScale.Fit)
+                        V3PersonPortrait(person, Modifier.matchParentSize().clip(CircleShape))
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(person.name, color = V3Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold)
@@ -2810,71 +2989,6 @@ private fun V3TimeControls(
     guideTargets: MutableMap<V3GuideFocus, Rect>,
     tutorialStep: Int
 ) {
-    val context = LocalContext.current
-    val activity = context as? android.app.Activity
-    val speedPassStore = remember { SpeedPassStore(context) }
-    var remainingPassMillis by remember { mutableStateOf(speedPassStore.remainingMillis()) }
-    var adLoading by remember { mutableStateOf(false) }
-    // 点击带锁遮罩的 2–5 倍按钮时先弹确认窗，确认后再拉广告
-    var confirmSpeed by remember { mutableStateOf<Int?>(null) }
-
-    LaunchedEffect(remainingPassMillis > 0L) {
-        while (remainingPassMillis > 0L) {
-            delay(1_000L)
-            remainingPassMillis = speedPassStore.remainingMillis()
-        }
-        if (remainingPassMillis <= 0L && controller.timeSpeed > 1) {
-            controller.updateTimeSpeed(1)
-            controller.showInfo("广告倍速权益已到期，时间流速已自动恢复为 1 倍。")
-        }
-    }
-
-    // 全屏静态遮罩：只有 adLoading=true 时显示；由 onLoadingChanged(false) 可靠关闭
-    AdLoadingOverlay(visible = adLoading, label = "倍速权益加载中…")
-    // 超时保护：若广告 SDK 30 秒内未回调 onLoadingChanged(false)，自动关闭遮罩避免卡死
-    LaunchedEffect(adLoading) {
-        if (adLoading) {
-            delay(30_000L)
-            if (adLoading) {
-                adLoading = false
-                controller.showInfo("广告加载超时，请检查网络后重试。")
-            }
-        }
-    }
-
-    // 观看前确认弹窗
-    confirmSpeed?.let { speed ->
-        Dialog(onDismissRequest = { confirmSpeed = null }) {
-            V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
-                Text("观看广告解锁倍速", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Text("完整观看后，2–5 倍时序全部解锁 20 分钟。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    V3SmallButton("关闭", Modifier.weight(1f)) { confirmSpeed = null }
-                    V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
-                        val act = activity
-                        confirmSpeed = null
-                        if (act == null) {
-                            controller.showInfo("当前页面无法打开激励广告。")
-                            return@V3SmallButton
-                        }
-                        RewardedAdController.show(
-                            activity = act,
-                            onLoadingChanged = { adLoading = it },
-                            onRewarded = {
-                                val expiresAt = speedPassStore.unlockForTwentyMinutes()
-                                remainingPassMillis = (expiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
-                                controller.updateTimeSpeed(speed)
-                                controller.showInfo("倍速经营权益已生效：2–5 倍速度全部解锁 20 分钟，当前切换为 ${speed} 倍。")
-                            },
-                            onError = controller::showInfo,
-                            onClosed = { /* AdLoadingOverlay 由 onLoadingChanged(false) 关闭 */ }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2891,19 +3005,14 @@ private fun V3TimeControls(
                 }
             }
             listOf(1, 2, 3, 4, 5).forEach { speed ->
-                val unlocked = speed == 1 || remainingPassMillis > 0L
                 V3SpeedButton(
                     speed = speed,
-                    unlocked = unlocked,
+                    unlocked = true,
                     selected = controller.timeSpeed == speed,
                     modifier = Modifier.weight(1f),
-                    enabled = !adLoading
+                    enabled = true
                 ) {
-                    when {
-                        unlocked -> controller.updateTimeSpeed(speed)
-                        adLoading -> Unit
-                        else -> confirmSpeed = speed
-                    }
+                    controller.updateTimeSpeed(speed)
                 }
             }
             val timeBlockReason = controller.timeBlockReason()
@@ -2922,17 +3031,6 @@ private fun V3TimeControls(
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1.4f)
-            )
-        }
-        if (remainingPassMillis > 0L) {
-            val totalSeconds = (remainingPassMillis / 1000L).coerceAtLeast(0L)
-            val minutes = totalSeconds / 60L
-            val seconds = totalSeconds % 60L
-            Text(
-                "倍速剩余 ${minutes}:${seconds.toString().padStart(2, '0')}",
-                color = V3Green,
-                fontSize = 10.sp,
-                lineHeight = 15.sp
             )
         }
     }
@@ -3407,17 +3505,76 @@ private fun V3Dialog(
 }
 
 @Composable
+private fun V3MiniGameDialog(session: V3MiniGameSession, controller: V3GameController) {
+    val question = V3EventContent.miniGameQuestions.firstOrNull { it.id == session.questionId }
+    if (question != null) {
+        Dialog(onDismissRequest = { controller.showInfo("请先完成${question.type.label}") }) {
+            V3ImagePanel(GameImages.V3UiExamPaper, Modifier.widthIn(max = 500.dp)) {
+                Box(Modifier.fillMaxWidth().heightIn(max = 430.dp).verticalScroll(rememberScrollState())) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            question.type.label,
+                            color = V3Red,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            question.title,
+                            color = V3Red,
+                            fontSize = 21.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (session.eventTitle.isNotBlank()) {
+                            Text(
+                                "事件：${session.eventTitle} · 方案：${session.choiceLabel}",
+                                color = V3Gold,
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp
+                            )
+                        }
+                        Text(question.prompt, color = V3Ink, fontSize = 16.sp, lineHeight = 24.sp)
+                        question.options.forEachIndexed { index, option ->
+                            V3SmallButton(option, Modifier.fillMaxWidth()) {
+                                controller.answerMiniGame(index)
+                            }
+                        }
+                        Text(
+                            "答对后才会结算事件奖励；答错会显示正确答案，本次不发奖励。",
+                            color = V3Muted,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
+            }
+        }
+    } else {
+        LaunchedEffect(session.questionId) {
+            controller.answerMiniGame(-1)
+        }
+    }
+}
+
+@Composable
 private fun V3ExamDialog(session: com.arktools.daming.v3.data.V3ExamSession, controller: V3GameController) {
     val question = V3GameEngine.examQuestion(session)
     if (question != null) {
         Dialog(onDismissRequest = { controller.showInfo("请先完成考题") }) {
             V3ImagePanel(GameImages.V3UiExamPaper, Modifier.widthIn(max = 500.dp)) {
-                Text("${session.stage.label}考题", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                Text(question.question, color = V3Ink, fontSize = 16.sp, lineHeight = 24.sp)
-                question.options.forEachIndexed { index, option ->
-                    V3SmallButton(option, Modifier.fillMaxWidth()) { controller.answerExam(index) }
+                Box(Modifier.fillMaxWidth().heightIn(max = 430.dp).verticalScroll(rememberScrollState())) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("${session.stage.label}考题", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                        Text(question.question, color = V3Ink, fontSize = 16.sp, lineHeight = 24.sp)
+                        question.options.forEachIndexed { index, option ->
+                            V3SmallButton(option, Modifier.fillMaxWidth()) { controller.answerExam(index) }
+                        }
+                        Text("提示：学识和谋略越高，答错时也越可能靠底子补救。", color = V3Muted, fontSize = 12.sp)
+                    }
                 }
-                Text("提示：学识和谋略越高，答错时也越可能靠底子补救。", color = V3Muted, fontSize = 12.sp)
             }
         }
     } else {
@@ -3438,53 +3595,37 @@ private data class V3AdRewardOffer(
 
 private fun monthlyAdOffers(state: V3GameState): List<V3AdRewardOffer> {
     val keyPrefix = "month-${state.year}-${state.month}"
-    val rescueOffer = when {
-        state.silver < 80 -> V3AdRewardOffer(
+    return when {
+        state.silver < 0 -> listOf(V3AdRewardOffer(
             key = "$keyPrefix-rescue-silver",
             title = "行商雪中送炭",
-            subtitle = "完整观看后获得 100 两应急银，立即缓解本月周转压力",
+            subtitle = "本月银库已见负数。完整观看后获得 100 两应急银，立即缓解周转压力",
             grantedMessage = "行商雪中送炭：银两 +100。",
             silver = 100
-        )
-        state.grain < 120 -> V3AdRewardOffer(
+        ))
+        state.grain < 0 -> listOf(V3AdRewardOffer(
             key = "$keyPrefix-rescue-grain",
             title = "乡绅开仓济族",
-            subtitle = "完整观看后获得 150 石粮，足以支撑下一阶段经营",
+            subtitle = "本月粮仓已见负数。完整观看后获得 150 石粮，避免口粮危机继续恶化",
             grantedMessage = "乡绅开仓济族：粮食 +150。",
             grain = 150
-        )
-        state.equipment.any { it.durability < it.maxDurability } -> V3AdRewardOffer(
+        ))
+        state.equipment.any { it.durability * 2 < it.maxDurability } -> listOf(V3AdRewardOffer(
             key = "$keyPrefix-rescue-repair",
             title = "军匠全面整备",
-            subtitle = "完整观看后全部军械恢复 20 点耐久，出征更有把握",
+            subtitle = "已有军械耐久低于一半。完整观看后全部军械恢复 20 点耐久",
             grantedMessage = "军匠全面整备完成：全部军械耐久 +20。",
             repairDurability = 20
-        )
-        state.cohesion < 65 -> V3AdRewardOffer(
+        ))
+        state.cohesion < 40 -> listOf(V3AdRewardOffer(
             key = "$keyPrefix-rescue-cohesion",
             title = "宗祠赐宴聚心",
-            subtitle = "完整观看后宗族凝聚 +10，降低内耗并稳住族心",
+            subtitle = "宗族凝聚已跌入危急区间。完整观看后宗族凝聚 +10",
             grantedMessage = "宗祠赐宴结束：宗族凝聚 +10。",
             cohesion = 10
-        )
-        else -> V3AdRewardOffer(
-            key = "$keyPrefix-rescue-trade",
-            title = "商路红利加倍",
-            subtitle = "完整观看后立即获得 80 两额外商路分红",
-            grantedMessage = "商路红利到账：银两 +80。",
-            silver = 80
-        )
+        ))
+        else -> emptyList()
     }
-    val prosperityOffer = V3AdRewardOffer(
-        key = "$keyPrefix-prosperity",
-        title = "领取本月家业福袋",
-        subtitle = "完整观看后获得 50 两、80 石粮与 4 点宗族凝聚",
-        grantedMessage = "家业福袋已入库：银两 +50、粮食 +80、宗族凝聚 +4。",
-        silver = 50,
-        grain = 80,
-        cohesion = 4
-    )
-    return listOf(rescueOffer, prosperityOffer)
 }
 
 @Composable
@@ -3518,7 +3659,7 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
                 V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
                     Text(offer.title, color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Text(offer.subtitle, color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
-                    Text("完整观看并通过奖励校验后立即发放。本月最多领取 2 档。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                    Text("完整观看并通过奖励校验后立即发放。每次危机仅可领取一次。", color = V3Muted, fontSize = 11.sp, lineHeight = 17.sp)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         V3SmallButton("暂不领取", Modifier.weight(1f)) { confirmOffer = null }
                         V3SmallButton("观看并领取", Modifier.weight(1f), selected = true) {
@@ -3560,27 +3701,29 @@ private fun V3MonthlyReportDialog(report: V3MonthlyReport, controller: V3GameCon
         tutorialState = controller.state,
         tutorialController = controller
     ) {
-        Column(
-            Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape).border(1.dp, V3Gold, V3SoftShape).padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("本月家业福缘", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("$claimedCount/${offers.size} 已领取", color = V3Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-            Text("按当前家业缺口智能推荐，奖励明确可见；全部自愿，不观看不影响月报结算。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
-            offers.forEach { offer ->
-                val alreadyClaimed = offer.key in claimedKeys
-                V3SmallButton(
-                    if (alreadyClaimed) "已领取 · ${offer.title}" else offer.title,
-                    Modifier.fillMaxWidth(),
-                    selected = !alreadyClaimed,
-                    enabled = !alreadyClaimed && !loading
-                ) {
-                    confirmOffer = offer
+        if (offers.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().background(V3PaperDeep, V3SoftShape).border(1.dp, V3Gold, V3SoftShape).padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("本月危机援手", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text("$claimedCount/${offers.size} 已领取", color = V3Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
-                if (!alreadyClaimed) {
-                    Text(offer.subtitle, color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp)
+                Text("仅在家业出现明确危机时提供；全部自愿，不观看不影响月报结算。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                offers.forEach { offer ->
+                    val alreadyClaimed = offer.key in claimedKeys
+                    V3SmallButton(
+                        if (alreadyClaimed) "已领取 · ${offer.title}" else offer.title,
+                        Modifier.fillMaxWidth(),
+                        selected = !alreadyClaimed,
+                        enabled = !alreadyClaimed && !loading
+                    ) {
+                        confirmOffer = offer
+                    }
+                    if (!alreadyClaimed) {
+                        Text(offer.subtitle, color = V3Ink, fontSize = 11.sp, lineHeight = 16.sp)
+                    }
                 }
             }
         }
@@ -4304,13 +4447,21 @@ private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
                     .padding(5.dp),
                 contentAlignment = Alignment.Center
             ) {
-                AssetImage(
-                    patriarchPerson?.let(::v3AvatarFor)
-                        ?: GameImages.v3AvatarPortraits.getValue("male_elder"),
-                    state.patriarch.name,
-                    Modifier.matchParentSize().clip(CircleShape),
-                    ContentScale.Fit
-                )
+                if (patriarchPerson != null) {
+                    V3PersonPortrait(
+                        patriarchPerson,
+                        Modifier.matchParentSize().clip(CircleShape)
+                    )
+                } else {
+                    AssetImage(
+                        GameImages.v3AvatarPortraits.getValue("male_elder"),
+                        state.patriarch.name,
+                        Modifier.matchParentSize().clip(CircleShape),
+                        ContentScale.Fit,
+                        alpha = if (state.regencyHeirId == null) 0.58f else 1f,
+                        colorFilter = if (state.regencyHeirId == null) V3DeceasedFilter else null
+                    )
+                }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("族长 · ${state.patriarch.name}", color = V3Gold, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -4353,19 +4504,23 @@ private fun V3VisitorDialog(
                 Text("${state.year}年${state.month}月", color = V3Muted, fontSize = 12.sp)
             }
             Text("这不是普通家务，而是一段会继续发展的访客故事。选择之后，访客进度、家乘、物品、关系或路线会真实写回；后续章节会在条件满足的月份再次来访。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-            Text(card.body, color = V3Ink, fontSize = 15.sp, lineHeight = 23.sp)
-            card.choices.forEach { choice ->
-                val unlocked = V3CardEngine.meets(choice.require, state)
-                V3SmallButton(
-                    if (unlocked) choice.label else "${choice.label}（条件不足）",
-                    Modifier.fillMaxWidth(),
-                    enabled = unlocked,
-                    selected = unlocked
-                ) {
-                    if (unlocked) controller.chooseCard(card.id, choice.id)
-                    else controller.showInfo(choice.require?.label() ?: "此项暂不可行")
+            Box(Modifier.fillMaxWidth().heightIn(max = 390.dp).verticalScroll(rememberScrollState())) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(card.body, color = V3Ink, fontSize = 15.sp, lineHeight = 23.sp)
+                    card.choices.forEach { choice ->
+                        val unlocked = V3CardEngine.meets(choice.require, state)
+                        V3SmallButton(
+                            if (unlocked) choice.label else "${choice.label}（条件不足）",
+                            Modifier.fillMaxWidth(),
+                            enabled = unlocked,
+                            selected = unlocked
+                        ) {
+                            if (unlocked) controller.chooseCard(card.id, choice.id)
+                            else controller.showInfo(choice.require?.label() ?: "此项暂不可行")
+                        }
+                        Text(choice.desc, color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                    }
                 }
-                Text(choice.desc, color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
             }
         }
     }

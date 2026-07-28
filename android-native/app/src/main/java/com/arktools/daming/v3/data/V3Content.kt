@@ -142,13 +142,13 @@ object V3Content {
             V3CardChoice("council", "让各房共担", "把守庄从主房的事，变成全族的事。", effects = V3EffectDelta(cohesion = 7, garrisonMorale = 5, unrest = -4, silver = -12)),
             V3CardChoice("dismiss", "遣散一半", "眼下省银，庄门从此变薄。", effects = V3EffectDelta(silver = 18, militia = -8, garrisonMorale = -18, unrest = 8))
         )),
-        V3MonthlyCard("exam_county_card", V3CardPool.Exam, "县试名额", "县中书吏送来名额，族里读书的孩子终于可以把名字写上考册。", "科举", minChapter = 1, weight = 12, require = V3CardRequire(minChildren = 1), choices = listOf(
-            V3CardChoice("prepare", "送子入试", "花束脩，也给族里一个向上攀的念头。", require = V3CardRequire(minSilver = 20, minPatriarchStat = "prestige", minPatriarchStatValue = 25), effects = V3EffectDelta(silver = -20, influence = 3, routeDelta = V3RouteDelta(V3Route.Scholar, 6), storyFlag = "exam_county_ready", biographicalNote = "族中第一次把名字写进县试名册。")),
+        V3MonthlyCard("exam_county_card", V3CardPool.Exam, "县试蒙馆名额", "县中书吏送来蒙馆名额，族里读书的孩子可以提前熟悉考册与县试规矩；真正晋级仍需在族人详情参加答题。", "科举", minChapter = 1, weight = 12, once = true, require = V3CardRequire(minChildren = 1), choices = listOf(
+            V3CardChoice("prepare", "备下蒙馆束脩", "花束脩请先生讲解考规，为日后正式县试做准备。", require = V3CardRequire(minSilver = 20, minPatriarchStat = "prestige", minPatriarchStatValue = 25), effects = V3EffectDelta(silver = -20, influence = 3, routeDelta = V3RouteDelta(V3Route.Scholar, 6), storyFlag = "exam_patronage_ready", biographicalNote = "族中第一次为子弟备下县试蒙馆束脩。")),
             V3CardChoice("farm", "先守田庄", "读书不只在考场，家底也不能断。", effects = V3EffectDelta(grain = 20, patriarchStewardship = 2))
         )),
-        V3MonthlyCard("exam_provincial_card", V3CardPool.Exam, "乡试秋闱", "族中后辈已过县府两关，乡试的门槛隔着一场秋雨。", "科举", minChapter = 3, weight = 14, require = V3CardRequire(minAliveAdults = 2, flagRequired = "exam_county_ready"), choices = listOf(
-            V3CardChoice("sponsor", "倾力供给", "给他盘缠、书卷与一间安静屋子。", require = V3CardRequire(minSilver = 80, minInfluence = 45), dice = true, successRate = 55, successText = "秋闱放榜，族中添了一名举子。", failureText = "名落孙山，盘缠也随秋风去了。", successEffects = V3EffectDelta(silver = -80, influence = 12, gentry = 8, routeDelta = V3RouteDelta(V3Route.Scholar, 12), itemId = "provincial_certificate", plaqueId = "耕读之家", biographicalNote = "族中后辈中举，族谱添上了一行墨色极重的字。"), failureEffects = V3EffectDelta(silver = -80, cohesion = -2, patriarchPrestige = -2)),
-            V3CardChoice("share", "各房分担", "不让一房独负，也不把所有希望压在一人身上。", effects = V3EffectDelta(silver = -35, cohesion = 5, routeDelta = V3RouteDelta(V3Route.Scholar, 5)))
+        V3MonthlyCard("exam_provincial_card", V3CardPool.Exam, "秋闱资助议", "族中有人取得科名后，各房商议是否设一笔长期赶考公费。该卡只决定资助，县试、府试、乡试、会试与殿试仍须逐级答题。", "科举", minChapter = 3, weight = 14, once = true, require = V3CardRequire(minAliveAdults = 2, flagRequired = "exam_patronage_ready"), choices = listOf(
+            V3CardChoice("sponsor", "设立赶考公费", "给后辈预备盘缠、书卷与一间安静屋子。", require = V3CardRequire(minSilver = 80, minInfluence = 45), dice = true, successRate = 70, successText = "公费议成，各房愿共同供养真正通过逐级科举的子弟。", failureText = "各房对分摊比例争执不下，本次未能设成公费。", successEffects = V3EffectDelta(silver = -80, influence = 8, gentry = 6, routeDelta = V3RouteDelta(V3Route.Scholar, 8), storyFlag = "exam_travel_fund", biographicalNote = "族中设立赶考公费，供有志子弟逐级应试。"), failureEffects = V3EffectDelta(silver = -20, cohesion = -2, patriarchPrestige = -1)),
+            V3CardChoice("share", "暂由各房自筹", "暂不设公费，各房自行承担赶考开支。", effects = V3EffectDelta(cohesion = 3))
         )),
         V3MonthlyCard("visitor_xu_xiake", V3CardPool.Visitor, "徐霞客过庄", "徐霞客自山道来，鞋底沾着远方的泥。他不问族里有多少银，只问哪一条路通向未曾写入舆图的地方。", "访客", minChapter = 2, weight = 16, once = true, choices = listOf(
             V3CardChoice("map", "请他绘路", "用一顿薄酒换一张能留在族谱里的图。", effects = V3EffectDelta(silver = -10, influence = 5, itemId = "travel_map", visitorId = "xu_xiake", visitorProgress = 1, biographicalNote = "徐霞客过庄，留下了一张标着水源与山路的图。")),
@@ -1347,7 +1347,28 @@ object V3Content {
             options = listOf("财粮、兵力、声望与凝聚", "单一人物年龄", "地图底色", "事件标题长度"),
             answerIndex = 0,
             note = "终局路线由多系统共同决定，不能只堆一种数值。"
-        )
+        ),
+        V3ExamQuestion("county_5", V3ExamStage.County, "“学而时习之，不亦说乎”出自哪部典籍？", listOf("《论语》", "《孟子》", "《尚书》"), 0, "此句见《论语·学而》。"),
+        V3ExamQuestion("county_6", V3ExamStage.County, "鱼鳞图册主要用于登记什么？", listOf("田地形状与归属", "军营兵器", "科举名次"), 0, "鱼鳞图册用于清查田亩与产权。"),
+        V3ExamQuestion("county_7", V3ExamStage.County, "二十户每户出粮三石，共收多少？", listOf("四十石", "六十石", "八十石"), 1, "二十乘三，共六十石。"),
+        V3ExamQuestion("prefecture_5", V3ExamStage.Prefecture, "官府同时催丁催粮，较稳妥的宗族应对是？", listOf("核册分担并留农时", "全部拒绝", "卖空种粮"), 0, "核户分担并避免误尽农时，才能兼顾官民。"),
+        V3ExamQuestion("prefecture_6", V3ExamStage.Prefecture, "田界讼案中较可靠的证据组合是？", listOf("契书、界碑与丈量册", "流言与猜测", "出价高低"), 0, "书证、物证与官府丈量应互相印证。"),
+        V3ExamQuestion("prefecture_7", V3ExamStage.Prefecture, "堤防出现管涌，正确处置方向是？", listOf("背水围井反滤", "迎水挖穿堤身", "封堵所有沟渠"), 0, "背水侧反滤能止土不止水，避免险情扩大。"),
+        V3ExamQuestion("provincial_5", V3ExamStage.Provincial, "灾民涌入而粮有限，最可持续的方案是？", listOf("核户赈济兼以工代赈", "闭门不问", "一次散尽仓粮"), 0, "分类救济并恢复生产，优于放任或一次耗尽。"),
+        V3ExamQuestion("provincial_6", V3ExamStage.Provincial, "县令出逃后豪族维持秩序的底线是？", listOf("保粮仓、止劫掠并留公议", "趁乱私掠", "焚毁契册"), 0, "先保障基本秩序与公共资源，才有合法性。"),
+        V3ExamQuestion("provincial_7", V3ExamStage.Provincial, "海贸高利伴随的主要系统风险是？", listOf("船损、封港与资金占压", "科举年龄", "祭祀席次"), 0, "海路收益高，但航行、政策与资金风险也高。"),
+        V3ExamQuestion("metropolitan_1", V3ExamStage.Metropolitan, "河流上下游争水，最合经世原则的是？", listOf("分时配水并设量水簿", "上游尽取", "任其械斗"), 0, "量水、分时和留档可兼顾公平与执行。"),
+        V3ExamQuestion("metropolitan_2", V3ExamStage.Metropolitan, "漕运中断时应先保哪一环？", listOf("关键粮道与转运仓", "奢侈货物", "宴饮支出"), 0, "先保民生与军需粮道，再恢复一般贸易。"),
+        V3ExamQuestion("metropolitan_3", V3ExamStage.Metropolitan, "边镇欠饷引发动摇，短期与长期应如何结合？", listOf("先发急饷再清册定制", "只罚士卒", "立即解散"), 0, "先止急变，再以清册和稳定财源解决根因。"),
+        V3ExamQuestion("metropolitan_4", V3ExamStage.Metropolitan, "赈荒结束后最重要的下一步是？", listOf("复耕、工具与种粮", "继续无限施粥", "提高徭役"), 0, "救急之后必须恢复生产能力。"),
+        V3ExamQuestion("metropolitan_5", V3ExamStage.Metropolitan, "地方积欠混乱，清查应避免什么？", listOf("不分真欠假欠一概严催", "核册分类", "公开复核"), 0, "一概严催会把账务问题转为民变风险。"),
+        V3ExamQuestion("metropolitan_6", V3ExamStage.Metropolitan, "宗族子弟入仕后最应防范什么？", listOf("公私不分损害家声", "继续读书", "记录政绩"), 0, "公器私用会反噬仕途与宗族信誉。"),
+        V3ExamQuestion("palace_1", V3ExamStage.Palace, "灾荒与兵乱并至，施政首务是什么？", listOf("安民保食并恢复秩序", "先修园林", "尽增杂税"), 0, "民生与基本秩序是恢复国家治理的前提。"),
+        V3ExamQuestion("palace_2", V3ExamStage.Palace, "地方危局中选任官吏最看重什么？", listOf("才具、操守与实绩", "门第一项", "馈赠多少"), 0, "经世用人须兼看能力、品行和实际政绩。"),
+        V3ExamQuestion("palace_3", V3ExamStage.Palace, "缓解财政困局的长策是？", listOf("清册均役、节用并恢复生产", "不断临时加派", "卖尽官仓"), 0, "扩大税基与公平负担优于反复加派。"),
+        V3ExamQuestion("palace_4", V3ExamStage.Palace, "强兵而不扰民的关键是什么？", listOf("定额粮饷、严明军纪", "纵兵自筹", "取消兵册"), 0, "稳定供给和军纪能减少军队向百姓转嫁成本。"),
+        V3ExamQuestion("palace_5", V3ExamStage.Palace, "礼教与法令应如何配合？", listOf("礼明其义、法守其底", "只讲人情", "只靠重刑"), 0, "教化塑造共识，法律守住底线。"),
+        V3ExamQuestion("palace_6", V3ExamStage.Palace, "朝局崩解时重建秩序最需什么？", listOf("财粮、人才、民心与制度", "单靠兵力", "只靠名号"), 0, "持久秩序依赖资源、人才、认同和制度共同支撑。")
     )
 
     val initialAnnualGoals = listOf(
@@ -1493,11 +1514,11 @@ object V3Content {
             id = "clinic",
             name = "仁心医馆",
             type = V3CountySiteType.Clinic,
-            level = 0,
-            control = 32,
-            risk = 24,
+            level = 1,
+            control = 40,
+            risk = 18,
             status = V3SiteStatus.Stable,
-            desc = "瘟疫与伤病的缓冲点，也能提升乡民关系。",
+            desc = "开局即可入馆问诊。可安排成年族人担任医师，并按年龄付费治疗族长与族人。",
             taskTypes = listOf(V3TaskType.Relief, V3TaskType.Govern)
         ),
         V3CountySite(

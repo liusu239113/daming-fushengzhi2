@@ -9,7 +9,18 @@ import com.arktools.daming.v3.data.V3EquipmentQuality
 import com.arktools.daming.v3.data.V3EquipmentSlot
 import com.arktools.daming.v3.data.V3EstateAsset
 import com.arktools.daming.v3.data.V3EstateType
+import com.arktools.daming.v3.data.V3CardChoice
+import com.arktools.daming.v3.data.V3CardPool
+import com.arktools.daming.v3.data.V3CardRequire
+import com.arktools.daming.v3.data.V3BattlePhase
+import com.arktools.daming.v3.data.V3BattleState
+import com.arktools.daming.v3.data.V3Combatant
 import com.arktools.daming.v3.data.V3GameState
+import com.arktools.daming.v3.data.V3ActiveEvent
+import com.arktools.daming.v3.data.V3EventChoice
+import com.arktools.daming.v3.data.V3EventContent
+import com.arktools.daming.v3.data.V3MiniGameType
+import com.arktools.daming.v3.data.V3ExamStage
 import com.arktools.daming.v3.data.V3Gender
 import com.arktools.daming.v3.data.V3Person
 import com.arktools.daming.v3.data.V3RegionStatus
@@ -166,6 +177,184 @@ class V3GameEngineTest {
     }
 
     @Test
+    fun legacyMinorOnlySuccessionMigratesToRegencyWithoutTimeLock() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val founder = base.people.first().copy(alive = false, deathYear = 1606, deathMonth = 4, deathCause = "病故")
+        val child = founder.copy(
+            id = 2,
+            name = "李承安",
+            age = 5,
+            ageMonths = 60,
+            generation = 2,
+            parentId = founder.id,
+            alive = true,
+            deathYear = null,
+            deathMonth = null,
+            deathCause = null
+        )
+        val legacy = base.copy(
+            people = listOf(founder, child),
+            pendingSuccession = true,
+            patriarch = base.patriarch.copy(health = 0)
+        )
+
+        val normalized = V3GameEngine.normalizeState(legacy)
+
+        assertTrue(normalized.pendingSuccession.not())
+        assertEquals(child.id, normalized.regencyHeirId)
+        assertTrue(normalized.patriarch.name.contains("族老摄政"))
+        assertEquals(null, V3GameEngine.failureKind(normalized))
+        val advanced = V3GameEngine.advanceMonth(normalized).nextState
+        assertEquals(child.id, advanced.regencyHeirId)
+        assertTrue(advanced.pendingSuccession.not())
+    }
+
+    @Test
+    fun completedFoundingRequirementsCanRankUpEvenWithUnclaimedReward() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val child = base.people.first().copy(
+            id = 2,
+            name = "李承业",
+            age = 2,
+            ageMonths = 24,
+            generation = 2,
+            parentId = 1
+        )
+        val spouse = base.people.first().copy(
+            id = 3,
+            name = "周静仪",
+            gender = V3Gender.Female,
+            age = 24,
+            ageMonths = 288,
+            generation = 1,
+            parentId = null,
+            spouseId = 1
+        )
+        val ready = base.copy(
+            year = 1602,
+            month = 7,
+            silver = 1_000,
+            grain = 1_000,
+            influence = 100,
+            people = base.people + child + spouse,
+            estateAssets = listOf(
+                V3EstateAsset("field", V3EstateType.TenantLand, 1),
+                V3EstateAsset("shop", V3EstateType.Shop, 1)
+            ),
+            sites = base.sites.map { site ->
+                if (site.id in setOf("farmland", "market")) site.copy(level = 1) else site
+            }
+        )
+
+        assertTrue(V3GameEngine.canRankUp(ready))
+        val ranked = V3GameEngine.rankUp(ready)
+        assertEquals(2, ranked.clanRank)
+        assertEquals(V3Chapter.Rooting, V3ProgressionEngine.currentChapter(ranked))
+    }
+
+    @Test
+    fun clinicSupportsFemaleHealerAndAgeScaledTreatment() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val founder = base.people.first().copy(illness = "风寒", illnessMonths = 2, fatigue = 70)
+        val healer = founder.copy(
+            id = 2,
+            name = "李素问",
+            gender = V3Gender.Female,
+            age = 22,
+            ageMonths = 264,
+            illness = null,
+            illnessMonths = 0,
+            fatigue = 10,
+            study = 75,
+            diplomacy = 68
+        )
+        val state = base.copy(
+            silver = 500,
+            people = listOf(founder, healer),
+            patriarch = base.patriarch.copy(health = 18)
+        )
+
+        val assigned = V3GameEngine.assignClinicHealer(state, healer.id)
+        assertEquals(healer.id, assigned.clinicHealerId)
+        assertTrue(V3GameEngine.treatmentCost(75) > V3GameEngine.treatmentCost(22))
+        val treatedPerson = V3GameEngine.treatPersonAtClinic(assigned, founder.id)
+        assertEquals(null, treatedPerson.people.first { it.id == founder.id }.illness)
+        val treatedPatriarch = V3GameEngine.treatPatriarchAtClinic(assigned)
+        assertTrue(treatedPatriarch.patriarch.health > assigned.patriarch.health)
+    }
+
+    @Test
+    fun automaticClinicTreatmentLastsExactlyTwentyFourSettlements() {
+        var state = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(clinicAutoTreatmentMonths = 24, patriarch = com.arktools.daming.v3.data.V3Patriarch(health = 30))
+
+        state = V3GameEngine.advanceMonth(state).nextState
+        assertEquals(23, state.clinicAutoTreatmentMonths)
+        assertTrue(state.patriarch.health > 30)
+        repeat(23) { state = V3GameEngine.advanceMonth(state).nextState }
+        assertEquals(0, state.clinicAutoTreatmentMonths)
+    }
+
+    @Test
+    fun miniGameRewardsOnlyAfterCorrectAnswerAndRecordsCooldownGroup() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val event = V3ActiveEvent(
+            title = "商会试账",
+            body = "当众核账。",
+            choices = listOf(
+                V3EventChoice("开局核账", "答对后结算。", miniGameType = V3MiniGameType.Accounting)
+            ),
+            id = "test_account",
+            cooldownGroup = "test_account_group",
+            cooldownMonths = 18
+        )
+        val started = V3EventEngine.choose(base.copy(activeEvent = event), event.choices.first())
+
+        assertNotNull(started.miniGameSession)
+        assertEquals(base.silver, started.silver)
+        assertEquals("test_account_group", started.miniGameSession?.cooldownGroup)
+
+        val question = V3EventContent.miniGameQuestions.first { it.id == started.miniGameSession?.questionId }
+        val wrongIndex = question.options.indices.first { it != question.answerIndex }
+        val failed = V3EventEngine.answerMiniGame(started, wrongIndex)
+        assertEquals(base.silver, failed.silver)
+        assertTrue(failed.eventLog.first().contains("事件组【test_account_group】"))
+
+        val restarted = V3EventEngine.choose(base.copy(activeEvent = event), event.choices.first())
+        val correctQuestion = V3EventContent.miniGameQuestions.first { it.id == restarted.miniGameSession?.questionId }
+        val passed = V3EventEngine.answerMiniGame(restarted, correctQuestion.answerIndex)
+        assertTrue(passed.silver > base.silver)
+        assertEquals(null, passed.miniGameSession)
+    }
+
+    @Test
+    fun situationalPoolExpandsTenfoldWithExplicitContextMetadata() {
+        assertTrue(V3EventContent.situationalEvents.size >= 1_200)
+        assertTrue(V3EventContent.allEvents.size >= 1_400)
+        assertTrue(V3EventContent.situationalEvents.all { it.id.isNotBlank() && it.months.size == 1 })
+        assertTrue(V3EventContent.situationalEvents.any { it.minSilver != null })
+        assertTrue(V3EventContent.situationalEvents.any { it.minGrain != null })
+        assertTrue(V3EventContent.situationalEvents.any { it.minPopulation != null })
+        assertTrue(V3EventContent.situationalEvents.any { it.relationKey != null })
+        assertTrue(V3EventContent.situationalEvents.any { it.requiredFlag != null })
+    }
+
+    @Test
+    fun examPoolCoversFiveStagesAndAdvancesInOrder() {
+        assertTrue(V3Content.examQuestions.size >= 30)
+        V3ExamStage.entries.forEach { stage ->
+            assertTrue(V3Content.examQuestions.count { it.stage == stage } >= 6)
+        }
+        val founder = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税").people.first()
+        assertEquals(V3ExamStage.County, V3GameEngine.nextExamStage(founder))
+        assertEquals(V3ExamStage.Prefecture, V3GameEngine.nextExamStage(founder.copy(examStage = V3ExamStage.County)))
+        assertEquals(V3ExamStage.Provincial, V3GameEngine.nextExamStage(founder.copy(examStage = V3ExamStage.Prefecture)))
+        assertEquals(V3ExamStage.Metropolitan, V3GameEngine.nextExamStage(founder.copy(examStage = V3ExamStage.Provincial)))
+        assertEquals(V3ExamStage.Palace, V3GameEngine.nextExamStage(founder.copy(examStage = V3ExamStage.Metropolitan)))
+        assertEquals(null, V3GameEngine.nextExamStage(founder.copy(examStage = V3ExamStage.Palace)))
+    }
+
+    @Test
     fun recurringItemsApplyOnlyDuringMonthlySettlement() {
         val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
         val withItem = base.copy(inventory = listOf("new_farming_manual"))
@@ -232,9 +421,11 @@ class V3GameEngineTest {
         assertTrue(next.plaques.contains("义门"))
         assertTrue(next.plaques.contains("望族"))
 
-        val failed = base.copy(grain = -300)
-        assertEquals("举族逃荒", V3GameEngine.failureKind(failed))
-        assertEquals("举族逃荒", V3GameEngine.finalizeEnding(failed).failureKind)
+        val deficitElevenMonths = base.copy(silver = -300, grain = -300, consecutiveDeficitMonths = 11)
+        assertEquals(null, V3GameEngine.failureKind(deficitElevenMonths))
+        val failed = deficitElevenMonths.copy(consecutiveDeficitMonths = 12)
+        assertEquals("长期亏空", V3GameEngine.failureKind(failed))
+        assertEquals("长期亏空", V3GameEngine.finalizeEnding(failed).failureKind)
     }
     @Test
     fun allStartCombinationsReachAutomaticEndingWithValidState() {
@@ -504,6 +695,102 @@ class V3GameEngineTest {
     }
 
     @Test
+    fun finalMonthlyResourcesDriveDeficitCounter() {
+        val base = V3Content.newGame("寒门佃户", "中原灾地", "明哲保身", "饥荒将至")
+        val deficit = base.copy(
+            silver = -120,
+            grain = -120,
+            consecutiveDeficitMonths = 4,
+            annualGoals = emptyList(),
+            activeCards = emptyList()
+        )
+        val afterDeficit = V3GameEngine.advanceMonth(deficit).nextState
+        assertEquals(5, afterDeficit.consecutiveDeficitMonths)
+
+        val recovered = deficit.copy(silver = 10_000, grain = 10_000)
+        val afterRecovery = V3GameEngine.advanceMonth(recovered).nextState
+        assertEquals(0, afterRecovery.consecutiveDeficitMonths)
+    }
+
+    @Test
+    fun chainCardsAppearAtMostOncePerGenerationAndRequirePlayableChoice() {
+        val chain = V3MonthlyCard(
+            id = "chain_generation_test",
+            pool = V3CardPool.Chain,
+            title = "旧案再议",
+            body = "旧案翻出。",
+            choices = listOf(V3CardChoice("pay", "带账登门", require = V3CardRequire(minSilver = 999_999)))
+        )
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val locked = V3CardEngine.refreshMonth(base, listOf(chain))
+        assertTrue(locked.activeCards.none { it.id == chain.id })
+
+        val playable = chain.copy(choices = listOf(V3CardChoice("answer", "据理回应")))
+        val refreshed = V3CardEngine.refreshMonth(base, listOf(playable))
+        assertTrue(refreshed.activeCards.any { it.id == playable.id })
+        val resolved = V3CardEngine.resolve(refreshed, playable, playable.choices.single(), null).state
+        assertTrue(playable.id in resolved.seenCardGenerations[resolved.patriarch.generation].orEmpty())
+        assertTrue(V3CardEngine.refreshMonth(resolved, listOf(playable)).activeCards.none { it.id == playable.id })
+    }
+
+    @Test
+    fun cardRequirementLabelsNeverExposeInternalEnglishIds() {
+        val label = V3CardRequire(
+            flagRequired = "exam_county_ready",
+            requiredBranch = "scholar",
+            minPatriarchStat = "conduct",
+            minPatriarchStatValue = 35
+        ).label().orEmpty()
+        assertTrue(label.contains("县府试"))
+        assertTrue(label.contains("读书"))
+        assertTrue(label.contains("品行"))
+        assertTrue(!label.contains("exam_county_ready"))
+        assertTrue(!label.contains("conduct"))
+        assertTrue(!label.contains("scholar"))
+    }
+
+    @Test
+    fun hostileAttackWithoutArmyCausesLossInsteadOfOpeningBattle() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(silver = 200, grain = 200, militia = 0, army = V3ArmyRoster())
+        val attacked = V3GameEngine.startBattle(base, "官差围庄")
+        assertEquals(null, attacked.battleState)
+        assertTrue(attacked.silver < base.silver)
+        assertTrue(attacked.grain < base.grain)
+        assertTrue(attacked.pendingReports.single().contains("无兵可守"))
+    }
+
+    @Test
+    fun battleDefeatDoesNotImproveSiteRiskOrControl() {
+        val base = V3Content.newGame("边地军户", "西北边堡", "聚族自保", "流寇逼近")
+        val target = base.sites.maxBy { it.risk }
+        val selected = base.people.first().copy(age = 30, ageMonths = 360)
+        val defeatedBattle = V3BattleState(
+            target = target.name,
+            enemyPower = 100,
+            rewardInfluence = 4,
+            rewardSilver = 12,
+            risk = "凶险",
+            phase = V3BattlePhase.Finished,
+            selectedPersonIds = listOf(selected.id),
+            allies = listOf(V3Combatant(selected.name, 0, 20, 5, "乡勇", personId = selected.id)),
+            finished = true,
+            victory = false
+        )
+        val state = base.copy(
+            clanRank = 2,
+            people = listOf(selected),
+            militia = 20,
+            army = V3ArmyRoster(militia = 20),
+            battleState = defeatedBattle
+        )
+        val finished = V3GameEngine.finalizeBattle(state)
+        val siteAfter = finished.sites.first { it.id == target.id }
+        assertEquals(target.risk, siteAfter.risk)
+        assertEquals(target.control, siteAfter.control)
+    }
+
+    @Test
     fun monthlyReportKeepsStructuredSummaryAndFullLedger() {
         val state = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
         val report = V3GameEngine.advanceMonth(state)
@@ -728,6 +1015,7 @@ class V3GameEngineTest {
             year = 1643,
             month = 8,
             grain = -300,
+            consecutiveDeficitMonths = 12,
             seenChapterMilestones = listOf(
                 "rooting_covenant",
                 "expansion_alliance",
@@ -741,7 +1029,7 @@ class V3GameEngineTest {
         assertTrue(V3GameEngine.shouldAutoEnd(failed))
         assertTrue(
             V3GameEngine.finalizeEnding(failed).body.contains(
-                "粮仓长期亏空"
+                "银粮连续十二个月"
             )
         )
     }

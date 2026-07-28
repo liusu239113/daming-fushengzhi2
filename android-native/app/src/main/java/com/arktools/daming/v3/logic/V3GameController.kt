@@ -130,6 +130,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         state.finalEnding != null -> "本局已经结束"
         state.activeEvent != null -> "请先处理月度事件"
         state.examSession != null -> "请先完成科举"
+        state.miniGameSession != null -> "请先完成情境小游戏"
         state.battleState != null -> "请先完成地点讨伐"
         state.hexBattleState != null -> "请先完成守庄战"
         state.pendingSuccession -> "请先推举继任族长"
@@ -174,22 +175,63 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun marry(candidateId: String, targetPersonId: Int? = null) {
         audio.playSfx(SfxKey.V3Edict)
-        state = V3GameEngine.marry(state, candidateId, targetPersonId)
+        val before = state
+        val target = before.people.firstOrNull { it.id == (targetPersonId ?: 1) && it.alive }
+        val candidate = target?.let { V3GameEngine.marriageCandidatesFor(it, before).firstOrNull { candidate -> candidate.id == candidateId } }
+        state = V3GameEngine.marry(before, candidateId, targetPersonId)
         message = state.pendingReports.firstOrNull()
+        if (candidate != null && before.influence >= candidate.influenceReq) {
+            offerResourceAid(
+                keySuffix = "marry-${target.id}-$candidateId",
+                actionTitle = "婚事周转",
+                actionDescription = "这门亲事只差银粮便可落定",
+                silverMissing = (candidate.silverCost - before.silver).coerceAtLeast(0),
+                grainMissing = (candidate.grainCost - before.grain).coerceAtLeast(0)
+            )
+        }
         saveStore.save(state)
     }
 
     fun takeConcubine(personId: Int, candidateId: String) {
         audio.playSfx(SfxKey.V3Edict)
-        state = V3GameEngine.takeConcubine(state, personId, candidateId)
+        val before = state
+        val person = before.people.firstOrNull { it.id == personId && it.alive }
+        val candidate = person?.let { V3GameEngine.concubineCandidatesFor(it, before).firstOrNull { candidate -> candidate.id == candidateId } }
+        state = V3GameEngine.takeConcubine(before, personId, candidateId)
         message = state.pendingReports.firstOrNull()
+        if (candidate != null) {
+            offerResourceAid(
+                keySuffix = "concubine-$personId-$candidateId",
+                actionTitle = "婚事周转",
+                actionDescription = "纳妾礼资只差银粮便可备齐",
+                silverMissing = (candidate.silverCost * 60 / 100 - before.silver).coerceAtLeast(0),
+                grainMissing = (candidate.grainCost * 60 / 100 - before.grain).coerceAtLeast(0)
+            )
+        }
         saveStore.save(state)
     }
 
     fun rankUp() {
         audio.playSfx(SfxKey.V3Build)
-        state = V3GameEngine.rankUp(state)
+        val before = state
+        val cost = V3GameEngine.nextRankCost(before)
+        state = V3GameEngine.rankUp(before)
         message = state.pendingReports.firstOrNull()
+        if (cost != null) {
+            val resourceReadyState = before.copy(
+                silver = maxOf(before.silver, cost.silver),
+                grain = maxOf(before.grain, cost.grain)
+            )
+            if (V3GameEngine.canRankUp(resourceReadyState)) {
+                offerResourceAid(
+                    keySuffix = "rank-${before.clanRank + 1}",
+                    actionTitle = "晋升筹资",
+                    actionDescription = "宗族晋升的其他条件均已具备，只差银粮",
+                    silverMissing = (cost.silver - before.silver).coerceAtLeast(0),
+                    grainMissing = (cost.grain - before.grain).coerceAtLeast(0)
+                )
+            }
+        }
         saveStore.save(state)
     }
 
@@ -237,8 +279,20 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun upgradeSite(siteId: String) {
         audio.playSfx(SfxKey.V3Build)
-        state = V3GameEngine.upgradeSite(state, siteId)
+        val before = state
+        val site = before.sites.firstOrNull { it.id == siteId }
+        val cost = site?.let(V3GameEngine::upgradeCost)
+        state = V3GameEngine.upgradeSite(before, siteId)
         message = state.pendingReports.firstOrNull()
+        if (site != null && cost != null && V3GameEngine.isSiteUnlocked(before, site.type)) {
+            offerResourceAid(
+                keySuffix = "site-$siteId-${site.level + 1}",
+                actionTitle = "营建周转",
+                actionDescription = "营建${site.name}只差银粮即可动工",
+                silverMissing = (cost.silver - before.silver).coerceAtLeast(0),
+                grainMissing = (cost.grain - before.grain).coerceAtLeast(0)
+            )
+        }
         saveStore.save(state)
     }
 
@@ -251,9 +305,89 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun upgradeEstate(type: V3EstateType) {
         audio.playSfx(SfxKey.V3Build)
-        state = V3GameEngine.upgradeEstate(state, type)
+        val before = state
+        val cost = V3GameEngine.estateUpgradeCost(before, type)
+        val requiredPopulation = when (type) {
+            V3EstateType.Workshop -> 4
+            V3EstateType.Caravan -> 5
+            V3EstateType.Barracks -> 6
+            else -> 1
+        }
+        state = V3GameEngine.upgradeEstate(before, type)
+        message = state.pendingReports.firstOrNull()
+        if (
+            V3GameEngine.isEstateUnlocked(before, type) &&
+            V3GameEngine.alivePeople(before).size >= requiredPopulation &&
+            (before.estateAssets.firstOrNull { it.type == type }?.level ?: 0) < 5
+        ) {
+            offerResourceAid(
+                keySuffix = "estate-${type.name}-${(before.estateAssets.firstOrNull { it.type == type }?.level ?: 0) + 1}",
+                actionTitle = "家产周转",
+                actionDescription = "扩建${type.label}只差银粮即可开工",
+                silverMissing = (cost.silver - before.silver).coerceAtLeast(0),
+                grainMissing = (cost.grain - before.grain).coerceAtLeast(0)
+            )
+        }
+        saveStore.save(state)
+    }
+
+    fun assignClinicHealer(personId: Int?) {
+        audio.select()
+        state = V3GameEngine.assignClinicHealer(state, personId)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+    }
+
+    fun treatPersonAtClinic(personId: Int) {
+        audio.playSfx(SfxKey.V3SpecialAction)
+        val before = state
+        state = V3GameEngine.treatPersonAtClinic(before, personId)
+        message = state.pendingReports.firstOrNull()
+        val person = before.people.firstOrNull { it.id == personId && it.alive }
+        if (person != null) {
+            val cost = V3GameEngine.treatmentCost(person.age)
+            offerResourceAid(
+                keySuffix = "clinic-person-$personId",
+                actionTitle = "医药周转",
+                actionDescription = "为${person.name}延医只差诊金",
+                silverMissing = (cost - before.silver).coerceAtLeast(0),
+                grainMissing = 0
+            )
+        }
+        saveStore.save(state)
+    }
+
+    fun treatPatriarchAtClinic() {
+        audio.playSfx(SfxKey.V3SpecialAction)
+        val before = state
+        state = V3GameEngine.treatPatriarchAtClinic(before)
+        message = state.pendingReports.firstOrNull()
+        val holder = before.people.firstOrNull { it.id == before.patriarch.personId && it.alive }
+        val age = holder?.age ?: 60
+        val cost = V3GameEngine.treatmentCost(age, patriarch = true)
+        offerResourceAid(
+            keySuffix = "clinic-patriarch",
+            actionTitle = "族长求医",
+            actionDescription = "族长身板告急，只差诊金便可入馆调治",
+            silverMissing = (cost - before.silver).coerceAtLeast(0),
+            grainMissing = 0
+        )
+        saveStore.save(state)
+    }
+
+    fun requestClinicAutoTreatmentAd() {
+        if (state.clinicAutoTreatmentMonths > 0) {
+            message = "两年自动治疗尚余${state.clinicAutoTreatmentMonths}个月，无需重复领取。"
+            return
+        }
+        pendingCrisisAd = V3CrisisAd(
+            key = "clinic-auto-treatment-${state.year}-${state.month}",
+            title = "药商两年义约",
+            subtitle = "当前确有治疗需求。完整观看后，药商将连续24个月承担族长自动调治；期间无需安排医师。",
+            grantedMessage = "药商两年义约已生效：未来24个月族长每月自动调治，医馆会持续显示剩余期限。",
+            clinicAutoTreatmentMonths = 24
+        )
+        pauseForModal()
     }
 
     fun siteSpecialAction(siteId: String) {
@@ -369,8 +503,24 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun recruitTroops(type: V3TroopType, amount: Int = 5) {
         audio.playSfx(SfxKey.V3Build)
-        state = V3GameEngine.recruitTroops(state, type, amount)
+        val before = state
+        val count = amount.coerceIn(1, 20).coerceAtMost((999 - before.army.total()).coerceAtLeast(0))
+        state = V3GameEngine.recruitTroops(before, type, amount)
         message = state.pendingReports.firstOrNull()
+        val troopUnlocked =
+            count > 0 &&
+                V3GameEngine.isUnlocked(before, "Recruit") &&
+                (type == V3TroopType.Militia || V3GameEngine.isUnlocked(before, "AdvancedTroops")) &&
+                (type != V3TroopType.Cavalry || before.clanRank >= 4)
+        if (troopUnlocked) {
+            offerResourceAid(
+                keySuffix = "recruit-${type.name}-$count",
+                actionTitle = "募兵筹粮",
+                actionDescription = "募${type.label}${count}名只差军饷与口粮",
+                silverMissing = (type.silverCost * count - before.silver).coerceAtLeast(0),
+                grainMissing = (type.grainCost * count - before.grain).coerceAtLeast(0)
+            )
+        }
         saveStore.save(state)
     }
 
@@ -432,6 +582,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun finalizeBattle() {
         state = V3GameEngine.finalizeBattle(state)
+        settleTimelineEndingIfReady()
         val result = state.pendingReports.firstOrNull().orEmpty()
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
@@ -455,6 +606,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun resolveBattle() {
         state = V3GameEngine.resolveBattle(state)
+        settleTimelineEndingIfReady()
         val result = state.pendingReports.firstOrNull().orEmpty()
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = if (state.battleState == null) state.pendingReports.firstOrNull() else null
@@ -706,25 +858,51 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         }
     }
 
+    fun answerMiniGame(answerIndex: Int) {
+        audio.playSfx(SfxKey.V3Success)
+        state = V3EventEngine.answerMiniGame(state, answerIndex)
+        message = state.pendingReports.firstOrNull()
+        saveStore.save(state)
+        if (message == null) resumeAfterModalIfClear()
+    }
+
     fun chooseEvent(choice: V3EventChoice) {
         audio.playSfx(SfxKey.V3Edict)
         pauseForModal()
+        val eventTitle = state.activeEvent?.title.orEmpty()
         val resolved = V3EventEngine.choose(state, choice)
+        val hostileBattleTarget = if (eventTitle.endsWith("敌对来书") && choice.label == "暂不回应") {
+            when {
+                eventTitle.startsWith("县衙") -> "官差围庄"
+                eventTitle.startsWith("山贼") -> "山贼来袭"
+                eventTitle.startsWith("军镇") -> "军镇问罪"
+                else -> "敌对势力来袭"
+            }
+        } else null
+        val resolvedWithBattle = if (hostileBattleTarget != null) {
+            V3GameEngine.startBattle(resolved, hostileBattleTarget)
+        } else {
+            resolved
+        }
         state = if (
-            V3GameEngine.isTimelineEnding(resolved) &&
-                "final_eve" in resolved.seenChapterMilestones
+            V3GameEngine.isTimelineEnding(resolvedWithBattle) &&
+                "final_eve" in resolvedWithBattle.seenChapterMilestones &&
+                resolvedWithBattle.battleState == null &&
+                resolvedWithBattle.hexBattleState == null &&
+                resolvedWithBattle.conquestState == null
         ) {
-            resolved.copy(
-                finalEnding = V3GameEngine.finalizeEnding(resolved),
+            resolvedWithBattle.copy(
+                finalEnding = V3GameEngine.finalizeEnding(resolvedWithBattle),
                 activeEvent = null
             )
         } else {
-            resolved
+            resolvedWithBattle
         }
         completeTutorialAction(18)
         message = if (
             state.finalEnding == null &&
-            state.tutorialCompleted
+            state.tutorialCompleted &&
+            state.miniGameSession == null
         ) {
             state.pendingReports.firstOrNull()
         } else {
@@ -808,6 +986,47 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         showInfo(description)
     }
 
+    private fun settleTimelineEndingIfReady() {
+        if (
+            state.finalEnding == null &&
+            state.battleState == null &&
+            state.hexBattleState == null &&
+            state.conquestState == null &&
+            V3GameEngine.isTimelineEnding(state) &&
+            "final_eve" in state.seenChapterMilestones
+        ) {
+            state = state.copy(
+                finalEnding = V3GameEngine.finalizeEnding(state),
+                activeEvent = null
+            )
+        }
+    }
+
+    private fun offerResourceAid(
+        keySuffix: String,
+        actionTitle: String,
+        actionDescription: String,
+        silverMissing: Int,
+        grainMissing: Int
+    ) {
+        if (pendingCrisisAd != null || state.finalEnding != null) return
+        if (silverMissing <= 0 && grainMissing <= 0) return
+        val aidParts = buildList {
+            if (silverMissing > 0) add("银$silverMissing 两")
+            if (grainMissing > 0) add("粮$grainMissing 石")
+        }
+        pendingCrisisAd = V3CrisisAd(
+            key = "crisis-action-${state.year}-${state.month}-$keySuffix",
+            title = actionTitle,
+            subtitle = "$actionDescription。完整观看后可获得本次缺口所需的${aidParts.joinToString("、")}；领取后请再次执行该操作。",
+            grantedMessage = "族中亲友送来周转物资：${aidParts.joinToString("、")}已入账，可重新执行刚才的操作。",
+            silver = silverMissing,
+            grain = grainMissing
+        )
+        message = null
+        pauseForModal()
+    }
+
     /** 关闭危机弹窗（点击"暂不需要"）。 */
     fun dismissCrisisAd() {
         audio.click()
@@ -839,11 +1058,13 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             state.people
         }
         state = state.copy(
-            silver = (state.silver + ad.silver).coerceIn(-999, 999_999),
-            grain = (state.grain + ad.grain).coerceIn(-999, 999_999),
+            silver = if (ad.settleDeficit) state.silver.coerceAtLeast(0) + ad.silver else (state.silver + ad.silver).coerceIn(-999, 999_999),
+            grain = if (ad.settleDeficit) state.grain.coerceAtLeast(0) + ad.grain else (state.grain + ad.grain).coerceIn(-999, 999_999),
             cohesion = (state.cohesion + ad.cohesion).coerceIn(0, 100),
             equipment = repairedEquipment,
-            people = curedPeople
+            people = curedPeople,
+            consecutiveDeficitMonths = if (ad.settleDeficit) 0 else state.consecutiveDeficitMonths,
+            clinicAutoTreatmentMonths = maxOf(state.clinicAutoTreatmentMonths, ad.clinicAutoTreatmentMonths)
         )
         saveStore.save(state)
         pendingCrisisAd = null
@@ -851,16 +1072,41 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     /**
-     * 在每月结算节点检测族人患病等月报未覆盖的危机，命中则主动弹出"临危援手"广告。
-     * 银两/粮草/凝聚/军械的短缺已由月报内的"接济礼包"覆盖，此处只处理月报未包含的治病场景。
+     * 每月结算后检查必须由当前困境触发的援助，不提供常驻广告入口。
+     * 优先处理负债平账，其次处理患病。
      */
     private fun maybeTriggerMonthlyCrisisAd() {
         if (pendingCrisisAd != null) return
         if (state.finalEnding != null) return
-        val sick = state.people.any { it.alive && it.illness != null }
-        if (!sick) return
         val y = state.year
         val m = state.month
+        if ((state.silver < 0 || state.grain < 0) && state.consecutiveDeficitMonths in 1..11) {
+            pendingCrisisAd = V3CrisisAd(
+                key = "crisis-deficit-$y-$m",
+                title = "家计告急",
+                subtitle = "银粮已出现亏空，继续拖欠将累计破产月份。完整观看后由乡绅与义仓出面平账，并另补银粮各100。",
+                grantedMessage = "乡绅与义仓协力平账：负银负粮已归零，并补银100两、粮100石。连续亏空月份已清零。",
+                silver = 100,
+                grain = 100,
+                settleDeficit = true
+            )
+            pauseForModal()
+            return
+        }
+        val absoluteMonth = state.year * 12 + state.month
+        if (
+            state.patriarch.health <= 20 &&
+            state.regencyHeirId == null &&
+            state.patriarchCriticalWarningMonth != absoluteMonth
+        ) {
+            state = state.copy(patriarchCriticalWarningMonth = absoluteMonth)
+            saveStore.save(state)
+            message = "族长身板仅余${state.patriarch.health}，已至病危。请前往【县域地图 → 仁心医馆】，安排一名成年族人（女性亦可）担任医师，或付银立即治疗；进入医馆后也可自愿观看广告，解锁连续24个月自动治疗。"
+            pauseForModal()
+            return
+        }
+        val sick = state.people.any { it.alive && it.illness != null }
+        if (!sick) return
         pendingCrisisAd = V3CrisisAd(
             key = "crisis-ill-$y-$m",
             title = "医者上门",
@@ -879,8 +1125,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     private fun resumeAfterModalIfClear() {
         val blocked = latestReport != null || message != null || pendingCrisisAd != null || settingsVisible || state.activeEvent != null ||
-            state.examSession != null || state.battleState != null || state.hexBattleState != null || state.conquestState != null ||
-            state.pendingSuccession || state.activeCards.isNotEmpty() || state.pendingDice != null || state.finalEnding != null
+            state.examSession != null || state.miniGameSession != null || state.battleState != null || state.hexBattleState != null ||
+            state.conquestState != null || state.pendingSuccession || state.activeCards.isNotEmpty() || state.pendingDice != null ||
+            state.finalEnding != null
         if (blocked) return
         resumeSpeedAfterModal?.let { speed ->
             timeSpeed = speed

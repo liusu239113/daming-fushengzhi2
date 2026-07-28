@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -19,7 +20,8 @@ fun AssetImage(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Fit,
-    alpha: Float = 1f
+    alpha: Float = 1f,
+    colorFilter: ColorFilter? = null
 ) {
     val context = LocalContext.current
     val imageBitmap = remember(path) {
@@ -32,7 +34,8 @@ fun AssetImage(
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
-        alpha = alpha
+        alpha = alpha,
+        colorFilter = colorFilter
     )
 }
 
