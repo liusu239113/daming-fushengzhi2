@@ -3,6 +3,7 @@ package com.arktools.daming.v3.logic
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.arktools.daming.ads.AutomationQuotaStore
 import com.arktools.daming.audio.GameAudio
 import com.arktools.daming.data.BgmKey
 import com.arktools.daming.data.SfxKey
@@ -21,7 +22,11 @@ import com.arktools.daming.v3.data.V3TroopType
 import com.arktools.daming.v3.data.V3CrisisAd
 import com.arktools.daming.v3.data.V3CardRequire
 
-class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
+class V3GameController(
+    private val saveStore: V3SaveStore,
+    private val audio: GameAudio,
+    private val automationQuotaStore: AutomationQuotaStore
+) {
     var state by mutableStateOf(V3GameEngine.normalizeState(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")))
         private set
 
@@ -89,6 +94,9 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     }
 
     companion object {
+        const val AUTOMATION_ARRANGE = "arrange"
+        const val AUTOMATION_ESTATE = "estate"
+
         // 完整教程包含界面导览、地点/族人弹窗教学和首月经营闭环。
         const val TUTORIAL_STEP_COUNT = 32
 
@@ -250,8 +258,21 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun automationRemaining(action: String): Int = automationQuotaStore.remaining(action)
+
     fun autoArrangeMonth() {
         audio.playSfx(SfxKey.V3Edict)
+        val actionable = state.people.any {
+            it.alive && it.illness == null && it.currentTask == null && it.trainingFocus == null && it.fatigue < 70
+        }
+        if (!actionable) {
+            message = "当前没有可安排的待命族人，不消耗今日一键次数。"
+            return
+        }
+        if (!automationQuotaStore.consume(AUTOMATION_ARRANGE)) {
+            offerAutomationQuota(AUTOMATION_ARRANGE, "一键安排")
+            return
+        }
         val beforeAssigned = state.people.count { it.alive && (it.currentTask != null || it.trainingFocus != null) }
         state = V3GameEngine.autoArrangeMonth(state)
         val afterAssigned = state.people.count { it.alive && (it.currentTask != null || it.trainingFocus != null) }
@@ -299,6 +320,27 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun autoManageEstates() {
         audio.playSfx(SfxKey.V3Build)
+        val actionable = V3EstateType.entries.any { type ->
+            if (!V3GameEngine.isEstateUnlocked(state, type)) return@any false
+            val level = state.estateAssets.firstOrNull { it.type == type }?.level ?: 0
+            if (level >= 5) return@any false
+            val requiredPopulation = when (type) {
+                V3EstateType.Workshop -> 4
+                V3EstateType.Caravan -> 5
+                V3EstateType.Barracks -> 6
+                else -> 1
+            }
+            val cost = V3GameEngine.estateUpgradeCost(state, type)
+            V3GameEngine.alivePeople(state).size >= requiredPopulation && state.silver >= cost.silver && state.grain >= cost.grain
+        }
+        if (!actionable) {
+            message = "当前没有可负担的家产升级，不消耗今日一键次数。"
+            return
+        }
+        if (!automationQuotaStore.consume(AUTOMATION_ESTATE)) {
+            offerAutomationQuota(AUTOMATION_ESTATE, "一键营建")
+            return
+        }
         state = V3GameEngine.autoManageEstates(state)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
@@ -384,8 +426,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         pendingCrisisAd = V3CrisisAd(
             key = "clinic-auto-treatment-${state.year}-${state.month}",
             title = "药商两年义约",
-            subtitle = "当前确有治疗需求。完整观看后，药商将连续24个月承担族长自动调治；期间无需安排医师。",
-            grantedMessage = "药商两年义约已生效：未来24个月族长每月自动调治，医馆会持续显示剩余期限。",
+            subtitle = "当前确有治疗需求。完整观看后，药商将连续24个月承担族长与所有患病族人的自动调治；期间无需安排医师。",
+            grantedMessage = "药商两年义约已生效：未来24个月族长和所有患病族人每月自动调治，医馆会持续显示剩余期限。",
             clinicAutoTreatmentMonths = 24
         )
         pauseForModal()
@@ -435,12 +477,48 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         saveStore.save(state)
     }
 
+    fun requestConquestTacticalAid() {
+        val conquest = state.conquestState ?: return
+        val assessment = V3GameEngine.conquestAssessment(state)
+        if (assessment.total >= conquest.enemyPower) {
+            message = "当前综合战力已不低于敌势，无需临时整军。"
+            return
+        }
+        if (state.conquestTacticalAid > 0) {
+            message = "军师整军增益已备妥：下一场地域征伐战力+${state.conquestTacticalAid}。"
+            return
+        }
+        val aid = ((conquest.enemyPower - assessment.total) * 60 / 100).coerceIn(35, 120)
+        pendingCrisisAd = V3CrisisAd(
+            key = "conquest-tactics-${state.year}-${state.month}-${conquest.regionId}",
+            title = "军师整军",
+            subtitle = "当前综合战力${assessment.total}，敌势${conquest.enemyPower}。完整观看后获得下一场地域征伐战力+$aid；仍需依靠族将、装备和兵种，不保证必胜。",
+            grantedMessage = "军师已完成阵图与粮道整备：下一场地域征伐战力+$aid，开战结算后消耗。",
+            conquestTacticalAid = aid
+        )
+        pauseForModal()
+    }
+
     fun resolveConquest() {
-        state = V3GameEngine.resolveConquest(state)
+        val before = state
+        val assessment = V3GameEngine.conquestAssessment(before)
+        val enemyPower = before.conquestState?.enemyPower ?: 0
+        state = V3GameEngine.resolveConquest(before)
         val result = state.pendingReports.firstOrNull().orEmpty()
         audio.playSfx(if (result.contains("得胜")) SfxKey.V3Success else SfxKey.V3Failure)
         message = state.pendingReports.firstOrNull()
         saveStore.save(state)
+        if (result.contains("失利") && pendingCrisisAd == null && state.finalEnding == null) {
+            val aid = ((enemyPower - assessment.total) * 50 / 100).coerceIn(35, 120)
+            pendingCrisisAd = V3CrisisAd(
+                key = "conquest-recovery-${state.year}-${state.month}-${before.conquestState?.regionId.orEmpty()}",
+                title = "败军复盘",
+                subtitle = "此战失利。完整观看后，军师复盘阵图并联络乡绅筹措粮道，下一场地域征伐战力+$aid。",
+                grantedMessage = "败军复盘完成：下一场地域征伐战力+$aid。请先补专业兵、修装备、培养族将，再择机出征。",
+                conquestTacticalAid = aid
+            )
+            pauseForModal()
+        }
         resumeAfterModalIfClear()
     }
 
@@ -1024,6 +1102,20 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         }
     }
 
+    private fun offerAutomationQuota(action: String, label: String) {
+        if (pendingCrisisAd != null || state.finalEnding != null) return
+        val batch = automationQuotaStore.nextBatch(action)
+        pendingCrisisAd = V3CrisisAd(
+            key = "automation-$action-${automationQuotaStore.dayToken()}-$batch",
+            title = "$label次数已用完",
+            subtitle = "今日5次免费额度已用完。仅在你再次需要时出现：完整观看一次，立即追加5次本功能额度。",
+            grantedMessage = "$label已追加5次今日额度。",
+            automationQuotaAction = action
+        )
+        message = null
+        pauseForModal()
+    }
+
     private fun offerCardResourceAid(cardId: String, choiceId: String, require: V3CardRequire?) {
         if (pendingCrisisAd != null || state.finalEnding != null || require == null) return
         val silverMissing = ((require.minSilver ?: 0) - state.silver).coerceAtLeast(0)
@@ -1122,6 +1214,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
     /** 观看广告后发放危机援手奖励，随后关闭弹窗。 */
     fun grantCrisisAd() {
         val ad = pendingCrisisAd ?: return
+        ad.automationQuotaAction?.let { automationQuotaStore.grantFive(it) }
         val repairedEquipment = if (ad.repairDurability > 0) {
             state.equipment.map { item ->
                 item.copy(durability = (item.durability + ad.repairDurability).coerceAtMost(item.maxDurability))
@@ -1155,7 +1248,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
                 health = (state.patriarch.health + ad.patriarchHealth).coerceIn(0, 100)
             ),
             consecutiveDeficitMonths = if (ad.settleDeficit) 0 else state.consecutiveDeficitMonths,
-            clinicAutoTreatmentMonths = maxOf(state.clinicAutoTreatmentMonths, ad.clinicAutoTreatmentMonths)
+            clinicAutoTreatmentMonths = maxOf(state.clinicAutoTreatmentMonths, ad.clinicAutoTreatmentMonths),
+            conquestTacticalAid = maxOf(state.conquestTacticalAid, ad.conquestTacticalAid)
         )
         saveStore.save(state)
         pendingCrisisAd = null

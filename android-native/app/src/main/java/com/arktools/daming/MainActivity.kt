@@ -25,6 +25,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.arktools.daming.ads.AdSdkInitializer
+import com.arktools.daming.ads.AutomationQuotaStore
 import com.arktools.daming.ads.RewardedAdController
 import com.arktools.daming.audio.GameAudio
 import com.arktools.daming.auth.ComplianceGate
@@ -149,7 +150,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun DamingApp(fontPreference: FontPreference) {
         val audio = remember { GameAudio(this).also { gameAudio = it } }
-        val v3Controller = remember { V3GameController(V3SaveStore(this), audio) }
+        val v3Controller = remember { V3GameController(V3SaveStore(this), audio, AutomationQuotaStore(this)) }
         var screen by remember { mutableStateOf(AppScreen.Menu) }
 
         DisposableEffect(Unit) {

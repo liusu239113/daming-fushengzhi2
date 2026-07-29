@@ -702,7 +702,7 @@ fun V3GameScreen(controller: V3GameController, fontPreference: FontPreference, o
             V3HexBattleDialog(battle = hexBattle, controller = controller)
         }
         controller.state.conquestState?.let { conquest ->
-            V3ConquestDialog(target = conquest.targetName, enemyPower = conquest.enemyPower, scale = conquest.scale, controller = controller)
+            V3ConquestDialog(target = conquest.targetName, enemyPower = conquest.enemyPower, scale = conquest.scale, state = state, controller = controller)
         }
         if (
             controller.latestReport == null &&
@@ -772,12 +772,11 @@ private fun V3HomePage(
                 }
                 Text("经营说明：田庄与佃田主产粮，集市、铺面和商队主产银；地点控制越高、风险越低，固定月产越多。人口和乡勇每月消耗粮食。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
                 V3SmallButton(
-                    "一键安排本月派遣与培养",
+                    "一键安排本月派遣与培养 · 今日余${controller.automationRemaining(V3GameController.AUTOMATION_ARRANGE)}次",
                     Modifier.fillMaxWidth().guideTarget(V3GuideFocus.AutoArrange, guideTargets),
                     selected = true
                 ) {
                     controller.autoArrangeMonth()
-                    controller.advanceTutorial(15)
                 }
             }
             V3RouteOverviewPanel(state, controller)
@@ -853,7 +852,7 @@ private fun V3ActionCenterPanel(
         }
         Text(quest.title, color = V3Ink, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text(quest.description, color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        Text("本章条件：已完成 ${quest.completedCount}/${quest.totalCount} 项；未全部完成不会自动进入下一章。全部达标后请在此直接晋升。", color = V3Red, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
+        Text("本作共有六章主线。前四章必须在条件全部达成后点击“晋升宗族”推进，不会自动跳章；晋升推进章节，章节奖励是晋升后的额外领取，两者互不阻塞。", color = V3Red, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
         quest.conditions.chunked(2).forEach { rowConditions ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 rowConditions.forEach { condition ->
@@ -892,8 +891,13 @@ private fun V3ActionCenterPanel(
                 controller.rankUp()
             }
         } else {
-            V3SmallButton(primary.actionLabel, Modifier.fillMaxWidth(), enabled = primary.canExecute, selected = true) {
-                onNavigate(primary.destination)
+            V3SmallButton("主线下一步 · ${quest.actionLabel}", Modifier.fillMaxWidth(), selected = true) {
+                onNavigate(quest.destination)
+            }
+            if (primary.priority == com.arktools.daming.v3.logic.V3ActionPriority.Critical) {
+                V3SmallButton("先处理急务 · ${primary.actionLabel}", Modifier.fillMaxWidth()) {
+                    onNavigate(primary.destination)
+                }
             }
         }
         progression.claimableReward?.let { reward ->
@@ -1627,11 +1631,28 @@ private fun V3ClanPage(
             Text("已达最高品第。", color = V3Green, fontSize = 14.sp)
         } else {
             Text("下一品第：${cost.title}", color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text("需要：银${cost.silver} / 粮${cost.grain} / 人口${cost.population} / 产业${cost.builtSites} / 族望${cost.influence}", color = V3Muted, fontSize = 13.sp)
-            Text("当前：银${state.silver} / 粮${state.grain} / 人口${V3GameEngine.alivePeople(state).size} / 产业${V3GameEngine.builtSiteCount(state)} / 族望${state.influence}", color = V3Ink, fontSize = 13.sp)
+            V3GameEngine.rankRequirements(state).chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    row.forEach { requirement ->
+                        Text(
+                            "${requirement.label} ${requirement.current}/${requirement.target}${if (requirement.satisfied) " · 已成" else " · 差${requirement.missing}"}",
+                            color = if (requirement.satisfied) V3Green else V3Red,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
             Text(V3GameEngine.rankProgressHint(state), color = if (V3GameEngine.canRankUp(state)) V3Green else V3Red, fontSize = 12.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
             Text("晋升解锁：${rankUnlockPreview(state.clanRank + 1)}", color = V3Gold, fontSize = 12.sp, fontWeight = FontWeight.Bold, lineHeight = 17.sp)
-            V3SmallButton("晋升宗族", Modifier.fillMaxWidth(), enabled = V3GameEngine.canRankUp(state), onClick = controller::rankUp)
+            V3SmallButton(
+                if (V3GameEngine.canRankUp(state)) "条件已齐 · 晋升并推进下一章" else "查看全部缺口与达成路径",
+                Modifier.fillMaxWidth(),
+                selected = V3GameEngine.canRankUp(state),
+                onClick = controller::rankUp
+            )
         }
     }
     V3Panel {
@@ -1657,7 +1678,11 @@ private fun V3PeoplePage(
     V3Panel {
         Text("族人总管", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text("待命族人较多时，无需逐个点开安排。系统会优先处理险地与收支缺口，再按族人所长培养其余人。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
-        V3SmallButton("一键安排全部待命族人", Modifier.fillMaxWidth(), selected = true) {
+        V3SmallButton(
+            "一键安排全部待命族人 · 今日余${controller.automationRemaining(V3GameController.AUTOMATION_ARRANGE)}次",
+            Modifier.fillMaxWidth(),
+            selected = true
+        ) {
             controller.autoArrangeMonth()
         }
     }
@@ -2633,16 +2658,30 @@ private fun V3ClinicPanel(
             fontSize = 12.sp,
             lineHeight = 18.sp
         )
-        healerCandidates.take(6).chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                row.forEach { person ->
-                    V3SmallButton(
-                        "${person.name} · ${person.gender.label}\n学${person.study} 谋${person.diplomacy}",
-                        Modifier.weight(1f),
-                        selected = person.id == state.clinicHealerId
-                    ) { controller.assignClinicHealer(person.id) }
+        Text(
+            when {
+                state.clinicAutoTreatmentMonths > 0 -> "覆盖范围：族长与全部患病族人每月自动治疗；剩余${state.clinicAutoTreatmentMonths}个月。"
+                healer != null -> "覆盖范围：${healer.name}常驻医馆，降低全族患病和恶化风险；患病者仍可付银立即治愈。"
+                else -> "覆盖范围：医馆降低全族患病与恶化风险；未设医师时，患病者可付银请外医立即诊治。"
+            },
+            color = if (state.clinicAutoTreatmentMonths > 0 || healer != null) V3Green else V3Muted,
+            fontSize = 11.sp,
+            lineHeight = 16.sp
+        )
+        Box(Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                healerCandidates.chunked(2).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        row.forEach { person ->
+                            V3SmallButton(
+                                "${person.name} · ${person.gender.label}\n学${person.study} 谋${person.diplomacy}",
+                                Modifier.weight(1f),
+                                selected = person.id == state.clinicHealerId
+                            ) { controller.assignClinicHealer(person.id) }
+                        }
+                        repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
-                repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
         if (healer != null) {
@@ -2659,21 +2698,30 @@ private fun V3ClinicPanel(
         V3SmallButton("付银为族长治疗", Modifier.fillMaxWidth(), selected = state.patriarch.health <= 35) {
             controller.treatPatriarchAtClinic()
         }
-        patients.take(6).forEach { patient ->
-            val cost = V3GameEngine.treatmentCost(patient.age)
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "${patient.name} · ${patient.age}岁 · ${patient.illness ?: "劳倦"} · 银${cost}",
-                    color = V3Ink,
-                    fontSize = 11.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                V3SmallButton("诊治", Modifier.width(76.dp)) {
-                    controller.treatPersonAtClinic(patient.id)
+        Text("待诊族人 ${patients.size} 名", color = if (patients.isEmpty()) V3Green else V3Red, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        if (patients.isEmpty()) {
+            Text("当前没有患病或重度疲劳族人。", color = V3Muted, fontSize = 11.sp)
+        } else {
+            Box(Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    patients.forEach { patient ->
+                        val cost = V3GameEngine.treatmentCost(patient.age)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "${patient.name} · ${patient.age}岁 · ${patient.illness ?: "劳倦"}${patient.illness?.let { " · 病程${patient.illnessMonths}月" } ?: ""} · 诊金银${cost}",
+                                color = V3Ink,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            V3SmallButton("立即诊治", Modifier.width(86.dp)) {
+                                controller.treatPersonAtClinic(patient.id)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2756,7 +2804,12 @@ private fun V3EstatePanel(
             V3SmallButton("控制地域", Modifier.weight(1f)) { controller.showInfo("控制地域：当前已控制的县外区域数量。控制地域会带来额外银粮，也会提高统一进度。当前 ${V3GameEngine.controlledRegionCount(state)}。") }
             V3SmallButton("统一进度", Modifier.weight(1f)) { controller.showInfo("统一进度：跨县经营和征伐的长期进度，不等于家产等级。需要逐步控制战略地域，满足条件后才能宣告统一。当前 ${state.unificationProgress}/100。") }
         }
-        V3SmallButton("一键营建可负担家产", Modifier.fillMaxWidth(), selected = true, onClick = controller::autoManageEstates)
+        V3SmallButton(
+            "一键营建可负担家产 · 今日余${controller.automationRemaining(V3GameController.AUTOMATION_ESTATE)}次",
+            Modifier.fillMaxWidth(),
+            selected = true,
+            onClick = controller::autoManageEstates
+        )
         V3EstateType.entries.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 row.forEach { type ->
@@ -2805,8 +2858,15 @@ private fun V3PersonCard(
                             Text(equipmentText, color = V3Blue, fontSize = 11.sp, lineHeight = 16.sp)
                         }
                         person.illness?.let { illness ->
+                            val clinicBuilt = (state.sites.firstOrNull { it.type == V3CountySiteType.Clinic }?.level ?: 0) > 0
+                            val careStatus = when {
+                                state.clinicAutoTreatmentMonths > 0 -> "药商义约自动治疗中"
+                                state.clinicHealerId != null -> "常驻医师照看中"
+                                clinicBuilt -> "医馆可付银问诊"
+                                else -> "尚无医馆"
+                            }
                             Text(
-                                "患病：$illness · 病程${person.illnessMonths}个月${if ((state.sites.firstOrNull { it.type == V3CountySiteType.Clinic }?.level ?: 0) > 0) " · 医馆诊治中" else " · 尚无医馆"}",
+                                "患病：$illness · 病程${person.illnessMonths}个月 · $careStatus",
                                 color = V3Red,
                                 fontSize = 11.sp,
                                 lineHeight = 16.sp,
@@ -4173,16 +4233,31 @@ private fun V3CombatantCard(
 }
 
 @Composable
-private fun V3ConquestDialog(target: String, enemyPower: Int, scale: String, controller: V3GameController) {
+private fun V3ConquestDialog(target: String, enemyPower: Int, scale: String, state: V3GameState, controller: V3GameController) {
+    val assessment = V3GameEngine.conquestAssessment(state)
     Dialog(onDismissRequest = controller::cancelConquest) {
         V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 460.dp)) {
             Text(scale, color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Text("目标：$target", color = V3Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text("敌势：$enemyPower", color = V3Muted, fontSize = 13.sp)
-            Text("这是从县域经营走向州府、京畿和天下统一的战役。结算会参考乡勇、团练营、寨堡、族望、武艺最高族人和统一进度。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+            Text(
+                "我方综合 ${assessment.total} / 敌势 $enemyPower · ${when { assessment.total >= enemyPower -> "胜算占优"; assessment.total * 100 >= enemyPower * 85 -> "势均力敌"; else -> "明显劣势" }}",
+                color = if (assessment.total >= enemyPower) V3Green else V3Red,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text("统兵${assessment.commanders} · 兵种${assessment.troops} · 组织${assessment.organization} · 后勤${assessment.logistics} · 装备${assessment.equipment} · 军师${assessment.tacticalAid}", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
+            if (assessment.militiaPenalty > 0) {
+                Text("纯乡勇占比过高：组织度惩罚-${assessment.militiaPenalty}。补充枪、弓、盾、骑并培养多名族将，远比继续堆乡勇有效。", color = V3Red, fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Text("征伐会综合最多六名成年族人的武艺、谋略与军功，以及所穿装备、专业兵种、团练营、驻防和军镇后勤。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            if (assessment.total < enemyPower && assessment.tacticalAid == 0) {
+                V3SmallButton("军师整军 · 自愿获取下一战增益", Modifier.fillMaxWidth()) {
+                    controller.requestConquestTacticalAid()
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                V3SmallButton("开战", Modifier.weight(1f), selected = true) { controller.resolveConquest() }
-                V3SmallButton("暂缓", Modifier.weight(1f)) { controller.cancelConquest() }
+                V3SmallButton("开战", Modifier.weight(1f), selected = assessment.total >= enemyPower) { controller.resolveConquest() }
+                V3SmallButton("暂缓整军", Modifier.weight(1f)) { controller.cancelConquest() }
             }
         }
     }
@@ -4279,7 +4354,7 @@ private fun nextAdvice(state: V3GameState): String {
         !hasAssignment -> "前往【族人】点${state.founderName}，安排培养或派差；月结时获得成长与收益。"
         !advancedFromOpeningMonth -> "返回【家业】点继续或倍速，推进首月结算；倒计时会显示距下月秒数。"
         state.clanRank == 1 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升小族；解锁议事、县衙、书院与基础募兵。"
-        state.clanRank == 1 -> "完成首年目标并积累银90、粮130、人口2、产业2、族望10，准备晋升小族。"
+        state.clanRank == 1 -> "当前晋升条件：${V3GameEngine.rankProgressHint(state)}前往【宗族】可查看全部条件和达成进度。"
         state.clanRank == 2 && V3GameEngine.canRankUp(state) -> "前往【宗族】晋升望族；解锁寨堡、码头、山道与天下征伐。"
         state.clanRank == 2 -> "经营县域、培养族人并扩大家口，满足望族晋升条件。"
         state.clanRank == 3 && V3GameEngine.canRankUp(state) -> "晋升县中大姓，筹备80兵册后可举旗。"

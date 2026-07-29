@@ -18,6 +18,7 @@ import com.arktools.daming.v3.data.V3MonthlyReport
 import com.arktools.daming.v3.data.V3Patriarch
 import com.arktools.daming.v3.data.V3Person
 import com.arktools.daming.v3.data.V3RankCost
+import com.arktools.daming.v3.data.V3RankRequirement
 import com.arktools.daming.v3.data.V3RegionStatus
 import com.arktools.daming.v3.data.V3Relations
 import com.arktools.daming.v3.data.V3Route
@@ -37,12 +38,14 @@ import com.arktools.daming.v3.data.V3BattleRound
 import com.arktools.daming.v3.data.V3TroopType
 import com.arktools.daming.v3.data.V3ArmyRoster
 import com.arktools.daming.v3.data.V3ConquestState
+import com.arktools.daming.v3.data.V3ConquestAssessment
 import com.arktools.daming.v3.data.V3ExamQuestion
 import com.arktools.daming.v3.data.V3ExamSession
 import com.arktools.daming.v3.data.V3ExamStage
 import com.arktools.daming.v3.data.V3HexBattleState
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 object V3GameEngine {
     private const val CHILD_ADULT_AGE = 16
@@ -321,11 +324,53 @@ object V3GameEngine {
     }
 
     fun nextRankCost(state: V3GameState): V3RankCost? = when (state.clanRank + 1) {
-        2 -> V3RankCost(180, 260, 3, 2, 45, "小族")
-        3 -> V3RankCost(360, 460, 6, 4, 55, "望族")
-        4 -> V3RankCost(760, 900, 11, 6, 72, "县中大姓")
-        5 -> V3RankCost(1600, 1750, 18, 8, 88, "郡望世家")
+        2 -> V3RankCost(260, 360, 4, 3, 50, "小族")
+        3 -> V3RankCost(650, 780, 8, 5, 65, "望族")
+        4 -> V3RankCost(1300, 1500, 14, 7, 80, "县中大姓")
+        5 -> V3RankCost(2800, 3000, 22, 9, 92, "郡望世家")
         else -> null
+    }
+
+    fun rankRequirements(state: V3GameState): List<V3RankRequirement> {
+        val cost = nextRankCost(state) ?: return emptyList()
+        val elapsedMonths = (state.year - 1601) * 12 + state.month - 1
+        val secondGeneration = state.people.count { it.alive && it.generation >= 2 }
+        val qualifiedAdults = adultPeople(state).count {
+            it.martial >= 55 || it.study >= 55 || it.commerce >= 55 || it.diplomacy >= 55 || it.merit >= 60
+        }
+        val stageRequirements = when (state.clanRank) {
+            1 -> listOf(
+                V3RankRequirement("经营月数", elapsedMonths, 24),
+                V3RankRequirement("第二代子嗣", secondGeneration, 1),
+                V3RankRequirement("家产总级", estateLevelTotal(state), 3)
+            )
+            2 -> listOf(
+                V3RankRequirement("经营月数", elapsedMonths, 72),
+                V3RankRequirement("第二代子嗣", secondGeneration, 4),
+                V3RankRequirement("家产总级", estateLevelTotal(state), 9),
+                V3RankRequirement("成材族人", qualifiedAdults, 1)
+            )
+            3 -> listOf(
+                V3RankRequirement("经营月数", elapsedMonths, 144),
+                V3RankRequirement("县外地域", externalControlledRegionCount(state), 3),
+                V3RankRequirement("商军组织", tradeNetworkLevel(state) + militaryOrganizationLevel(state), 7),
+                V3RankRequirement("成材族人", qualifiedAdults, 2)
+            )
+            4 -> listOf(
+                V3RankRequirement("经营月数", elapsedMonths, 264),
+                V3RankRequirement("战略地域", controlledRegionCount(state), 7),
+                V3RankRequirement("主路线", state.routeScores.values.maxOrNull() ?: 0, 100),
+                V3RankRequirement("商军组织", tradeNetworkLevel(state) + militaryOrganizationLevel(state), 12)
+            )
+            else -> emptyList()
+        }
+        return stageRequirements + listOf(
+            V3RankRequirement("银两", state.silver, cost.silver),
+            V3RankRequirement("粮食", state.grain, cost.grain),
+            V3RankRequirement("人口", alivePeople(state).size, cost.population),
+            V3RankRequirement("产业", builtSiteCount(state), cost.builtSites),
+            V3RankRequirement("族望", state.influence, cost.influence)
+        )
     }
 
     fun builtSiteCount(state: V3GameState): Int = state.sites.count { it.level > 0 && it.type != V3CountySiteType.Shrine }
@@ -619,24 +664,58 @@ object V3GameEngine {
         if (region.status == V3RegionStatus.Pacified || region.status == V3RegionStatus.Controlled) return state.copy(pendingReports = listOf("${region.name}已在掌中，继续经营即可。"))
         val prerequisite = if (region.tier <= 2) 1 else region.tier
         if (controlledRegionCount(state) < prerequisite) return state.copy(pendingReports = listOf("征伐${region.name}前，至少要控制$prerequisite 个地域。先稳住县域和府县。"))
-        if (state.militia < 40 + region.tier * 25) return state.copy(pendingReports = listOf("乡勇不足，征伐${region.name}至少需要${40 + region.tier * 25}。"))
-        val enemy = region.enemyPower + state.rebelHeat / 2 - region.control / 3
+        val requiredTroops = 40 + region.tier * 25
+        if (state.army.total() < requiredTroops) return state.copy(pendingReports = listOf("兵册不足，征伐${region.name}至少需要总兵力$requiredTroops；乡勇与专业兵均计入。"))
+        val enemy =
+            (
+                region.enemyPower +
+                    state.rebelHeat / 2 -
+                    region.control / 3
+                ).coerceAtLeast(30 + region.tier * 12)
         val conquest = V3ConquestState(region.id, enemy, region.wealth / 2, region.wealth / 3, 5 + region.tier * 3, region.name, if (region.tier >= 4) "天下大战" else "地域征伐")
         return state.copy(conquestState = conquest, pendingReports = listOf("已准备${conquest.scale}【${region.name}】：敌势${conquest.enemyPower}。胜则控制地域，败则折损乡勇。"))
     }
 
-    fun cancelConquest(state: V3GameState): V3GameState = state.copy(conquestState = null, pendingReports = listOf("已暂缓征伐，粮草和乡勇留待后用。"))
+    fun cancelConquest(state: V3GameState): V3GameState = state.copy(conquestState = null, pendingReports = listOf("已暂缓征伐，粮草和乡勇留待后用；已获得的下一战军师增益仍会保留。"))
+
+    fun conquestAssessment(state: V3GameState): V3ConquestAssessment {
+        val commanders = adultPeople(state)
+            .sortedByDescending { it.martial + it.diplomacy + it.merit / 3 }
+            .take(6)
+        val commanderPower = commanders.sumOf { it.martial / 4 + it.diplomacy / 5 + it.merit / 18 }
+        val equipmentPower = commanders.sumOf { equipmentCombatBonus(it.id, state) } / 2
+        val professionalPower = state.army.spear * 2 + state.army.archer * 2 + state.army.shield * 2 + state.army.cavalry * 4
+        val militiaPower = sqrt(state.army.militia.toDouble()).toInt() * 5
+        val troopVariety = V3TroopType.entries.count { state.army.count(it) > 0 }
+        val organization = militaryOrganizationLevel(state) * 10 + troopVariety * 6
+        val logistics =
+            (state.estateAssets.firstOrNull { it.type == V3EstateType.Barracks }?.level ?: 0) * 15 +
+                state.worldRegions.sumOf { it.garrisonLevel } * 10 +
+                state.relations.garrison.coerceAtLeast(0) / 3
+        val militiaPenalty = if (state.army.total() >= 80 && state.army.militia * 100 / state.army.total().coerceAtLeast(1) >= 80) 45 else 0
+        val total = commanderPower + equipmentPower + professionalPower + militiaPower + organization + logistics + state.conquestTacticalAid - militiaPenalty
+        return V3ConquestAssessment(
+            total = total.coerceAtLeast(0),
+            commanders = commanderPower,
+            troops = professionalPower + militiaPower,
+            organization = organization,
+            logistics = logistics,
+            equipment = equipmentPower,
+            tacticalAid = state.conquestTacticalAid,
+            militiaPenalty = militiaPenalty
+        )
+    }
 
     fun resolveConquest(state: V3GameState): V3GameState {
         val conquest = state.conquestState ?: return state
         val region = state.worldRegions.firstOrNull { it.id == conquest.regionId } ?: return state.copy(conquestState = null)
-        val bestWarrior = alivePeople(state).maxByOrNull { it.martial + it.merit / 4 }
-        val barracks = state.estateAssets.firstOrNull { it.type == V3EstateType.Barracks }?.level ?: 0
-        val fortLevel = state.sites.firstOrNull { it.type == V3CountySiteType.Fort }?.level ?: 0
-        val troopPower = state.army.battlePower() / V3TroopType.Militia.power
-        val power = troopPower + (bestWarrior?.martial ?: 0) + barracks * 24 + fortLevel * 14 + state.influence / 2 + state.unificationProgress / 2
-        val victory = power >= conquest.enemyPower
-        val loss = if (victory) max(12, conquest.enemyPower / 16) else max(28, conquest.enemyPower / 8)
+        val assessment = conquestAssessment(state)
+        val commanders = adultPeople(state)
+            .sortedByDescending { it.martial + it.diplomacy + it.merit / 3 }
+            .take(6)
+        val leadCommander = commanders.firstOrNull()
+        val victory = assessment.total >= conquest.enemyPower
+        val loss = if (victory) max(16, conquest.enemyPower / 12) else max(36, conquest.enemyPower / 6)
         val nextRegions = state.worldRegions.map {
             if (it.id == region.id) {
                 val control = (it.control + (if (victory) 65 else 18)).coerceAtMost(100)
@@ -644,16 +723,29 @@ object V3GameEngine {
             } else it
         }
         val nextProgress = calculateUnification(nextRegions)
+        val commanderIds = commanders.map { it.id }.toSet()
         val nextPeople = state.people.map {
-            if (it.id == bestWarrior?.id) it.copy(martial = (it.martial + (if (victory) 3 else 1)).coerceAtMost(100), merit = (it.merit + (if (victory) 18 else 6)).coerceAtMost(999), militaryRank = if (victory && it.militaryRank == null) "统兵族将" else it.militaryRank, fatigue = (it.fatigue + (if (victory) 18 else 32)).coerceIn(0, 100)) else it
+            if (it.id in commanderIds) {
+                it.copy(
+                    martial = (it.martial + (if (victory) 2 else 1)).coerceAtMost(100),
+                    merit = (it.merit + (if (victory) 12 else 4)).coerceAtMost(999),
+                    militaryRank = if (victory && it.id == leadCommander?.id && it.militaryRank == null) "统兵族将" else it.militaryRank,
+                    fatigue = (it.fatigue + (if (victory) 18 else 32)).coerceIn(0, 100)
+                )
+            } else it
         }
-        val message = if (victory) "征伐【${region.name}】得胜，家族势力跨出县域，统一进度推进到$nextProgress。" else "征伐【${region.name}】失利，虽未控制地域，但地方已知${state.surname}氏兵威。"
+        val message = if (victory) {
+            "征伐【${region.name}】得胜：综合战力${assessment.total}/${conquest.enemyPower}。六将、军械、专业兵与后勤共同建功，统一进度推进到$nextProgress。"
+        } else {
+            "征伐【${region.name}】失利：综合战力${assessment.total}/${conquest.enemyPower}。应培养多名统兵族人、分配装备、补专业兵种并提高商军组织后再战。"
+        }
         val nextArmy = state.army.lose(loss)
         return state.copy(
             people = nextPeople,
             worldRegions = nextRegions,
             unificationProgress = nextProgress,
             conquestState = null,
+            conquestTacticalAid = 0,
             militia = nextArmy.militia,
             army = nextArmy,
             silver = state.silver + (if (victory) conquest.rewardSilver else 0),
@@ -686,60 +778,17 @@ object V3GameEngine {
         return state.copy(finalEnding = ending, activeEvent = null, conquestState = null, pendingReports = listOf("天下归一，${state.surname}氏家乘写入新朝开篇。"))
     }
 
-    fun canRankUp(state: V3GameState): Boolean {
-        val cost = nextRankCost(state) ?: return false
-        val elapsedMonths = (state.year - 1601) * 12 + state.month - 1
-        val stageReady = when (state.clanRank) {
-            1 -> elapsedMonths >= 18 && state.people.any { it.alive && it.generation >= 2 } && estateLevelTotal(state) >= 2
-            2 -> elapsedMonths >= 60 && state.people.count { it.alive && it.generation >= 2 } >= 3 && estateLevelTotal(state) >= 6
-            3 -> elapsedMonths >= 120 && externalControlledRegionCount(state) >= 2 && tradeNetworkLevel(state) + militaryOrganizationLevel(state) >= 4
-            4 -> elapsedMonths >= 240 && controlledRegionCount(state) >= 6 && (state.routeScores.values.maxOrNull() ?: 0) >= 80
-            else -> true
-        }
-        return stageReady &&
-            state.silver >= cost.silver &&
-            state.grain >= cost.grain &&
-            alivePeople(state).size >= cost.population &&
-            builtSiteCount(state) >= cost.builtSites &&
-            state.influence >= cost.influence
-    }
+    fun canRankUp(state: V3GameState): Boolean =
+        nextRankCost(state) != null && rankRequirements(state).all { it.satisfied }
 
     fun rankProgressHint(state: V3GameState): String {
-        val cost = nextRankCost(state) ?: return "宗族已达最高品第。"
-        val elapsedMonths = (state.year - 1601) * 12 + state.month - 1
-        val stageHint = when (state.clanRank) {
-            1 -> when {
-                elapsedMonths < 18 -> "还需经营至少${18 - elapsedMonths}个月"
-                state.people.none { it.alive && it.generation >= 2 } -> "还需迎来首位第二代子嗣"
-                estateLevelTotal(state) < 2 -> "还需将家产总级提升至2"
-                else -> "成家传代与产业条件已满足"
-            }
-            2 -> when {
-                elapsedMonths < 60 -> "还需经营至少${60 - elapsedMonths}个月"
-                state.people.count { it.alive && it.generation >= 2 } < 3 -> "还需至少三名第二代子嗣延续家业"
-                estateLevelTotal(state) < 6 -> "还需将家产总级提升至6"
-                else -> "代际经营条件已满足"
-            }
-            3 -> when {
-                elapsedMonths < 120 -> "还需经营至少${120 - elapsedMonths}个月"
-                externalControlledRegionCount(state) < 2 -> "还需控制至少两个县外地域"
-                tradeNetworkLevel(state) + militaryOrganizationLevel(state) < 4 -> "商路与军伍组织合计还需达到4"
-                else -> "跨域经营条件已满足"
-            }
-            4 -> when {
-                elapsedMonths < 240 -> "还需经营至少${240 - elapsedMonths}个月"
-                controlledRegionCount(state) < 6 -> "还需再控制${6 - controlledRegionCount(state)}个地域"
-                (state.routeScores.values.maxOrNull() ?: 0) < 80 -> "主路线倾向还需达到80"
-                else -> "天下经营与路线条件已满足"
-            }
-            else -> "阶段条件已满足"
+        if (nextRankCost(state) == null) return "宗族已达最高品第。"
+        val missing = rankRequirements(state).filterNot { it.satisfied }
+        return if (missing.isEmpty()) {
+            "全部条件已达成。点击晋升即可推进到下一章；晋升后章节奖励另行领取，不会阻塞新章。"
+        } else {
+            "未完成${missing.size}项：${missing.joinToString("；") { "${it.label} ${it.current}/${it.target}（还差${it.missing}）" }}。"
         }
-        val silverMissing = (cost.silver - state.silver).coerceAtLeast(0)
-        val grainMissing = (cost.grain - state.grain).coerceAtLeast(0)
-        val populationMissing = (cost.population - alivePeople(state).size).coerceAtLeast(0)
-        val sitesMissing = (cost.builtSites - builtSiteCount(state)).coerceAtLeast(0)
-        val influenceMissing = (cost.influence - state.influence).coerceAtLeast(0)
-        return "$stageHint；缺口：银$silverMissing、粮$grainMissing、人口$populationMissing、产业$sitesMissing、族望$influenceMissing。"
     }
 
     fun rankUp(state: V3GameState): V3GameState {
@@ -1665,7 +1714,8 @@ object V3GameEngine {
             else -> 0
         }
         val encounterRisk = if (forcedTarget == null) riskySite.risk else (45 + relationPressure / 2).coerceAtMost(90)
-        val enemyPower = 35 + encounterRisk + state.rebelHeat / 3 + relationPressure / 2
+        val eraPressure = state.clanRank * 12 + controlledRegionCount(state) * 8 + state.year.coerceAtLeast(1601).minus(1601) / 4
+        val enemyPower = 45 + encounterRisk * 3 / 2 + state.rebelHeat / 2 + relationPressure / 2 + eraPressure
         val battle = V3BattleState(
             target = target,
             enemyPower = enemyPower,
@@ -1767,9 +1817,21 @@ object V3GameEngine {
                 val targetIndex = ((battle.turn + 1) * 7 + index * 3 + attacker.power) % defenders.size
                 val defender = defenders[targetIndex]
                 val variance = ((battle.turn + index + attacker.power) % 9) - 4
-                val crit = ((battle.turn + index + attacker.power) % 11) == 0
-                val damage = max(4, attacker.power + variance + (if (crit) 10 else 0) - defender.defense / 5)
-                val text = if (allyTurn) "${attacker.name}先手${attacker.role}击${defender.name}，${if (crit) "会心" else "伤"}$damage。" else "${attacker.name}反攻${defender.name}，${if (crit) "重创" else "伤"}$damage。"
+                val crit = ((battle.turn + index + attacker.power) % 13) == 0
+                val attackerType = combatTroopType(attacker)
+                val defenderType = combatTroopType(defender)
+                val counter = troopCounterBonus(attackerType, defenderType)
+                val shieldBlock = if (defenderType == V3TroopType.Shield && attackerType == V3TroopType.Archer) 8 else 0
+                val rawDamage = attacker.power / 2 + variance + (if (crit) 8 else 0) + counter
+                val mitigation = defender.defense / 6 + shieldBlock
+                val damage = (rawDamage - mitigation).coerceIn(3, (defender.maxHp * 35 / 100).coerceAtLeast(3))
+                val tactic = when {
+                    counter > 0 -> "克制"
+                    shieldBlock > 0 -> "格挡"
+                    crit -> "会心"
+                    else -> "伤"
+                }
+                val text = if (allyTurn) "${attacker.name}以${attacker.role}击${defender.name}，$tactic $damage。" else "${attacker.name}反攻${defender.name}，$tactic $damage。"
                 if (allyTurn) {
                     // 按对象身份命中对应敌人（避免同名敌人全部受伤）
                     val defenderListIndex = nextEnemies.indexOfFirst { it === defender }
@@ -1898,6 +1960,22 @@ object V3GameEngine {
         )
     }
 
+    private fun combatTroopType(combatant: V3Combatant): V3TroopType = combatant.troopType ?: when (combatant.role) {
+        "枪" -> V3TroopType.Spear
+        "弓" -> V3TroopType.Archer
+        "盾" -> V3TroopType.Shield
+        "骑" -> V3TroopType.Cavalry
+        else -> V3TroopType.Militia
+    }
+
+    private fun troopCounterBonus(attacker: V3TroopType, defender: V3TroopType): Int = when {
+        attacker == V3TroopType.Spear && defender == V3TroopType.Cavalry -> 12
+        attacker == V3TroopType.Cavalry && defender == V3TroopType.Archer -> 12
+        attacker == V3TroopType.Archer && defender == V3TroopType.Militia -> 9
+        attacker == V3TroopType.Militia && defender == V3TroopType.Spear -> 5
+        else -> 0
+    }
+
     private fun buildBattleAllies(
         state: V3GameState,
         battle: V3BattleState,
@@ -1922,10 +2000,13 @@ object V3GameEngine {
         val equipment = state.equipment.filter { it.ownerId == person.id && it.durability > 0 }
         val equipmentAttack = equipment.sumOf { it.attack }
         val equipmentDefense = equipment.sumOf { it.defense }
-        val troopAttack = owned * troopType.power / 8
-        val command = person.martial + person.diplomacy / 2 + person.merit / 5
-        val power = command + troopAttack + equipmentAttack + if (person.trait == V3Trait.Martial || person.trait == V3Trait.Fierce) 10 else 0
-        val defense = person.loyalty / 3 + owned * troopType.power / 12 + equipmentDefense
+        val effectiveTroops = sqrt(owned.toDouble()).toInt()
+        val troopAttack = effectiveTroops * troopType.power / 2
+        val command = person.martial / 2 + person.diplomacy / 3 + person.merit / 12
+        val traitBonus = if (person.trait == V3Trait.Martial || person.trait == V3Trait.Fierce) 10 else 0
+        val professionalBonus = if (troopType == V3TroopType.Militia) 0 else 10 + troopType.power / 2
+        val power = command + troopAttack + equipmentAttack * 2 + traitBonus + professionalBonus
+        val defense = person.loyalty / 4 + effectiveTroops * troopType.power / 3 + equipmentDefense * 2 + if (troopType == V3TroopType.Shield) 14 else 0
         val role = when (troopType) {
             V3TroopType.Archer -> "弓"
             V3TroopType.Shield -> "盾"
@@ -1933,7 +2014,7 @@ object V3GameEngine {
             V3TroopType.Spear -> "枪"
             V3TroopType.Militia -> if (person.study > person.martial && person.diplomacy > 45) "谋" else "刀"
         }
-        val maxHp = 70 + person.martial / 2 + person.loyalty / 4 + owned * 2 + defense / 2
+        val maxHp = 95 + person.martial / 2 + person.loyalty / 3 + effectiveTroops * 4 + defense + equipmentDefense * 2
         return V3Combatant(person.name, hp = maxHp, maxHp = maxHp, power = power.coerceAtLeast(12), defense = defense, role = role, personId = person.id, troopType = troopType, troopCount = owned)
     }
 
@@ -1949,8 +2030,24 @@ object V3GameEngine {
         return List(6) { index ->
             val nameSeed = (target.hashCode() + enemyPower + index * 17).let { if (it < 0) -it else it }
             val name = "${target}${faction}·${surnames[nameSeed % surnames.size]}${given[(nameSeed / 7) % given.size]}"
-            val power = enemyPower / 8 + index * 3
-            V3Combatant(name, hp = 58 + enemyPower / 8 + index * 4, maxHp = 58 + enemyPower / 8 + index * 4, power = power, role = if (index % 3 == 0) "刀" else if (index % 3 == 1) "弓" else "枪", defense = power / 3)
+            val troopType = when (index % 5) {
+                0 -> V3TroopType.Shield
+                1 -> V3TroopType.Archer
+                2 -> V3TroopType.Spear
+                3 -> V3TroopType.Cavalry
+                else -> V3TroopType.Militia
+            }
+            val role = when (troopType) {
+                V3TroopType.Shield -> "盾"
+                V3TroopType.Archer -> "弓"
+                V3TroopType.Spear -> "枪"
+                V3TroopType.Cavalry -> "骑"
+                V3TroopType.Militia -> "刀"
+            }
+            val power = 38 + enemyPower / 7 + index * 3 + if (troopType == V3TroopType.Cavalry) 8 else 0
+            val defense = 24 + enemyPower / 10 + index * 2 + if (troopType == V3TroopType.Shield) 15 else 0
+            val hp = 120 + enemyPower / 3 + index * 10 + defense
+            V3Combatant(name, hp = hp, maxHp = hp, power = power, role = role, defense = defense, troopType = troopType, troopCount = 8 + enemyPower / 20)
         }
     }
 
@@ -2751,6 +2848,11 @@ object V3GameEngine {
 
     private fun processLifeCycle(people: List<V3Person>, state: V3GameState, lines: MutableList<String>, yearEnded: Boolean): List<V3Person> {
         val clinicLevel = state.sites.firstOrNull { it.type == V3CountySiteType.Clinic }?.level ?: 0
+        val healerAvailable = state.clinicHealerId?.let { healerId ->
+            people.any { it.id == healerId && it.alive && it.age >= CHILD_ADULT_AGE && it.illness == null }
+        } == true
+        val automaticTreatment = state.clinicAutoTreatmentMonths > 0
+        val careLevel = clinicLevel + (if (healerAvailable) 1 else 0) + (if (automaticTreatment) 2 else 0)
         val crisisRisk = if (state.crisis == "瘟疫初起") 2 else 0
         var healthLivingCount = people.count { it.alive }
         val healthProcessed = people.map { person ->
@@ -2758,14 +2860,17 @@ object V3GameEngine {
             val healthSeed = Math.floorMod(state.year * 37 + state.month * 11 + person.id * 17 + person.age, 60)
             if (person.illness != null) {
                 val nextIllnessMonths = person.illnessMonths + 1
-                val recoveryMonths = (4 - clinicLevel).coerceAtLeast(1)
+                val recoveryMonths = (4 - careLevel).coerceAtLeast(1)
                 val severeRisk = when {
                     person.age >= 75 -> 3
                     person.age >= 65 -> 2
                     person.fatigue >= 80 -> 2
                     else -> 1
-                } + crisisRisk - clinicLevel
-                if (nextIllnessMonths >= recoveryMonths && healthSeed % 4 != 0) {
+                } + crisisRisk - careLevel
+                if (automaticTreatment) {
+                    lines += "药商义约为${person.name}送药复诊，${person.illness}已愈；自动治疗剩余${state.clinicAutoTreatmentMonths}个月。"
+                    person.copy(illness = null, illnessMonths = 0, fatigue = (person.fatigue - 24).coerceAtLeast(0))
+                } else if (nextIllnessMonths >= recoveryMonths && healthSeed % 4 != 0) {
                     val recoverText = if (clinicLevel > 0) {
                         "经医馆悉心诊治、汤药调理"
                     } else {
@@ -2822,7 +2927,7 @@ object V3GameEngine {
                     person.fatigue >= 55 -> 1
                     else -> 0
                 }
-                val illnessRisk = (1 + ageRisk + fatigueRisk + crisisRisk - clinicLevel * 2).coerceAtLeast(0)
+                val illnessRisk = (1 + ageRisk + fatigueRisk + crisisRisk - careLevel * 2).coerceAtLeast(0)
                 if (healthSeed < illnessRisk) {
                     val illness = when ((person.id + state.year + state.month) % 3) {
                         0 -> "风寒"

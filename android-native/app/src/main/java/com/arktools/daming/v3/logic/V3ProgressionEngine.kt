@@ -41,7 +41,7 @@ data class V3QuestCondition(
     val satisfied: Boolean = current >= target
 ) {
     val progressText: String
-        get() = if (satisfied) "已完成" else "$current/$target"
+        get() = if (satisfied) "$current/$target · 已完成" else "$current/$target · 还差${(target - current).coerceAtLeast(0)}"
 }
 
 data class V3QuestCard(
@@ -263,43 +263,9 @@ object V3ProgressionEngine {
     ): V3QuestCard {
         val cost = V3GameEngine.nextRankCost(state)
         if (cost == null) return routeQuest(state)
-        val elapsedMonths = elapsedMonths(state)
-        val secondGeneration = state.people.count { it.alive && it.generation >= 2 }
-        val externalRegions = externalControlledRegions(state)
-        val stageConditions = when (state.clanRank) {
-            1 -> listOf(
-                V3QuestCondition("经营月数", elapsedMonths, 18),
-                V3QuestCondition("家产总级", V3GameEngine.estateLevelTotal(state), 2)
-            )
-            2 -> listOf(
-                V3QuestCondition("经营月数", elapsedMonths, 60),
-                V3QuestCondition("家产总级", V3GameEngine.estateLevelTotal(state), 6)
-            )
-            3 -> listOf(
-                V3QuestCondition("经营月数", elapsedMonths, 120),
-                V3QuestCondition("县外地域", externalRegions, 2),
-                V3QuestCondition("商军组织", V3GameEngine.tradeNetworkLevel(state) + V3GameEngine.militaryOrganizationLevel(state), 4)
-            )
-            4 -> listOf(
-                V3QuestCondition("经营月数", elapsedMonths, 240),
-                V3QuestCondition("战略地域", V3GameEngine.controlledRegionCount(state), 6),
-                V3QuestCondition("主路线", state.routeScores.values.maxOrNull() ?: 0, 80)
-            )
-            else -> listOf(V3QuestCondition("阶段历练", 1, 1))
+        val conditions = V3GameEngine.rankRequirements(state).map {
+            V3QuestCondition(it.label, it.current, it.target, it.satisfied)
         }
-        val generationCondition = when (state.clanRank) {
-            1 -> V3QuestCondition("第二代子嗣", secondGeneration, 1)
-            2 -> V3QuestCondition("第二代子嗣", secondGeneration, 3)
-            else -> null
-        }
-        val conditions = stageConditions + listOfNotNull(
-            generationCondition,
-            V3QuestCondition("银两", state.silver, cost.silver),
-            V3QuestCondition("粮食", state.grain, cost.grain),
-            V3QuestCondition("人口", V3GameEngine.alivePeople(state).size, cost.population),
-            V3QuestCondition("产业", V3GameEngine.builtSiteCount(state), cost.builtSites),
-            V3QuestCondition("族望", state.influence, cost.influence)
-        )
         return V3QuestCard(
             id = "rank_${state.clanRank + 1}",
             category = V3QuestCategory.Main,
@@ -486,9 +452,7 @@ object V3ProgressionEngine {
                 "派人治理、筑寨或执行专属事务"
             )
         }
-        if (actions.none { it.priority == V3ActionPriority.Critical }) {
-            actions += mainQuestAction(state, chapter, mainQuest)
-        }
+        actions += mainQuestAction(state, chapter, mainQuest)
         state.annualGoals
             .filterNot { it.completed || V3GameEngine.goalProgress(state, it) >= it.target }
             .minByOrNull { goal -> (goal.target - V3GameEngine.goalProgress(state, goal)).coerceAtLeast(0) }

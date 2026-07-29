@@ -263,6 +263,17 @@ data class V3ConquestState(
     val scale: String
 )
 
+data class V3ConquestAssessment(
+    val total: Int,
+    val commanders: Int,
+    val troops: Int,
+    val organization: Int,
+    val logistics: Int,
+    val equipment: Int,
+    val tacticalAid: Int,
+    val militiaPenalty: Int
+)
+
 @Serializable
 enum class V3GoalMetric(val label: String) {
     SilverStock("银两储备"),
@@ -361,6 +372,18 @@ data class V3RankCost(
     val influence: Int,
     val title: String
 )
+
+data class V3RankRequirement(
+    val label: String,
+    val current: Int,
+    val target: Int
+) {
+    val satisfied: Boolean
+        get() = current >= target
+
+    val missing: Int
+        get() = (target - current).coerceAtLeast(0)
+}
 
 @Serializable
 data class V3SiteYield(
@@ -559,7 +582,9 @@ data class V3CrisisAd(
     val patriarchConduct: Int = 0,
     val patriarchStewardship: Int = 0,
     val patriarchPrestige: Int = 0,
-    val patriarchHealth: Int = 0
+    val patriarchHealth: Int = 0,
+    val conquestTacticalAid: Int = 0,
+    val automationQuotaAction: String? = null
 )
 
 @Serializable
@@ -1032,5 +1057,6 @@ data class V3GameState(
     val consecutiveDeficitMonths: Int = 0, // 银两或粮食为负的连续月数；达到12个月触发破产结局
     val clinicHealerId: Int? = null,
     val clinicAutoTreatmentMonths: Int = 0,
-    val patriarchCriticalWarningMonth: Int = -1
+    val patriarchCriticalWarningMonth: Int = -1,
+    val conquestTacticalAid: Int = 0
 )
