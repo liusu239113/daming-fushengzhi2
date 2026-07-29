@@ -1295,7 +1295,7 @@ object V3GameEngine {
                 val trainedPerson = trainedState.people.firstOrNull { it.id == person.id }
                 if (trainedPerson?.trainingFocus == training) {
                     next = trainedState
-                    trained += "${person.name}${training.label}"
+                    trained += "${person.name}${trainingLabel(person, training)}"
                 }
             }
 
@@ -1309,15 +1309,33 @@ object V3GameEngine {
         return next.copy(pendingReports = listOf(summary))
     }
 
+    fun trainingLabel(person: V3Person, training: V3TrainingType): String =
+        if (training == V3TrainingType.Enlighten && person.age >= 12) "经义研习" else training.label
+
     private fun recommendedTraining(person: V3Person, state: V3GameState): V3TrainingType {
         if (person.age < 12) return V3TrainingType.Enlighten
         val route = dominantRoute(state)
-        return when {
-            person.trait == V3Trait.Martial || person.trait == V3Trait.Fierce || route == V3Route.Fortress || route == V3Route.Warlord -> V3TrainingType.MartialDrill
-            person.trait == V3Trait.Studious || route == V3Route.Scholar || route == V3Route.Loyalist -> V3TrainingType.Enlighten
-            person.trait == V3Trait.Greedy || route == V3Route.Merchant || route == V3Route.Overseas -> V3TrainingType.Abacus
-            else -> V3TrainingType.Etiquette
+        val preferred = when {
+            person.trait == V3Trait.Martial || person.trait == V3Trait.Fierce || route == V3Route.Fortress || route == V3Route.Warlord ->
+                listOf(V3TrainingType.MartialDrill, V3TrainingType.Etiquette, V3TrainingType.Abacus, V3TrainingType.Enlighten)
+
+            person.trait == V3Trait.Studious || route == V3Route.Scholar || route == V3Route.Loyalist ->
+                listOf(V3TrainingType.Enlighten, V3TrainingType.Etiquette, V3TrainingType.Abacus, V3TrainingType.MartialDrill)
+
+            person.trait == V3Trait.Greedy || route == V3Route.Merchant || route == V3Route.Overseas ->
+                listOf(V3TrainingType.Abacus, V3TrainingType.Etiquette, V3TrainingType.Enlighten, V3TrainingType.MartialDrill)
+
+            else -> listOf(V3TrainingType.Etiquette, V3TrainingType.Abacus, V3TrainingType.Enlighten, V3TrainingType.MartialDrill)
         }
+        fun stat(training: V3TrainingType): Int = when (training) {
+            V3TrainingType.Enlighten -> person.study
+            V3TrainingType.MartialDrill -> person.martial
+            V3TrainingType.Abacus -> person.commerce
+            V3TrainingType.Etiquette -> person.diplomacy
+        }
+        return preferred.firstOrNull { stat(it) < 90 }
+            ?: V3TrainingType.entries.minByOrNull(::stat)
+            ?: V3TrainingType.Etiquette
     }
 
     fun recommendedCouncilAgenda(state: V3GameState): Pair<String, String> {
@@ -1402,7 +1420,7 @@ object V3GameEngine {
             grain = state.grain - costGrain,
             people = people,
             sites = sites,
-            pendingReports = listOf("已安排${person.name}本月【${training.label}】。${training.desc}，月结时增长属性。")
+            pendingReports = listOf("已安排${person.name}本月【${trainingLabel(person, training)}】。${training.desc}，月结时增长属性。")
         )
     }
 

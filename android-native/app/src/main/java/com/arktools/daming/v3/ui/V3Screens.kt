@@ -1969,6 +1969,7 @@ private fun V3StrategyPage(
 ) {
     val ending = V3GameEngine.endingPreview(state)
     var page by remember { mutableStateOf(forcedPage ?: "声势") }
+    var equipmentTargetItemId by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(forcedPage) {
         if (forcedPage != null) page = forcedPage
     }
@@ -2091,16 +2092,49 @@ private fun V3StrategyPage(
                 }
             }
             state.equipment.filter { it.ownerId == null }.take(6).forEach { item ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${item.name} · 攻${item.attack}/防${item.defense}", color = V3Ink, fontSize = 12.sp, modifier = Modifier.weight(1f))
                     V3SmallButton("修复", Modifier.width(58.dp), enabled = item.durability < item.maxDurability) { controller.repairEquipment(item.id) }
-                    V3SmallButton("给武将", Modifier.width(72.dp), enabled = V3GameEngine.adultPeople(state).isNotEmpty()) { controller.equipEquipment(item.id, V3GameEngine.adultPeople(state).first().id) }
+                    V3SmallButton(
+                        "选择族人",
+                        Modifier.width(86.dp),
+                        enabled = V3GameEngine.adultPeople(state).isNotEmpty()
+                    ) { equipmentTargetItemId = item.id }
                 }
             }
+            Text("点「选择族人」后可从全部成年族人中指定佩戴者；已穿戴装备会显示在族人详情中。", color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
         }
         else -> V3Panel {
             Text("近事", color = V3Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             state.eventLog.take(6).ifEmpty { listOf("族谱新启，尚无大事入册。") }.forEach { Text("· $it", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp) }
+        }
+    }
+    equipmentTargetItemId?.let { itemId ->
+        val item = state.equipment.firstOrNull { it.id == itemId && it.ownerId == null }
+        if (item == null) {
+            equipmentTargetItemId = null
+        } else {
+            Dialog(onDismissRequest = { equipmentTargetItemId = null }) {
+                V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 460.dp)) {
+                    Text("指定佩戴者", color = V3Red, fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Text("${item.name} · 战攻 +${item.attack} · 战防 +${item.defense}", color = V3Gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("选择一名成年族人。装备会在该族人的详情页「装备与兵册」中显示。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                    Box(Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            V3GameEngine.adultPeople(state).forEach { person ->
+                                V3SmallButton(
+                                    "${person.name} · ${person.identity} · 武${person.martial} 谋${person.diplomacy}",
+                                    Modifier.fillMaxWidth()
+                                ) {
+                                    controller.equipEquipment(item.id, person.id)
+                                    equipmentTargetItemId = null
+                                }
+                            }
+                        }
+                    }
+                    V3SmallButton("暂不分配", Modifier.fillMaxWidth(), onClick = { equipmentTargetItemId = null })
+                }
+            }
         }
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2789,7 +2823,7 @@ private fun V3PersonCard(
                         val assignedSite = person.assignedSiteId?.let { id -> state.sites.firstOrNull { it.id == id } }
                         val titleBits = listOfNotNull(person.officeRank, person.militaryRank, person.careerRank).joinToString(" · ")
                         Text(
-                            if (person.currentTask == null && person.trainingFocus == null) "待命${if (titleBits.isBlank()) "" else " · $titleBits"}" else "${person.currentTask?.label ?: person.trainingFocus?.label} · ${assignedSite?.name ?: "家中"}",
+                            if (person.currentTask == null && person.trainingFocus == null) "待命${if (titleBits.isBlank()) "" else " · $titleBits"}" else "${person.currentTask?.label ?: person.trainingFocus?.let { V3GameEngine.trainingLabel(person, it) }} · ${assignedSite?.name ?: "家中"}",
                             color = if (person.currentTask == null && person.trainingFocus == null) V3Muted else V3Green,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
@@ -2868,7 +2902,7 @@ private fun V3TrainingButtons(person: V3Person, controller: V3GameController) {
     V3TrainingType.entries.chunked(2).forEach { row ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             row.forEach { training ->
-                V3SmallButton(training.label, Modifier.weight(1f), enabled = person.currentTask == null && person.trainingFocus == null) {
+                V3SmallButton(V3GameEngine.trainingLabel(person, training), Modifier.weight(1f), enabled = person.currentTask == null && person.trainingFocus == null) {
                     controller.trainPerson(person.id, training)
                 }
             }
@@ -3928,8 +3962,26 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
         if (battle.phase == V3BattlePhase.Draft) controller.cancelBattle()
         else controller.showInfo("战斗中无法后撤，请完成本轮结算")
     }) {
-        V3ImagePanel(GameImages.V3UiBattleReport, Modifier.widthIn(max = 540.dp)) {
+        V3ImagePanel(
+            GameImages.V3UiBattleReport,
+            Modifier
+                .widthIn(max = 540.dp)
+                .heightIn(max = 720.dp)
+        ) {
             Text("军务出征 · ${battle.target}", color = V3Red, fontSize = 21.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(
+                when (battle.phase) {
+                    V3BattlePhase.Draft -> "第一步：选将并配兵；第二步：确认出战。"
+                    else -> "每次点「推进回合」结算一击；也可直接点「自动打完」。"
+                },
+                color = V3Gold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Box(Modifier.fillMaxWidth().heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("敌势 ${battle.enemyPower} · 风险 ${battle.risk} · 第${battle.turn + 1}阵。${if (battle.turn % 2 == 0) "我方先手" else "敌方先手"}", color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
             if (battle.phase == V3BattlePhase.Draft) {
                 Text("先点选最多6名成年族人，确认后进入战斗。战斗界面只显示上下两阵，不再显示候选人。", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
@@ -3957,10 +4009,6 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    V3SmallButton("确认出战", Modifier.weight(1f), selected = true, enabled = battle.selectedPersonIds.isNotEmpty()) { controller.confirmBattleLineup() }
-                    V3SmallButton("暂缓", Modifier.weight(1f)) { controller.cancelBattle() }
-                }
             } else {
                 val latestHit = battle.roundLog.firstOrNull()
                 Text("敌阵", color = V3Red, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -3980,8 +4028,21 @@ private fun V3BattleDialog(state: V3GameState, battle: V3BattleState, controller
                         if (!adLoading) confirmBattleReward = true
                     }
                 }
+            }
+                }
+            }
+            if (battle.phase == V3BattlePhase.Draft) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    V3SmallButton(if (battle.finished) "收兵结算" else if (battle.turn % 2 == 0) "我方先手" else "敌方先手", Modifier.weight(1f), selected = true) {
+                    V3SmallButton("确认出战", Modifier.weight(1f), selected = true, enabled = battle.selectedPersonIds.isNotEmpty()) { controller.confirmBattleLineup() }
+                    V3SmallButton("暂缓", Modifier.weight(1f)) { controller.cancelBattle() }
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton(
+                        if (battle.finished) "收兵结算" else "推进回合",
+                        Modifier.weight(1f),
+                        selected = true
+                    ) {
                         if (battle.finished) controller.finalizeBattle() else controller.advanceBattleRound()
                     }
                     V3SmallButton("自动打完", Modifier.weight(1f), enabled = !battle.finished) { controller.resolveBattle() }
@@ -4529,6 +4590,14 @@ private fun V3PatriarchPanel(state: V3GameState, controller: V3GameController) {
     }
 }
 
+private fun V3CardRequire?.hasContextualAid(): Boolean =
+    this != null && (
+        minPatriarchStat != null ||
+            minSilver != null ||
+            minGrain != null ||
+            minCohesion != null
+    )
+
 @Composable
 private fun V3VisitorDialog(
     card: V3MonthlyCard,
@@ -4551,13 +4620,12 @@ private fun V3VisitorDialog(
                     card.choices.forEach { choice ->
                         val unlocked = V3CardEngine.meets(choice.require, state)
                         V3SmallButton(
-                            if (unlocked) choice.label else "${choice.label}（条件不足）",
+                            if (unlocked) choice.label else if (choice.require.hasContextualAid()) "${choice.label}（条件不足，可求援）" else "${choice.label}（条件不足）",
                             Modifier.fillMaxWidth(),
-                            enabled = unlocked,
+                            enabled = unlocked || choice.require.hasContextualAid(),
                             selected = unlocked
                         ) {
-                            if (unlocked) controller.chooseCard(card.id, choice.id)
-                            else controller.showInfo(choice.require?.label() ?: "此项暂不可行")
+                            controller.chooseCard(card.id, choice.id)
                         }
                         Text(choice.desc, color = V3Muted, fontSize = 11.sp, lineHeight = 16.sp)
                     }
@@ -4617,11 +4685,12 @@ private fun V3CardPanel(card: V3MonthlyCard, state: V3GameState, controller: V3G
             val unlocked = com.arktools.daming.v3.logic.V3CardEngine.meets(choice.require, state)
             if (!choice.hiddenIfLocked || unlocked) {
                 V3SmallButton(
-                    if (unlocked) choice.label else "${choice.label}（条件不足）",
+                    if (unlocked) choice.label else if (choice.require.hasContextualAid()) "${choice.label}（条件不足，可求援）" else "${choice.label}（条件不足）",
                     Modifier.fillMaxWidth(),
+                    enabled = unlocked || choice.require.hasContextualAid(),
                     selected = unlocked
                 ) {
-                    if (unlocked) controller.chooseCard(card.id, choice.id) else controller.showInfo(choice.require?.label() ?: "此项暂不可行")
+                    controller.chooseCard(card.id, choice.id)
                 }
             }
         }

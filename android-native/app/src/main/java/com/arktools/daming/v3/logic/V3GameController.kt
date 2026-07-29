@@ -19,6 +19,7 @@ import com.arktools.daming.v3.data.V3EventChoice
 import com.arktools.daming.v3.data.V3EstateType
 import com.arktools.daming.v3.data.V3TroopType
 import com.arktools.daming.v3.data.V3CrisisAd
+import com.arktools.daming.v3.data.V3CardRequire
 
 class V3GameController(private val saveStore: V3SaveStore, private val audio: GameAudio) {
     var state by mutableStateOf(V3GameEngine.normalizeState(saveStore.load() ?: V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")))
@@ -460,8 +461,21 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun trainPerson(personId: Int, training: V3TrainingType) {
         audio.select()
-        state = V3GameEngine.trainPerson(state, personId, training)
+        val before = state
+        state = V3GameEngine.trainPerson(before, personId, training)
         message = state.pendingReports.firstOrNull()
+        val person = before.people.firstOrNull { it.id == personId && it.alive }
+        val costSilver = if ((person?.age ?: 12) < 12) 2 else 5
+        val costGrain = if ((person?.age ?: 12) < 12) 1 else 2
+        if (person != null && (before.silver < costSilver || before.grain < costGrain)) {
+            offerResourceAid(
+                keySuffix = "training-$personId-${training.name}",
+                actionTitle = "塾师留课",
+                actionDescription = "为${person.name}安排${V3GameEngine.trainingLabel(person, training)}只差束脩与口粮",
+                silverMissing = (costSilver - before.silver).coerceAtLeast(0),
+                grainMissing = (costGrain - before.grain).coerceAtLeast(0)
+            )
+        }
         saveStore.save(state)
     }
 
@@ -639,6 +653,14 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
 
     fun chooseCard(cardId: String, choiceId: String) {
         audio.playSfx(SfxKey.V3Edict)
+        val card = state.activeCards.firstOrNull { it.id == cardId }
+        val requestedChoice = card?.choices?.firstOrNull { it.id == choiceId }
+        if (requestedChoice != null && !V3CardEngine.meets(requestedChoice.require, state)) {
+            offerPatriarchStatAid(cardId, requestedChoice.require)
+            offerCardResourceAid(cardId, requestedChoice.id, requestedChoice.require)
+            message = requestedChoice.require?.label() ?: "此项暂不可行"
+            return
+        }
         val resolution = V3CardEngine.choose(state, cardId, choiceId)
         if (resolution == null) {
             message = "此项家务尚不能处置，或本月议事名额已用尽。"
@@ -1002,6 +1024,69 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         }
     }
 
+    private fun offerCardResourceAid(cardId: String, choiceId: String, require: V3CardRequire?) {
+        if (pendingCrisisAd != null || state.finalEnding != null || require == null) return
+        val silverMissing = ((require.minSilver ?: 0) - state.silver).coerceAtLeast(0)
+        val grainMissing = ((require.minGrain ?: 0) - state.grain).coerceAtLeast(0)
+        val cohesionMissing = ((require.minCohesion ?: 0) - state.cohesion).coerceAtLeast(0)
+        if (silverMissing <= 0 && grainMissing <= 0 && cohesionMissing <= 0) return
+        val rewardParts = buildList {
+            if (silverMissing > 0) add("银$silverMissing两")
+            if (grainMissing > 0) add("粮$grainMissing石")
+            if (cohesionMissing > 0) add("凝聚+$cohesionMissing")
+        }
+        pendingCrisisAd = V3CrisisAd(
+            key = "crisis-card-resource-${state.year}-${state.month}-$cardId-$choiceId",
+            title = "亲友周转",
+            subtitle = "此项家务只差${rewardParts.joinToString("、")}。完整观看后可补足本次缺口；领取后请再次选择此项。",
+            grantedMessage = "亲友援手已到：${rewardParts.joinToString("、")}已补足，可重新处置刚才的家务。",
+            silver = silverMissing,
+            grain = grainMissing,
+            cohesion = cohesionMissing
+        )
+        message = null
+        pauseForModal()
+    }
+
+    private fun offerPatriarchStatAid(cardId: String, require: V3CardRequire?) {
+        if (pendingCrisisAd != null || state.finalEnding != null) return
+        val stat = require?.minPatriarchStat ?: return
+        val target = require.minPatriarchStatValue ?: return
+        val current = when (stat) {
+            "conduct" -> state.patriarch.conduct
+            "stewardship" -> state.patriarch.stewardship
+            "prestige" -> state.patriarch.prestige
+            "health" -> state.patriarch.health
+            else -> return
+        }
+        val gain = (target - current).coerceIn(1, 10)
+        val label = when (stat) {
+            "conduct" -> "处世（品行）"
+            "stewardship" -> "经营（治家）"
+            "prestige" -> "威望"
+            "health" -> "身板"
+            else -> return
+        }
+        val title = when (stat) {
+            "conduct" -> "族老训诫"
+            "stewardship" -> "账房留卷"
+            "prestige" -> "乡绅举荐"
+            else -> "名医调理"
+        }
+        pendingCrisisAd = V3CrisisAd(
+            key = "crisis-card-stat-${state.year}-${state.month}-$cardId-$stat-$current",
+            title = title,
+            subtitle = "此事要求家主$label≥$target，当前$current。完整观看后可获得$label +$gain；领取后请再次选择此项。",
+            grantedMessage = "$title已成：家主$label +$gain，现为${current + gain}，可重新处置刚才的家务。",
+            patriarchConduct = if (stat == "conduct") gain else 0,
+            patriarchStewardship = if (stat == "stewardship") gain else 0,
+            patriarchPrestige = if (stat == "prestige") gain else 0,
+            patriarchHealth = if (stat == "health") gain else 0
+        )
+        message = null
+        pauseForModal()
+    }
+
     private fun offerResourceAid(
         keySuffix: String,
         actionTitle: String,
@@ -1063,6 +1148,12 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             cohesion = (state.cohesion + ad.cohesion).coerceIn(0, 100),
             equipment = repairedEquipment,
             people = curedPeople,
+            patriarch = state.patriarch.copy(
+                conduct = (state.patriarch.conduct + ad.patriarchConduct).coerceIn(0, 100),
+                stewardship = (state.patriarch.stewardship + ad.patriarchStewardship).coerceIn(0, 100),
+                prestige = (state.patriarch.prestige + ad.patriarchPrestige).coerceIn(0, 100),
+                health = (state.patriarch.health + ad.patriarchHealth).coerceIn(0, 100)
+            ),
             consecutiveDeficitMonths = if (ad.settleDeficit) 0 else state.consecutiveDeficitMonths,
             clinicAutoTreatmentMonths = maxOf(state.clinicAutoTreatmentMonths, ad.clinicAutoTreatmentMonths)
         )

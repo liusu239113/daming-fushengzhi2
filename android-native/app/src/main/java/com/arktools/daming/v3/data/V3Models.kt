@@ -555,7 +555,11 @@ data class V3CrisisAd(
     val repairDurability: Int = 0,
     val cureIllness: Boolean = false,
     val settleDeficit: Boolean = false, // true 时将负银负粮先平到0，再各加奖励
-    val clinicAutoTreatmentMonths: Int = 0
+    val clinicAutoTreatmentMonths: Int = 0,
+    val patriarchConduct: Int = 0,
+    val patriarchStewardship: Int = 0,
+    val patriarchPrestige: Int = 0,
+    val patriarchHealth: Int = 0
 )
 
 @Serializable
@@ -779,10 +783,10 @@ data class V3CardRequire(
         if (flagBlocked != null) parts += "该剧情已结束"
         if (minPatriarchStat != null && minPatriarchStatValue != null) {
             val statLabel = when (minPatriarchStat) {
-                "conduct" -> "品行"
-                "stewardship" -> "治家"
-                "prestige" -> "声望"
-                "health" -> "体质"
+                "conduct" -> "处世（品行）"
+                "stewardship" -> "经营（治家）"
+                "prestige" -> "威望"
+                "health" -> "身板"
                 else -> "相关能力"
             }
             parts += "家主${statLabel}≥$minPatriarchStatValue"
