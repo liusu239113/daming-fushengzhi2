@@ -91,6 +91,7 @@ import com.arktools.daming.ui.theme.FontPreference
 import com.arktools.daming.ui.theme.FontStyleKey
 import com.arktools.daming.v3.data.V3ActiveEvent
 import com.arktools.daming.v3.data.V3CardPool
+import com.arktools.daming.v3.data.V3CardRequire
 import com.arktools.daming.v3.data.V3MonthlyCard
 import com.arktools.daming.v3.data.V3HexArms
 import com.arktools.daming.v3.data.V3HexBattleState
@@ -1969,7 +1970,7 @@ private fun V3StrategyPage(
 ) {
     val ending = V3GameEngine.endingPreview(state)
     var page by remember { mutableStateOf(forcedPage ?: "声势") }
-    var equipmentTargetItemId by remember { mutableStateOf<Int?>(null) }
+    var equipmentTargetItemId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(forcedPage) {
         if (forcedPage != null) page = forcedPage
     }

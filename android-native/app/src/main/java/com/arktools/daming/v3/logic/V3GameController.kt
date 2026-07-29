@@ -1031,8 +1031,8 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
         val cohesionMissing = ((require.minCohesion ?: 0) - state.cohesion).coerceAtLeast(0)
         if (silverMissing <= 0 && grainMissing <= 0 && cohesionMissing <= 0) return
         val rewardParts = buildList {
-            if (silverMissing > 0) add("银$silverMissing两")
-            if (grainMissing > 0) add("粮$grainMissing石")
+            if (silverMissing > 0) add("银${silverMissing}两")
+            if (grainMissing > 0) add("粮${grainMissing}石")
             if (cohesionMissing > 0) add("凝聚+$cohesionMissing")
         }
         pendingCrisisAd = V3CrisisAd(
@@ -1077,7 +1077,7 @@ class V3GameController(private val saveStore: V3SaveStore, private val audio: Ga
             key = "crisis-card-stat-${state.year}-${state.month}-$cardId-$stat-$current",
             title = title,
             subtitle = "此事要求家主$label≥$target，当前$current。完整观看后可获得$label +$gain；领取后请再次选择此项。",
-            grantedMessage = "$title已成：家主$label +$gain，现为${current + gain}，可重新处置刚才的家务。",
+            grantedMessage = "${title}已成：家主$label +$gain，现为${current + gain}，可重新处置刚才的家务。",
             patriarchConduct = if (stat == "conduct") gain else 0,
             patriarchStewardship = if (stat == "stewardship") gain else 0,
             patriarchPrestige = if (stat == "prestige") gain else 0,
