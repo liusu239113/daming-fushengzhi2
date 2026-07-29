@@ -230,19 +230,23 @@ class V3GameEngineTest {
             parentId = null,
             spouseId = 1
         )
+        val sibling = child.copy(
+            id = 4,
+            name = "李承平"
+        )
         val ready = base.copy(
-            year = 1602,
-            month = 7,
+            year = 1603,
+            month = 1,
             silver = 1_000,
             grain = 1_000,
             influence = 100,
-            people = base.people + child + spouse,
+            people = base.people + child + spouse + sibling,
             estateAssets = listOf(
-                V3EstateAsset("field", V3EstateType.TenantLand, 1),
+                V3EstateAsset("field", V3EstateType.TenantLand, 2),
                 V3EstateAsset("shop", V3EstateType.Shop, 1)
             ),
             sites = base.sites.map { site ->
-                if (site.id in setOf("farmland", "market")) site.copy(level = 1) else site
+                if (site.id in setOf("farmland", "market", "clinic")) site.copy(level = 1) else site
             }
         )
 
@@ -558,12 +562,15 @@ class V3GameEngineTest {
     fun foundingQuestUsesExactPromotionThresholds() {
         val base = V3Content.newGame("江南商族", "江南水乡", "重商逐利", "商路断绝")
             .copy(
-                year = 1602,
-                month = 7,
-                silver = 179,
-                grain = 260,
-                influence = 45,
-                estateAssets = listOf(V3EstateAsset("tenantland", V3EstateType.TenantLand, 2))
+                year = 1603,
+                month = 1,
+                silver = 259,
+                grain = 360,
+                influence = 50,
+                estateAssets = listOf(
+                    V3EstateAsset("tenantland", V3EstateType.TenantLand, 2),
+                    V3EstateAsset("shop", V3EstateType.Shop, 1)
+                )
             )
         val child = V3Person(
             id = 2,
@@ -583,11 +590,12 @@ class V3GameEngineTest {
             surname = base.surname
         )
         val secondChild = child.copy(id = 3, name = "李承平")
+        val thirdChild = child.copy(id = 4, name = "李承宁")
         val state = base.copy(
-            people = base.people + child + secondChild,
-            nextPersonId = 4,
+            people = base.people + child + secondChild + thirdChild,
+            nextPersonId = 5,
             sites = base.sites.map { site ->
-                if (site.id == "market") site.copy(level = 1) else site
+                if (site.id in setOf("market", "clinic")) site.copy(level = 1) else site
             }
         )
         val snapshot = V3ProgressionEngine.snapshot(state)
@@ -596,7 +604,7 @@ class V3GameEngineTest {
         assertEquals("银两还差1", snapshot.mainQuest.blockers.first { it.startsWith("银两") })
         assertTrue(V3GameEngine.canRankUp(state).not())
 
-        val ready = state.copy(silver = 180)
+        val ready = state.copy(silver = 260)
         assertTrue(V3GameEngine.canRankUp(ready))
         assertTrue(V3ProgressionEngine.snapshot(ready).mainQuest.completed)
     }
@@ -641,7 +649,7 @@ class V3GameEngineTest {
         assertEquals(V3Chapter.Expansion, V3ProgressionEngine.currentChapter(base))
         assertTrue(V3ProgressionEngine.snapshot(base).mainQuest.conditions.first { it.label == "县外地域" }.satisfied.not())
 
-        val externalIds = base.worldRegions.filter { it.id != "home_county" }.take(2).map { it.id }.toSet()
+        val externalIds = base.worldRegions.filter { it.id != "home_county" }.take(3).map { it.id }.toSet()
         val withExternal = base.copy(
             worldRegions = base.worldRegions.map { region ->
                 if (region.id in externalIds) region.copy(status = V3RegionStatus.Controlled, control = 85) else region
