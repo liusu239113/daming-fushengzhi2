@@ -1107,9 +1107,9 @@ class V3GameController(
         val batch = automationQuotaStore.nextBatch(action)
         pendingCrisisAd = V3CrisisAd(
             key = "automation-$action-${automationQuotaStore.dayToken()}-$batch",
-            title = "$label次数已用完",
+            title = "${label}次数已用完",
             subtitle = "今日5次免费额度已用完。仅在你再次需要时出现：完整观看一次，立即追加5次本功能额度。",
-            grantedMessage = "$label已追加5次今日额度。",
+            grantedMessage = "${label}已追加5次今日额度。",
             automationQuotaAction = action
         )
         message = null
