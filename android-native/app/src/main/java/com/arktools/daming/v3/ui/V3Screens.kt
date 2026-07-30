@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.arktools.daming.ads.RewardClaimStore
 import com.arktools.daming.ads.RewardedAdController
+import com.arktools.daming.ads.SpeedPassStore
 import com.arktools.daming.ads.ui.AdLoadingOverlay
 import com.arktools.daming.data.GameImages
 import com.arktools.daming.ui.components.AssetImage
@@ -3114,6 +3115,59 @@ private fun V3TimeControls(
     guideTargets: MutableMap<V3GuideFocus, Rect>,
     tutorialStep: Int
 ) {
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+    val speedPassStore = remember { SpeedPassStore(context) }
+    var remainingPassMillis by remember { mutableStateOf(speedPassStore.remainingMillis()) }
+    var adLoading by remember { mutableStateOf(false) }
+    var confirmSpeed by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            remainingPassMillis = speedPassStore.remainingMillis()
+            if (remainingPassMillis <= 0L && controller.timeSpeed > 1) {
+                controller.updateTimeSpeed(1)
+                controller.showInfo("广告倍速权益已到期，时间流速已自动恢复为 1 倍。")
+            }
+            delay(1_000L)
+        }
+    }
+
+    AdLoadingOverlay(visible = adLoading, label = "倍速权益加载中…")
+
+    confirmSpeed?.let { speed ->
+        Dialog(onDismissRequest = { confirmSpeed = null }) {
+            V3ImagePanel(GameImages.V3UiEventPanel, Modifier.widthIn(max = 420.dp)) {
+                Text("观看广告解锁倍速", color = V3Red, fontSize = 19.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text("完整观看后，2–5 倍时序全部解锁 20 分钟；退出游戏、切到后台和重进都会按真实时间继续倒计时。", color = V3Ink, fontSize = 13.sp, lineHeight = 20.sp)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    V3SmallButton("关闭", Modifier.weight(1f)) { confirmSpeed = null }
+                    V3SmallButton("观看视频", Modifier.weight(1f), selected = true) {
+                        val act = activity
+                        confirmSpeed = null
+                        if (act == null) {
+                            controller.showInfo("当前页面无法打开激励广告。")
+                            return@V3SmallButton
+                        }
+                        RewardedAdController.show(
+                            activity = act,
+                            onLoadingChanged = { adLoading = it },
+                            onRewarded = {
+                                val expiresAt = speedPassStore.unlockForTwentyMinutes()
+                                remainingPassMillis = (expiresAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                                controller.updateTimeSpeed(speed)
+                                controller.showInfo("倍速经营权益已生效：2–5 倍速度全部解锁 20 分钟，当前切换为 ${speed} 倍。")
+                            },
+                            onError = controller::showInfo,
+                            onClosed = {}
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -3130,14 +3184,19 @@ private fun V3TimeControls(
                 }
             }
             listOf(1, 2, 3, 4, 5).forEach { speed ->
+                val unlocked = speed == 1 || remainingPassMillis > 0L
                 V3SpeedButton(
                     speed = speed,
-                    unlocked = true,
+                    unlocked = unlocked,
                     selected = controller.timeSpeed == speed,
                     modifier = Modifier.weight(1f),
-                    enabled = true
+                    enabled = !adLoading
                 ) {
-                    controller.updateTimeSpeed(speed)
+                    if (unlocked) {
+                        controller.updateTimeSpeed(speed)
+                    } else {
+                        confirmSpeed = speed
+                    }
                 }
             }
             val timeBlockReason = controller.timeBlockReason()

@@ -60,12 +60,13 @@ object RewardedAdController {
         RewardedAdManager.load(activity, object : RewardedAdManager.Callback {
             override fun onLoaded() {
                 if (finished || activity.isFinishing || activity.isDestroyed) {
+                    handler.removeCallbacks(timeout)
+                    RewardedAdManager.destroy()
                     finish("页面已关闭")
                     return
                 }
                 handler.removeCallbacks(timeout)
                 lastShownAt = System.currentTimeMillis()
-                onLoadingChanged(false)
                 RewardedAdManager.show()
             }
 
