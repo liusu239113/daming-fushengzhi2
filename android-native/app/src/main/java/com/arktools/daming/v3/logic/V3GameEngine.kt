@@ -1174,12 +1174,39 @@ object V3GameEngine {
         )
     }
 
+    fun siteSpecialActionCost(type: V3CountySiteType): V3SiteYield = when (type) {
+        V3CountySiteType.Shrine -> V3SiteYield(grain = 18)
+        V3CountySiteType.Farmland -> V3SiteYield(silver = 16)
+        V3CountySiteType.Market -> V3SiteYield(grain = 20)
+        V3CountySiteType.Yamen -> V3SiteYield(silver = 38)
+        V3CountySiteType.Academy -> V3SiteYield(silver = 28)
+        V3CountySiteType.Clinic -> V3SiteYield(silver = 24, grain = 18)
+        V3CountySiteType.Fort -> V3SiteYield(silver = 32, grain = 28)
+        V3CountySiteType.Dock -> V3SiteYield()
+        V3CountySiteType.MountainPass -> V3SiteYield(silver = 18)
+    }
+
     fun siteSpecialAction(state: V3GameState, siteId: String): V3GameState {
         val site = state.sites.firstOrNull { it.id == siteId } ?: return state
         if (!isSiteUnlocked(state, site.type)) {
             return state.copy(pendingReports = listOf("${site.name}尚未开放：宗族达到${siteRequiredRank(site.type)}级后解锁。"))
         }
         if (site.level <= 0) return state.copy(pendingReports = listOf("【${site.name}】尚未建成，先营建后才能执行专属事务。"))
+        val currentMonth = state.year * 12 + state.month
+        if (state.siteSpecialActionMonths[site.id] == currentMonth) {
+            return state.copy(pendingReports = listOf("【${site.name}】本月专属事务已处理。请推进到下月后再安排，避免重复消耗或重复收益。"))
+        }
+        val cost = siteSpecialActionCost(site.type)
+        if (state.silver < cost.silver || state.grain < cost.grain) {
+            val silverMissing = (cost.silver - state.silver).coerceAtLeast(0)
+            val grainMissing = (cost.grain - state.grain).coerceAtLeast(0)
+            return state.copy(
+                pendingReports = listOf(
+                    "执行【${site.name}】专属事务需要银${cost.silver}、粮${cost.grain}；" +
+                        "当前银${state.silver}、粮${state.grain}，还缺银${silverMissing}、粮${grainMissing}。"
+                )
+            )
+        }
         var silver = state.silver
         var grain = state.grain
         var influence = state.influence
@@ -1285,8 +1312,8 @@ object V3GameEngine {
         val militiaDelta = militia - state.militia
         val nextArmy = if (militiaDelta >= 0) state.army.add(V3TroopType.Militia, militiaDelta) else state.army.lose(-militiaDelta)
         return state.copy(
-            silver = silver.coerceAtLeast(-999),
-            grain = grain.coerceAtLeast(-999),
+            silver = silver,
+            grain = grain,
             influence = influence.coerceIn(0, 100),
             cohesion = cohesion.coerceIn(0, 100),
             militia = nextArmy.militia,
@@ -1294,6 +1321,7 @@ object V3GameEngine {
             people = treatedPeople,
             relations = relations,
             sites = state.sites.map { if (it.id == site.id) nextSite.copy(status = statusFor(nextSite.control, nextSite.risk)) else it },
+            siteSpecialActionMonths = state.siteSpecialActionMonths + (site.id to currentMonth),
             routeScores = state.routeScores + (route to ((state.routeScores[route] ?: 0) + routeGain)),
             pendingReports = listOf(title),
             eventLog = (listOf("${state.year}年${state.month}月 · $title") + state.eventLog).take(100)

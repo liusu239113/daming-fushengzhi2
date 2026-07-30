@@ -38,6 +38,47 @@ import org.junit.Test
 
 class V3GameEngineTest {
     @Test
+    fun siteSpecialActionRequiresResourcesAndOnlyRunsOncePerMonth() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+        val farmland = base.sites.first { it.id == "farmland" }
+        val unaffordable = base.copy(silver = -64, grain = 469)
+
+        val rejected = V3GameEngine.siteSpecialAction(unaffordable, farmland.id)
+        assertEquals(unaffordable.silver, rejected.silver)
+        assertEquals(unaffordable.grain, rejected.grain)
+        assertTrue(rejected.pendingReports.single().contains("还缺银"))
+
+        val completed = V3GameEngine.siteSpecialAction(base.copy(silver = 100), farmland.id)
+        assertEquals(84, completed.silver)
+        assertEquals(base.grain + 70, completed.grain)
+        assertEquals(base.year * 12 + base.month, completed.siteSpecialActionMonths[farmland.id])
+
+        val repeated = V3GameEngine.siteSpecialAction(completed, farmland.id)
+        assertEquals(completed.silver, repeated.silver)
+        assertEquals(completed.grain, repeated.grain)
+        assertTrue(repeated.pendingReports.single().contains("本月专属事务已处理"))
+    }
+
+    @Test
+    fun siteUpgradeRaisesMonthlyYieldAndSettlementIncome() {
+        val base = V3Content.newGame("没落士族", "江南水乡", "耕读传家", "官府催税")
+            .copy(silver = 1_000, grain = 1_000)
+        val farmland = base.sites.first { it.id == "farmland" }
+        val beforeYield = V3GameEngine.siteYield(farmland)
+        val upgraded = V3GameEngine.upgradeSite(base, farmland.id)
+        val upgradedFarmland = upgraded.sites.first { it.id == farmland.id }
+        val afterYield = V3GameEngine.siteYield(upgradedFarmland)
+
+        assertEquals(farmland.level + 1, upgradedFarmland.level)
+        assertTrue(afterYield.grain > beforeYield.grain)
+        assertTrue(afterYield.silver > beforeYield.silver)
+
+        val beforeReport = V3GameEngine.advanceMonth(base).nextState
+        val afterReport = V3GameEngine.advanceMonth(upgraded).nextState
+        assertTrue(afterReport.grain - upgraded.grain > beforeReport.grain - base.grain)
+    }
+
+    @Test
     fun completeCardAndVisitorContentIsReachable() {
         assertTrue(V3Content.allMonthlyCards.size >= 60)
         assertTrue(V3Content.visitors.size >= 30)

@@ -1058,5 +1058,6 @@ data class V3GameState(
     val clinicHealerId: Int? = null,
     val clinicAutoTreatmentMonths: Int = 0,
     val patriarchCriticalWarningMonth: Int = -1,
-    val conquestTacticalAid: Int = 0
+    val conquestTacticalAid: Int = 0,
+    val siteSpecialActionMonths: Map<String, Int> = emptyMap()
 )

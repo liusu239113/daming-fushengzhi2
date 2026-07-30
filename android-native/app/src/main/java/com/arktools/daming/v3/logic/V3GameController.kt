@@ -435,8 +435,27 @@ class V3GameController(
 
     fun siteSpecialAction(siteId: String) {
         audio.playSfx(SfxKey.V3SpecialAction)
-        state = V3GameEngine.siteSpecialAction(state, siteId)
+        val before = state
+        val site = before.sites.firstOrNull { it.id == siteId }
+        val cost = site?.let { V3GameEngine.siteSpecialActionCost(it.type) }
+        state = V3GameEngine.siteSpecialAction(before, siteId)
         message = state.pendingReports.firstOrNull()
+        val currentMonth = before.year * 12 + before.month
+        if (
+            site != null &&
+            cost != null &&
+            site.level > 0 &&
+            before.siteSpecialActionMonths[site.id] != currentMonth &&
+            V3GameEngine.isSiteUnlocked(before, site.type)
+        ) {
+            offerResourceAid(
+                keySuffix = "site-action-$siteId-${before.year}-${before.month}",
+                actionTitle = "专属事务周转",
+                actionDescription = "执行${site.name}专属事务只差银粮即可安排",
+                silverMissing = (cost.silver - before.silver).coerceAtLeast(0),
+                grainMissing = (cost.grain - before.grain).coerceAtLeast(0)
+            )
+        }
         saveStore.save(state)
     }
 

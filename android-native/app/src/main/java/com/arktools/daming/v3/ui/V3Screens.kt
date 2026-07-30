@@ -2771,7 +2771,13 @@ private fun V3SiteCard(
         )
         Text("控制：${site.control}/100（越高产出越稳定） · 风险：${site.risk}/100（越高越容易减产或触发事件） · 等级：${site.level}", color = V3Muted, fontSize = 12.sp, lineHeight = 18.sp)
         Text(siteSpecialHint(site), color = V3Ink, fontSize = 12.sp, lineHeight = 18.sp)
-        V3SmallButton(siteSpecialButtonLabel(site), Modifier.fillMaxWidth(), enabled = site.level > 0) { controller.siteSpecialAction(site.id) }
+        val currentMonth = state.year * 12 + state.month
+        val specialActionDone = state.siteSpecialActionMonths[site.id] == currentMonth
+        V3SmallButton(
+            if (specialActionDone) "本月专属事务已完成" else siteSpecialButtonLabel(site),
+            Modifier.fillMaxWidth(),
+            enabled = site.level > 0 && !specialActionDone
+        ) { controller.siteSpecialAction(site.id) }
         val cost = V3GameEngine.upgradeCost(site)
         if (cost != null) {
             Text("营建：银${cost.silver} / 粮${cost.grain} · ${cost.desc}", color = V3Muted, fontSize = 12.sp)
@@ -4444,15 +4450,15 @@ private fun siteSpecialButtonLabel(site: V3CountySite): String = when (site.type
 }
 
 private fun siteSpecialHint(site: V3CountySite): String = when (site.type) {
-    com.arktools.daming.v3.data.V3CountySiteType.Shrine -> "专属事务：消耗粮食，提升凝聚和族望。"
-    com.arktools.daming.v3.data.V3CountySiteType.Farmland -> "专属事务：花银修渠，换取大量粮食。"
-    com.arktools.daming.v3.data.V3CountySiteType.Market -> "专属事务：消耗粮食换银两和商帮关系。"
-    com.arktools.daming.v3.data.V3CountySiteType.Yamen -> "专属事务：花银打点官府，缓冲税役压力。"
-    com.arktools.daming.v3.data.V3CountySiteType.Academy -> "专属事务：开讲会提升士绅、族望和耕读路线。"
-    com.arktools.daming.v3.data.V3CountySiteType.Clinic -> "专属事务：义诊压疫病，提高乡民与凝聚。"
-    com.arktools.daming.v3.data.V3CountySiteType.Fort -> "专属事务：消耗银粮，快速增加乡勇。"
-    com.arktools.daming.v3.data.V3CountySiteType.Dock -> "专属事务：走海货获银，推进海外路线但损官府。"
-    com.arktools.daming.v3.data.V3CountySiteType.MountainPass -> "专属事务：设卡压流寇，推进割据路线。"
+    com.arktools.daming.v3.data.V3CountySiteType.Shrine -> "专属事务：每月限一次，消耗粮食，提升凝聚和族望。"
+    com.arktools.daming.v3.data.V3CountySiteType.Farmland -> "专属事务：每月限一次，花银修渠，换取大量粮食；银不足时可选择周转援手。"
+    com.arktools.daming.v3.data.V3CountySiteType.Market -> "专属事务：每月限一次，消耗粮食换银两和商帮关系。"
+    com.arktools.daming.v3.data.V3CountySiteType.Yamen -> "专属事务：每月限一次，花银打点官府，缓冲税役压力。"
+    com.arktools.daming.v3.data.V3CountySiteType.Academy -> "专属事务：每月限一次，开讲会提升士绅、族望和耕读路线。"
+    com.arktools.daming.v3.data.V3CountySiteType.Clinic -> "专属事务：每月限一次，义诊压疫病，提高乡民与凝聚。"
+    com.arktools.daming.v3.data.V3CountySiteType.Fort -> "专属事务：每月限一次，消耗银粮，快速增加乡勇。"
+    com.arktools.daming.v3.data.V3CountySiteType.Dock -> "专属事务：每月限一次，走海货获银，推进海外路线但损官府。"
+    com.arktools.daming.v3.data.V3CountySiteType.MountainPass -> "专属事务：每月限一次，设卡压流寇，推进割据路线。"
 }
 
 private fun siteYieldSummary(yield: V3SiteYield): String {
